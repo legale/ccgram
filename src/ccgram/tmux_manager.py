@@ -37,7 +37,7 @@ logger = structlog.get_logger()
 
 # ── Vim mode state cache ───────────────────────────────────────────────
 # window_id → True (vim mode on) / False (vim mode off)
-# Missing key = unknown, needs probe on first send.
+# Missing key = unknown; first send must not type probe keys into user input.
 _vim_state: dict[str, bool] = {}
 
 # Per-window locks to serialize vim probe + send sequences,
@@ -49,7 +49,6 @@ _VIM_PROBE_DELAY = 0.12
 
 
 _VIM_INSERT_RE = re.compile(r"^--\s*INSERT\s*--\s*$")
-
 
 def has_insert_indicator(pane_text: str) -> bool:
     """Check if vim's ``-- INSERT --`` appears in the last 3 lines of pane text.
@@ -616,7 +615,7 @@ class TmuxManager:
         - False (vim off): returns immediately, zero cost.
         - True (vim on): captures pane to check INSERT indicator.
           If missing (NORMAL mode), sends ``i`` to enter INSERT.
-        - Missing (unknown): probes once to determine vim state.
+        - Missing (unknown): only observes current pane; no synthetic input.
         """
         cached = _vim_state.get(window_id)
 
@@ -634,9 +633,13 @@ class TmuxManager:
             return
 
         # No INSERT indicator visible.
-        # If cache is None (unknown), we need to probe.
+        # If cache is None (unknown), don't probe by typing `i` + Backspace:
+        # in a plain shell that can race with real input and eat its first byte.
+        if cached is not True:
+            _vim_state[window_id] = False
+            return
+
         # If cache is True (was vim), INSERT disappeared → likely NORMAL mode.
-        # Both cases: send `i` and check result.
         if not await asyncio.to_thread(
             self._pane_send, window_id, "i", enter=False, literal=True
         ):

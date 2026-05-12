@@ -170,41 +170,30 @@ class TestEnsureVimInsertMode:
         assert calls == [("i", True), ("BSpace", False)]
 
     async def test_probe_unknown_vim_on(self, manager):
+        # Unknown state no longer probes by typing into user input.
         assert "@1" not in _vim_state
-        captures = iter(["prompt>", "prompt>\n-- INSERT --"])
-
-        async def fake_capture(_wid):
-            return next(captures)
-
         with (
-            patch.object(manager, "capture_pane", side_effect=fake_capture),
-            patch.object(manager, "_pane_send", return_value=True),
-            patch("ccgram.tmux_manager.asyncio.sleep", new_callable=AsyncMock),
+            patch.object(
+                manager, "capture_pane", new_callable=AsyncMock, return_value="prompt>"
+            ),
+            patch.object(manager, "_pane_send", return_value=True) as send,
         ):
             await manager._ensure_vim_insert_mode("@1")
-        assert _vim_state["@1"] is True
+        send.assert_not_called()
+        assert _vim_state["@1"] is False
 
     async def test_probe_unknown_vim_off(self, manager):
+        # Unknown state no longer probes by typing into user input.
         assert "@1" not in _vim_state
-        captures = iter(["prompt>", "prompt> i"])
-
-        async def fake_capture(_wid):
-            return next(captures)
-
-        calls = []
-
-        def fake_send(_wid, chars, *, enter, literal):
-            calls.append((chars, literal))
-            return True
-
         with (
-            patch.object(manager, "capture_pane", side_effect=fake_capture),
-            patch.object(manager, "_pane_send", side_effect=fake_send),
-            patch("ccgram.tmux_manager.asyncio.sleep", new_callable=AsyncMock),
+            patch.object(
+                manager, "capture_pane", new_callable=AsyncMock, return_value="prompt>"
+            ),
+            patch.object(manager, "_pane_send", return_value=True) as send,
         ):
             await manager._ensure_vim_insert_mode("@1")
+        send.assert_not_called()
         assert _vim_state["@1"] is False
-        assert calls == [("i", True), ("BSpace", False)]
 
     async def test_first_capture_failure_returns_early(self, manager):
         with (
@@ -252,7 +241,8 @@ class TestEnsureVimInsertMode:
             patch.object(manager, "_pane_send", return_value=False),
         ):
             await manager._ensure_vim_insert_mode("@1")
-        assert "@1" not in _vim_state
+        # Unknown state resolves to False without probing.
+        assert _vim_state["@1"] is False
 
 
 # ── Self-correction scenarios ──────────────────────────────────────────
