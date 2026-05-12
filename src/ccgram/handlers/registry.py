@@ -22,6 +22,7 @@ from telegram.ext import (
 )
 from telegram.ext._utils.types import HandlerCallback
 
+from ..topic_tail import record_telegram_message
 from .callback_registry import dispatch as _dispatch_callback
 from .callback_registry import load_handlers as _load_callback_handlers
 from .cleanup import unbind_command
@@ -55,6 +56,11 @@ class CommandSpec:
 
     name: str
     handler: HandlerFn
+
+
+async def _record_topic_tail(update, _context) -> None:
+    message = getattr(update, "effective_message", None)
+    record_telegram_message(message)
 
 
 def register_all(
@@ -92,6 +98,11 @@ def register_all(
         application.add_handler(
             CommandHandler(spec.name, spec.handler, filters=group_filter)
         )
+
+    application.add_handler(
+        MessageHandler(group_filter, _record_topic_tail),
+        group=-1,
+    )
 
     _load_callback_handlers()
     application.add_handler(CallbackQueryHandler(_dispatch_callback))

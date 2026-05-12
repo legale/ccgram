@@ -246,7 +246,7 @@ async def sync_topic_name(
     Preserves the last known lifecycle emoji when it is cached so `/sync`
     can repair stale titles without waiting for a later state transition.
     """
-    if chat_id in _disabled_chats:
+    if not config.topic_rename_enabled or chat_id in _disabled_chats:
         return
 
     key = (chat_id, thread_id)
@@ -293,7 +293,7 @@ async def update_topic_emoji(
         state: One of "active", "idle", "done", "dead"
         display_name: Base topic name (without emoji prefix)
     """
-    if chat_id in _disabled_chats:
+    if not config.topic_rename_enabled or chat_id in _disabled_chats:
         return
 
     key = (chat_id, thread_id)

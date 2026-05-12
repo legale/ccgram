@@ -26,6 +26,7 @@ from ...config import config
 from ...entity_formatting import convert_to_entities
 from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
+from ...topic_tail import record_telegram_message
 from ..reactions import (
     ALLOWED_REACTIONS,
     REACT_DONE,
@@ -227,7 +228,9 @@ async def safe_reply(message: Message, text: str, **kwargs: Any) -> Message | No
             raise
 
     try:
-        return await _with_entity_fallback(_reply, text, "reply", **kwargs)
+        sent = await _with_entity_fallback(_reply, text, "reply", **kwargs)
+        record_telegram_message(sent)
+        return sent
     except _MessageGoneError:
         return None
 

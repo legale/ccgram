@@ -37,9 +37,11 @@ def _debounce_for(state: str) -> float:
 
 
 @pytest.fixture(autouse=True)
-def _reset():
+def _reset(monkeypatch):
+    from ccgram.config import config
     from ccgram.handlers.polling.polling_state import terminal_poll_state
 
+    monkeypatch.setattr(config, "topic_rename_enabled", True)
     reset_all_state()
     terminal_poll_state.reset_all_seen_status()
     yield
@@ -118,6 +120,14 @@ class TestUpdateTopicEmoji:
         bot = AsyncMock()
         with patch(_PATCH_MONOTONIC, return_value=0.0):
             await update_topic_emoji(bot, -100, 42, "active", "myproject")
+        bot.edit_forum_topic.assert_not_called()
+
+    async def test_config_can_disable_topic_rename(self, monkeypatch) -> None:
+        from ccgram.config import config
+
+        monkeypatch.setattr(config, "topic_rename_enabled", False)
+        bot = AsyncMock()
+        await _debounced_update(bot, -100, 42, "active", "myproject")
         bot.edit_forum_topic.assert_not_called()
 
     @pytest.mark.parametrize("state,emoji", _STATE_EMOJI)
@@ -392,6 +402,14 @@ class TestSyncTopicName:
             message_thread_id=42,
             name=f"{EMOJI_IDLE} ccgram-codex",
         )
+
+    async def test_config_can_disable_sync_topic_name(self, monkeypatch) -> None:
+        from ccgram.config import config
+
+        monkeypatch.setattr(config, "topic_rename_enabled", False)
+        bot = AsyncMock()
+        await sync_topic_name(bot, -100, 42, "ccgram-codex")
+        bot.edit_forum_topic.assert_not_called()
 
     async def test_clear_resets_pending_transition(self) -> None:
         bot = AsyncMock()

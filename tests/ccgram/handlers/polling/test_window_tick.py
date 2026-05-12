@@ -12,7 +12,7 @@ from ccgram.handlers.polling.polling_state import (
     terminal_poll_state,
     terminal_screen_buffer,
 )
-from ccgram.handlers.polling.polling_types import TickContext
+from ccgram.handlers.polling.polling_types import TickContext, TickDecision
 from ccgram.handlers.polling.window_tick import (
     _check_interactive_only,
     _handle_dead_window_notification,
@@ -211,6 +211,88 @@ class TestUpdateStatusInteractive:
             await _update_status(bot, 1, "@0", thread_id=100, _window=w)
             mock_handle.assert_called_once()
             mock_enqueue.assert_not_called()
+
+
+class TestUpdateStatusTopicDiff:
+    async def test_calls_update_topic_status_diff_when_enabled(self, monkeypatch):
+        from ccgram.config import config
+
+        monkeypatch.setattr(config, "topic_rename_enabled", True)
+        monkeypatch.setattr(config, "topic_status_diff_enabled", True)
+
+        bot = AsyncMock(spec=Bot)
+        w = _make_window()
+        status = _make_status(raw_text="Working", is_interactive=False)
+
+        with (
+            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
+            patch("ccgram.handlers.polling.window_tick.apply.window_query"),
+            patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
+            patch(
+                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
+                return_value=status,
+            ),
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.update_topic_status_diff",
+                new_callable=AsyncMock,
+            ) as mock_diff,
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.decide_tick",
+                return_value=TickDecision(),
+            ),
+            patch(
+                "ccgram.handlers.polling.window_tick.apply._apply_tick_decision",
+                new_callable=AsyncMock,
+            ),
+        ):
+            mock_tm.find_window_by_id = AsyncMock(return_value=w)
+            mock_tm.capture_pane = AsyncMock(return_value="pane text")
+            mock_tr.resolve_chat_id.return_value = -100
+
+            await _update_status(bot, 1, "@0", thread_id=100, _window=w)
+
+            mock_diff.assert_awaited_once()
+
+    async def test_does_not_call_update_topic_status_diff_when_disabled(
+        self, monkeypatch
+    ):
+        from ccgram.config import config
+
+        monkeypatch.setattr(config, "topic_rename_enabled", False)
+        monkeypatch.setattr(config, "topic_status_diff_enabled", True)
+
+        bot = AsyncMock(spec=Bot)
+        w = _make_window()
+        status = _make_status(raw_text="Working", is_interactive=False)
+
+        with (
+            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
+            patch("ccgram.handlers.polling.window_tick.apply.window_query"),
+            patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
+            patch(
+                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
+                return_value=status,
+            ),
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.update_topic_status_diff",
+                new_callable=AsyncMock,
+            ) as mock_diff,
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.decide_tick",
+                return_value=TickDecision(),
+            ),
+            patch(
+                "ccgram.handlers.polling.window_tick.apply._apply_tick_decision",
+                new_callable=AsyncMock,
+            ),
+        ):
+            mock_tm.find_window_by_id = AsyncMock(return_value=w)
+            mock_tm.capture_pane = AsyncMock(return_value="pane text")
+            mock_tr.resolve_chat_id.return_value = -100
+
+            await _update_status(bot, 1, "@0", thread_id=100, _window=w)
+
+            mock_diff.assert_not_called()
 
 
 class TestUpdateStatusActiveLine:

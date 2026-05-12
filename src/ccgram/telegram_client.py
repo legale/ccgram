@@ -31,6 +31,8 @@ from telegram._botcommandscope import BotCommandScope
 from telegram._files.inputmedia import InputMedia
 from telegram._reaction import ReactionType
 
+from .topic_tail import record_telegram_message
+
 
 @runtime_checkable
 class TelegramClient(Protocol):
@@ -194,7 +196,9 @@ class PTBTelegramClient:
     async def send_message(
         self, chat_id: int | str, text: str, **kwargs: Any
     ) -> Message:
-        return await self._bot.send_message(chat_id=chat_id, text=text, **kwargs)
+        msg = await self._bot.send_message(chat_id=chat_id, text=text, **kwargs)
+        record_telegram_message(msg)
+        return msg
 
     async def edit_message_text(
         self,
@@ -395,9 +399,11 @@ class FakeTelegramClient:
     async def send_message(
         self, chat_id: int | str, text: str, **kwargs: Any
     ) -> Message:
-        return self._record(
+        msg = self._record(
             "send_message", {"chat_id": chat_id, "text": text, **kwargs}
         )
+        record_telegram_message(msg)
+        return msg
 
     async def edit_message_text(
         self,

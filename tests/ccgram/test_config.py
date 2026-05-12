@@ -164,6 +164,48 @@ class TestStatusMode:
 
 
 @pytest.mark.usefixtures("_base_env")
+class TestTopicStatusConfig:
+    def test_topic_rename_default_false(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_TOPIC_RENAME_ENABLED", raising=False)
+        assert Config().topic_rename_enabled is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "True", "YES"])
+    def test_topic_rename_enabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_TOPIC_RENAME_ENABLED", value)
+        assert Config().topic_rename_enabled is True
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_topic_rename_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_TOPIC_RENAME_ENABLED", value)
+        assert Config().topic_rename_enabled is False
+
+    def test_status_diff_default_true(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_TOPIC_STATUS_DIFF_ENABLED", raising=False)
+        assert Config().topic_status_diff_enabled is True
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_status_diff_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_ENABLED", value)
+        assert Config().topic_status_diff_enabled is False
+
+    @pytest.mark.parametrize(
+        ("env_str", "expected"),
+        [("10", 10), ("1", 1), ("0", 1)],
+    )
+    def test_status_diff_interval(self, monkeypatch, env_str, expected):
+        monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", env_str)
+        assert Config().topic_status_diff_interval == expected
+
+    def test_status_diff_interval_default(self):
+        assert Config().topic_status_diff_interval == 10
+
+    def test_status_diff_interval_invalid(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", "bad")
+        with pytest.raises(ValueError, match="CCGRAM_TOPIC_STATUS_DIFF_INTERVAL"):
+            Config()
+
+
+@pytest.mark.usefixtures("_base_env")
 class TestMessagingConfig:
     def test_msg_auto_spawn_default_false(self):
         cfg = Config()

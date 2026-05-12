@@ -43,6 +43,13 @@ def _parse_int_env(name: str, default: int) -> int:
         raise ValueError(f"{name} must be a valid integer: {exc}") from exc
 
 
+def _parse_bool_env(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
 def _resolve_toolbar_path() -> str:
     """Resolve the toolbar TOML config path: env var → ~/.ccgram → empty.
 
@@ -187,6 +194,7 @@ class Config:
         self._init_live_view()
         self._init_send()
         self._init_lifecycle()
+        self._init_topic_status()
 
         # Global default for hiding tool_use/tool_result content in Telegram.
         # Per-window override via WindowState.tool_call_visibility takes precedence.
@@ -264,6 +272,17 @@ class Config:
             "CCGRAM_PANE_LIFECYCLE_NOTIFY", ""
         ).lower() in ("1", "true", "yes")
         self._init_miniapp()
+
+    def _init_topic_status(self) -> None:
+        self.topic_rename_enabled: bool = _parse_bool_env(
+            "CCGRAM_TOPIC_RENAME_ENABLED", False
+        )
+        self.topic_status_diff_enabled: bool = _parse_bool_env(
+            "CCGRAM_TOPIC_STATUS_DIFF_ENABLED", True
+        )
+        self.topic_status_diff_interval: int = max(
+            1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 10)
+        )
 
     def _init_miniapp(self) -> None:
         # Mini App backend (Phase 3 / Theme 6) — disabled when base URL is empty.

@@ -42,7 +42,8 @@ async def test_synthesize_wraps_edge_no_audio_as_tts_error(monkeypatch):
 
 
 async def test_synthesize_wraps_edge_exceptions_as_tts_error(monkeypatch):
-    from edge_tts.exceptions import WebSocketError
+    edge_tts = pytest.importorskip("edge_tts")
+    WebSocketError = edge_tts.exceptions.WebSocketError
 
     class FailingCommunicate:
         def __init__(self, *a, **kw):

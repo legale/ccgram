@@ -243,6 +243,8 @@ Open your Telegram group, create a new topic, send a message — a directory bro
 | `CCGRAM_GROUP_ID`              | _(all groups)_                 | Restrict to one Telegram group                                                                              |
 | `CCGRAM_STATUS_MODE`           | `system`                       | Topic emoji color scheme: `system` (green=working) or `user` (green=ready)                                  |
 | `CCGRAM_HIDE_TOOL_CALLS`       | `true`                         | Global default for hiding `tool_use`/`tool_result` messages                                                 |
+| `CCGRAM_TOPIC_RENAME_ENABLED`  | `false`                        | Enable periodic topic title updates (emoji prefix + status diff messages)                                   |
+| `CCGRAM_TOPIC_STATUS_DIFF_INTERVAL` | `10`                      | Minimum seconds between status diff edits/sends                                                             |
 | `CCGRAM_LLM_PROVIDER`          | _(disabled)_                   | LLM for shell command generation + completion summaries                                                     |
 | `CCGRAM_LLM_API_KEY`           | _(empty)_                      | LLM API key (env only)                                                                                      |
 | `CCGRAM_WHISPER_PROVIDER`      | _(disabled)_                   | Whisper provider for voice transcription (`openai`, `groq`)                                                 |

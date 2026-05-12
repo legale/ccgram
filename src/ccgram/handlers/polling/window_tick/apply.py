@@ -47,6 +47,7 @@ from ...messaging_pipeline.message_queue import (
 from ...messaging_pipeline.message_sender import rate_limit_send_message, safe_send
 from ...recovery.recovery_banner import RecoveryBanner, render_banner
 from ...status.topic_emoji import update_topic_emoji
+from ...status.topic_status_diff import update_topic_status_diff
 from ..polling_state import (
     lifecycle_strategy,
     pane_status_strategy,
@@ -522,6 +523,12 @@ async def _update_status(
     if should_check_new_ui and status is not None and status.is_interactive:
         await handle_interactive_ui(client, user_id, window_id, thread_id)
         return
+
+    if thread_id is not None and config.topic_rename_enabled:
+        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+        await update_topic_status_diff(
+            client, chat_id, thread_id, window_id, pane_text
+        )
 
     notification_mode = window_query.get_notification_mode(window_id)
     ctx = build_context(window_id, w, status, notification_mode=notification_mode)

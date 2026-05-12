@@ -48,6 +48,22 @@ def _default_replace_prompt_mode():
     config.prompt_mode = original
 
 
+@pytest.fixture(autouse=True)
+def _default_show_tool_calls():
+    """Show tool calls by default in unit tests.
+
+    Some messaging pipeline tests assert batching/dispatch behavior for
+    tool_use/tool_result content; those paths are suppressed when the global
+    default is hidden.
+    """
+    from ccgram.config import config
+
+    original = config.hide_tool_calls
+    config.hide_tool_calls = False
+    yield
+    config.hide_tool_calls = original
+
+
 @pytest.fixture
 def _wrap_mode():
     """Switch to wrap prompt mode for the test."""

@@ -34,6 +34,8 @@ from typing import Any, Final, Literal
 import structlog
 from telegram import Bot, InlineKeyboardMarkup
 from telegram.error import BadRequest, NetworkError, RetryAfter, TelegramError, TimedOut
+
+from .topic_tail import record_message
 from telegram.warnings import PTBUserWarning
 
 # PTB v22.6+ exposes a typed `send_message_draft` whose signature requires a
@@ -387,6 +389,7 @@ class DraftStream:
             logger.warning("sendMessageDraft returned no message id — degrading")
             await self._start_legacy()
             return
+        record_message(self._chat_id, self._thread_id, self._message_id)
         self._mode = DRAFT_STREAMING
 
     async def _start_legacy(self) -> None:
@@ -396,6 +399,7 @@ class DraftStream:
             **self._send_kwargs(),
         )
         self._message_id = msg.message_id
+        record_message(self._chat_id, self._thread_id, self._message_id)
         self._mode = DRAFT_LEGACY
 
     async def _push_update(self, *, final: bool = False) -> None:
