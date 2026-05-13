@@ -111,14 +111,8 @@ max-statements = 60
 "src/ccgram/handlers/recovery/history.py" = ["C901", "PLR0912", "PLR0915"]
 # Response builder: message formatting with content-type dispatch
 "src/ccgram/handlers/response_builder.py" = ["C901", "PLR0912"]
-# Polling coordinator: background loop with multiple state checks
-"src/ccgram/handlers/polling_coordinator.py" = ["C901", "PLR0912"]
-# Message queue: worker loop with task dispatch and error handling
-"src/ccgram/handlers/message_queue.py" = ["C901"]
 # Directory callbacks: confirm handler with state cleanup branches
 "src/ccgram/handlers/topics/directory_callbacks.py" = ["C901"]
-# Recovery callbacks: fresh handler with state cleanup branches
-"src/ccgram/handlers/recovery_callbacks.py" = ["C901"]
 
 [tool.deptry.per_rule_ignores]
 # DEP002: dev/CLI tools (never imported in src/)
