@@ -14,6 +14,7 @@ toolbar_callbacks.py.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 import contextlib
 import io
@@ -46,7 +47,10 @@ from ..callback_helpers import get_thread_id, parse_target, user_owns_window
 from ..callback_registry import register
 
 if TYPE_CHECKING:
+    from telegram import Message
     from telegram.ext import ContextTypes
+
+    from ...tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
 
@@ -370,6 +374,51 @@ async def _handle_status_screenshot(
 # ------------------------------------------------------------------
 
 
+async def _command_thread_id(
+    update: Update,
+    safe_reply: Callable[..., Awaitable[object]],
+    handle_general_topic_message: Callable[..., Awaitable[object]],
+    is_general_topic: Callable[["Message"], bool],
+    use_topic_text: str,
+) -> int | None:
+    message = update.message
+    if message is None:
+        return None
+
+    thread_id = get_thread_id(update)
+    if thread_id is not None:
+        return thread_id
+
+    if update.effective_chat and is_general_topic(message):
+        await handle_general_topic_message(
+            update.get_bot(), message, update.effective_chat.id
+        )
+    else:
+        await safe_reply(message, use_topic_text)
+    return None
+
+
+async def _resolve_bound_tmux_window(
+    message: "Message",
+    user_id: int,
+    thread_id: int,
+    safe_reply: Callable[..., Awaitable[object]],
+    *,
+    unbound_text: str,
+    missing_text: str,
+) -> tuple[str, "TmuxWindow"] | None:
+    window_id = thread_router.get_window_for_thread(user_id, thread_id)
+    if not window_id:
+        await safe_reply(message, unbound_text)
+        return None
+
+    w = await tmux_manager.find_window_by_id(window_id)
+    if not w:
+        await safe_reply(message, missing_text)
+        return None
+    return window_id, w
+
+
 async def screenshot_command(
     update: Update, _context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -392,39 +441,32 @@ async def screenshot_command(
     if not update.message:
         return
 
-    thread_id = get_thread_id(update)
+    thread_id = await _command_thread_id(
+        update,
+        safe_reply,
+        handle_general_topic_message,
+        is_general_topic,
+        "\u274c Use this command inside a topic.",
+    )
     if thread_id is None:
-        if (
-            update.message
-            and update.effective_chat
-            and is_general_topic(update.message)
-        ):
-            await handle_general_topic_message(
-                update.get_bot(), update.message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(update.message, "\u274c Use this command inside a topic.")
         return
 
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
-    if not window_id:
-        await safe_reply(
-            update.message, "\u274c This topic is not bound to any session."
-        )
+    resolved = await _resolve_bound_tmux_window(
+        update.message,
+        user.id,
+        thread_id,
+        safe_reply,
+        unbound_text="\u274c This topic is not bound to any session.",
+        missing_text="\u274c Window no longer exists.",
+    )
+    if resolved is None:
         return
-
-    w = await tmux_manager.find_window_by_id(window_id)
-    if not w:
-        await safe_reply(update.message, "\u274c Window no longer exists.")
-        return
+    window_id, w = resolved
 
     pane_text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
     if not pane_text:
         await safe_reply(update.message, "\u274c Failed to capture terminal.")
         return
-
-    # Lazy: only needed when rendering the screenshot payload
-    import io
 
     png_bytes = await text_to_image(pane_text, with_ansi=True)
     keyboard = build_screenshot_keyboard(window_id)
@@ -471,33 +513,31 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.message:
         return
 
-    thread_id = get_thread_id(update)
+    thread_id = await _command_thread_id(
+        update,
+        safe_reply,
+        handle_general_topic_message,
+        is_general_topic,
+        "❌ Use this command inside a topic.",
+    )
     if thread_id is None:
-        if (
-            update.message
-            and update.effective_chat
-            and is_general_topic(update.message)
-        ):
-            await handle_general_topic_message(
-                update.get_bot(), update.message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(update.message, "❌ Use this command inside a topic.")
         return
 
     if is_live(user.id, thread_id):
         await safe_reply(update.message, "\U0001f4fa Live view already running.")
         return
 
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
-    if not window_id:
-        await safe_reply(update.message, "❌ This topic is not bound to any session.")
+    resolved = await _resolve_bound_tmux_window(
+        update.message,
+        user.id,
+        thread_id,
+        safe_reply,
+        unbound_text="❌ This topic is not bound to any session.",
+        missing_text="❌ Window no longer exists.",
+    )
+    if resolved is None:
         return
-
-    w = await tmux_manager.find_window_by_id(window_id)
-    if not w:
-        await safe_reply(update.message, "❌ Window no longer exists.")
-        return
+    window_id, w = resolved
 
     text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
     if not text:
@@ -536,9 +576,6 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def panes_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: C901
     """List all panes in the current topic's window."""
-    # Lazy: same callback-registry contract as screenshot_command.
-    from telegram import InlineKeyboardMarkup
-
     # Lazy: config singleton resolved at call time so tests can swap it
     from ...config import config
 
@@ -560,18 +597,14 @@ async def panes_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> 
     if not update.message:
         return
 
-    thread_id = get_thread_id(update)
+    thread_id = await _command_thread_id(
+        update,
+        safe_reply,
+        handle_general_topic_message,
+        is_general_topic,
+        "\u274c Use this command inside a topic.",
+    )
     if thread_id is None:
-        if (
-            update.message
-            and update.effective_chat
-            and is_general_topic(update.message)
-        ):
-            await handle_general_topic_message(
-                update.get_bot(), update.message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(update.message, "\u274c Use this command inside a topic.")
         return
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
