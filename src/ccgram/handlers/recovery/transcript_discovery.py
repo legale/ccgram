@@ -13,7 +13,7 @@ Key components:
 import asyncio
 import os
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from pathlib import Path
 
 import structlog
@@ -282,7 +282,7 @@ def _discover_codex_open_transcript(
 
 async def _find_and_register_transcript(
     window_id: str,
-    state: "WindowState",
+    state: Any,
     providers_to_try: list[tuple[str, "AgentProvider"]],
     pane_alive: bool,
 ) -> None:
