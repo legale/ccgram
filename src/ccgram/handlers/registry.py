@@ -32,6 +32,7 @@ from .commands import (
     forward_command_handler,
     toolbar_command,
 )
+from .echo_command import echo_command
 from .file_handler import handle_document_message, handle_photo_message
 from .inline import inline_query_handler, unsupported_content_handler
 from .live import live_command, panes_command, screenshot_command
@@ -92,6 +93,7 @@ def register_all(
         CommandSpec("verbose", verbose_command),
         CommandSpec("toolcalls", toolcalls_command),
         CommandSpec("restore", restore_command),
+        CommandSpec("echo", echo_command),
     ]
 
     for spec in command_specs:
@@ -169,5 +171,6 @@ COMMAND_NAMES: tuple[str, ...] = (
     "verbose",
     "toolcalls",
     "restore",
+    "echo",
 )
 """Sentinel for tests: the exact command names register_all installs, in order."""

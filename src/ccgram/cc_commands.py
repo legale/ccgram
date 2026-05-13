@@ -62,6 +62,7 @@ _BOT_COMMANDS: list[tuple[str, str]] = [
     ("toolbar", "Show action toolbar"),
     ("verbose", "Toggle tool call batching"),
     ("upgrade", "Upgrade ccgram and restart"),
+    ("echo", "Echo raw Telegram update"),
 ]
 
 # Telegram limits: max 100 commands, descriptions max 256 chars
