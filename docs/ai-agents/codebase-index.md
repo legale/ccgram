@@ -38,6 +38,7 @@ Telegram handler surface (post Round 4 F1 — feature subpackages):
 - `src/ccgram/handlers/topics/directory_browser.py` + `directory_callbacks.py`: new-session UX.
 - `src/ccgram/handlers/topics/topic_lifecycle.py`: autoclose timers for done/dead topics, unbound window TTL.
 - `src/ccgram/handlers/topics/topic_orchestration.py`: new window/topic creation, unbound window adoption.
+- `src/ccgram/handlers/topics/topic_binding.py`: small shared topic bind + forum rename helpers used by new-session and recovery flows.
 - `src/ccgram/handlers/topics/window_callbacks.py`: window picker callbacks (bind, new, cancel).
 - `src/ccgram/handlers/topics/new_command.py`: `/new` (and `/start` alias) handler.
 - `src/ccgram/handlers/interactive/interactive_ui.py` + `interactive_callbacks.py`: interactive prompt UX.
@@ -101,6 +102,7 @@ Change topic/window routing behavior:
 
 - `src/ccgram/session.py` for bindings/state model.
 - `src/ccgram/handlers/callback_helpers.py` for thread/window extraction helpers.
+- `src/ccgram/handlers/topics/topic_binding.py` for bind + forum-topic rename glue shared by topic creation/recovery flows.
 - `src/ccgram/window_resolver.py` for stale ID re-resolution.
 
 Change monitor/event dispatch behavior:
@@ -148,6 +150,7 @@ Change recovery UX (dead window banner / resume picker):
 
 - `src/ccgram/handlers/recovery/recovery_banner.py` for the dead-window banner UX (Round 5 F3).
 - `src/ccgram/handlers/recovery/resume_picker.py` for the resume picker UX + transcript scan (Round 5 F3).
+- Topic rebinding and forum-topic renames are shared through `src/ccgram/handlers/topics/topic_binding.py`; keep recovery-specific create/resume decisions in recovery modules.
 - `src/ccgram/handlers/recovery/recovery_callbacks.py` is now a thin dispatcher only — do not add UX logic here.
 
 Change polling pure types vs strategies:

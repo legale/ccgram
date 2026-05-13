@@ -52,7 +52,7 @@ graph TD
 
     subgraph handlers["Handler Layer — handlers/"]
         TopLevel["Top-level: callback_*, cleanup,<br>command_*, file_handler, hook_events,<br>inline, reactions, registry, response_builder,<br>sessions_dashboard, sync_command, upgrade, user_state"]
-        TopicsPkg["topics/<br>topic_orchestration, topic_lifecycle,<br>directory_browser, directory_callbacks,<br>window_callbacks, new_command"]
+        TopicsPkg["topics/<br>topic_orchestration, topic_lifecycle,<br>topic_binding, directory_browser,<br>directory_callbacks, window_callbacks, new_command"]
         TextPkg["text/<br>text_handler"]
         InteractivePkg["interactive/<br>interactive_ui, interactive_callbacks"]
         StatusPkg["status/<br>status_bubble, status_bar_actions, topic_emoji"]
@@ -338,3 +338,4 @@ graph LR
 | Recovery split (R5 F3)                  | `recovery_callbacks.py` shrunk to ~170-LOC dispatcher (routing + shared validators); `recovery_banner.py` (~450 LOC dead-window UX) + `resume_picker.py` (~400 LOC resume UX + transcript scan) are siblings. `recovery/__init__.py` re-exports unchanged; pinned by `test_recovery_subpackage_surface.py`                                   |
 | Commands subpackage (R5 F4)             | `command_orchestration.py` deleted; `handlers/commands/` follows `shell/` pattern: `forward.py`, `menu_sync.py`, `failure_probe.py`, `status_snapshot.py`. `commands/__init__.py` hosts `commands_command` + `toolbar_command`; pinned by `test_commands_subpackage_surface.py`                                                              |
 | Lazy-import lint enforcement (R5 F5)    | `scripts/lint_lazy_imports.py` AST-walks `src/ccgram/**/*.py` and fails any in-function import without `# Lazy:` (or inside `if TYPE_CHECKING:` / `_reset_*_for_testing`). Walker recurses through compound statements (incl. `except*`) and nested `def`/`class` bodies. All 250 sites annotated. Cycle test expanded from 29 → 162 modules |
+| Topic binding helper                    | `handlers/topics/topic_binding.py` owns the small repeated bind+rename steps shared by new-session and recovery flows; window creation, provider setup, and pending-message delivery stay in the caller-specific handlers                                                                                                                   |
