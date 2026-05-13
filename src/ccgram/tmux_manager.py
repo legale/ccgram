@@ -89,6 +89,14 @@ _TmuxError = (
 _EXTERNAL_DISCOVERY_TTL = 10.0  # seconds — cache external session discovery
 
 
+async def _kill_timed_out_proc(proc: asyncio.subprocess.Process | None) -> None:
+    if proc is None:
+        return
+    with contextlib.suppress(ProcessLookupError):
+        proc.kill()
+        await proc.wait()
+
+
 @dataclass
 class PaneInfo:
     """Information about a single tmux pane within a window."""
@@ -280,10 +288,7 @@ class TmuxManager:
             async with asyncio.timeout(5.0):
                 stdout, _ = await proc.communicate()
         except TimeoutError:
-            if proc:
-                with contextlib.suppress(ProcessLookupError):
-                    proc.kill()
-                    await proc.wait()
+            await _kill_timed_out_proc(proc)
             return None
         except OSError:
             return None
@@ -360,10 +365,7 @@ class TmuxManager:
             text = stdout.decode("utf-8", errors="replace").rstrip()
             return text if text else None
         except TimeoutError:
-            if proc:
-                with contextlib.suppress(ProcessLookupError):
-                    proc.kill()
-                    await proc.wait()
+            await _kill_timed_out_proc(proc)
             logger.debug("capture_pane_scrollback timed out", window_id=window_id)
             return None
         except OSError as exc:
@@ -414,12 +416,7 @@ class TmuxManager:
             return (text, columns, rows)
         except TimeoutError:
             logger.warning("Capture pane raw %s timed out", window_id)
-            if proc:
-                try:
-                    proc.kill()
-                    await proc.wait()
-                except ProcessLookupError:
-                    pass
+            await _kill_timed_out_proc(proc)
             return None
         except OSError:
             logger.exception("Unexpected error capturing pane raw %s", window_id)
@@ -452,12 +449,7 @@ class TmuxManager:
             return text if text else None
         except TimeoutError:
             logger.warning("Capture pane %s timed out", window_id)
-            if proc:
-                try:
-                    proc.kill()
-                    await proc.wait()
-                except ProcessLookupError:
-                    pass
+            await _kill_timed_out_proc(proc)
             return None
         except OSError:
             logger.exception("Unexpected error capturing pane %s", window_id)
@@ -487,12 +479,7 @@ class TmuxManager:
                 return ""
             return stdout.decode("utf-8", errors="replace").strip()
         except TimeoutError:
-            if proc:
-                try:
-                    proc.kill()
-                    await proc.wait()
-                except ProcessLookupError:
-                    pass
+            await _kill_timed_out_proc(proc)
             return ""
         except OSError:
             return ""
@@ -801,10 +788,7 @@ class TmuxManager:
             async with asyncio.timeout(5.0):
                 stdout, _ = await proc.communicate()
         except TimeoutError:
-            if proc:
-                with contextlib.suppress(ProcessLookupError):
-                    proc.kill()
-                    await proc.wait()
+            await _kill_timed_out_proc(proc)
             return []
         except OSError:
             return []
@@ -850,10 +834,7 @@ class TmuxManager:
             async with asyncio.timeout(5.0):
                 win_stdout, _ = await proc.communicate()
         except TimeoutError:
-            if proc:
-                with contextlib.suppress(ProcessLookupError):
-                    proc.kill()
-                    await proc.wait()
+            await _kill_timed_out_proc(proc)
             return []
         except OSError:
             return []
