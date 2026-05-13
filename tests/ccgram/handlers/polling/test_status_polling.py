@@ -1492,13 +1492,15 @@ class TestMaybeDiscoverTranscript:
             mock_window = MagicMock(pane_current_command="bun")
             mock_tmux.find_window_by_id = AsyncMock(return_value=mock_window)
             mock_tmux.get_pane_title = AsyncMock(return_value="")
-            mock_asyncio.to_thread = AsyncMock(side_effect=[event, None])
+            mock_asyncio.to_thread = AsyncMock(side_effect=[None, event, None])
             await discover_and_register_transcript("@7")
 
-        assert mock_asyncio.to_thread.call_count == 2
-        discover_call = mock_asyncio.to_thread.call_args_list[0]
+        assert mock_asyncio.to_thread.call_count == 3
+        probe_call = mock_asyncio.to_thread.call_args_list[0]
+        assert probe_call.args[0].__name__ == "_discover_codex_open_transcript"
+        discover_call = mock_asyncio.to_thread.call_args_list[1]
         assert discover_call.args[0] == mock_provider.discover_transcript
-        write_call = mock_asyncio.to_thread.call_args_list[1]
+        write_call = mock_asyncio.to_thread.call_args_list[2]
         assert write_call.args[0] == mock_sms.write_hookless_session_map
         mock_sms.register_hookless_session.assert_called_once()
 
@@ -1643,7 +1645,9 @@ class TestMaybeDiscoverTranscript:
             mock_asyncio.to_thread = AsyncMock(return_value=None)
             await discover_and_register_transcript("@7")
 
-        discover_call = mock_asyncio.to_thread.call_args_list[0]
+        probe_call = mock_asyncio.to_thread.call_args_list[0]
+        assert probe_call.args[0].__name__ == "_discover_codex_open_transcript"
+        discover_call = mock_asyncio.to_thread.call_args_list[1]
         assert discover_call.args[0] == mock_provider.discover_transcript
         assert discover_call.kwargs["max_age"] == 0
 
@@ -1686,7 +1690,9 @@ class TestMaybeDiscoverTranscript:
             mock_asyncio.to_thread = AsyncMock(return_value=None)
             await discover_and_register_transcript("@7")
 
-        discover_call = mock_asyncio.to_thread.call_args_list[0]
+        probe_call = mock_asyncio.to_thread.call_args_list[0]
+        assert probe_call.args[0].__name__ == "_discover_codex_open_transcript"
+        discover_call = mock_asyncio.to_thread.call_args_list[1]
         assert discover_call.args[0] == mock_provider.discover_transcript
         assert discover_call.kwargs["max_age"] is None
 

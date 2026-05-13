@@ -11,7 +11,10 @@ Key components:
 """
 
 import asyncio
+import os
+import subprocess
 from typing import TYPE_CHECKING
+from pathlib import Path
 
 import structlog
 
@@ -29,6 +32,7 @@ from ...telegram_client import TelegramClient
 from ...tmux_manager import tmux_manager
 from ...window_resolver import is_foreign_window
 from ...window_state_store import window_store
+from ...providers.base import SessionStartEvent
 
 if TYPE_CHECKING:
     from ...providers.base import AgentProvider
@@ -36,6 +40,9 @@ if TYPE_CHECKING:
     from ...tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
+
+_TMUX_TIMEOUT_SEC = 2.0
+_PROC_STAT_MIN_FIELDS_AFTER_COMM = 2
 
 
 async def _detect_and_apply_provider(
@@ -135,6 +142,144 @@ def _resolve_providers_to_try(
     ]
 
 
+def _tmux_target(window_id: str) -> str:
+    if is_foreign_window(window_id):
+        return window_id
+    return f"{config.tmux_session_name}:{window_id}"
+
+
+def _read_tmux_pane_pid(window_id: str) -> int | None:
+    try:
+        proc = subprocess.run(
+            [
+                "tmux",
+                "display-message",
+                "-p",
+                "-t",
+                _tmux_target(window_id),
+                "#{pane_pid}",
+            ],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=_TMUX_TIMEOUT_SEC,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    raw = proc.stdout.strip()
+    return int(raw) if raw.isdigit() else None
+
+
+def _read_proc_ppid(stat_path: Path) -> tuple[int, int] | None:
+    try:
+        pid = int(stat_path.parent.name)
+        data = stat_path.read_text()
+    except (OSError, ValueError):
+        return None
+    if ")" not in data:
+        return None
+    rest = data.rsplit(")", 1)[1].strip().split()
+    if len(rest) < _PROC_STAT_MIN_FIELDS_AFTER_COMM:
+        return None
+    try:
+        return pid, int(rest[1])
+    except ValueError:
+        return None
+
+
+def _proc_descendants(root_pid: int) -> set[int]:
+    children: dict[int, list[int]] = {}
+    for stat_path in Path("/proc").glob("[0-9]*/stat"):
+        item = _read_proc_ppid(stat_path)
+        if item is None:
+            continue
+        pid, ppid = item
+        children.setdefault(ppid, []).append(pid)
+
+    seen: set[int] = set()
+    stack = [root_pid]
+    while stack:
+        pid = stack.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        stack.extend(children.get(pid, ()))
+    return seen
+
+
+def _iter_proc_fds(pid: int) -> list[Path]:
+    fd_dir = Path("/proc") / str(pid) / "fd"
+    try:
+        return list(fd_dir.iterdir())
+    except OSError:
+        return []
+
+
+def _codex_event_from_fd(
+    fd_path: Path,
+    cwd: str,
+    window_key: str,
+) -> tuple[float, SessionStartEvent] | None:
+    try:
+        target = Path(os.readlink(fd_path))
+    except OSError:
+        return None
+    sessions_dir = Path.home() / ".codex" / "sessions"
+    if target.suffix != ".jsonl":
+        return None
+    try:
+        target.relative_to(sessions_dir)
+    except ValueError:
+        return None
+
+    # Lazy: reuse Codex provider's transcript metadata rules without importing
+    # provider-specific code on the recovery module cold path.
+    from ...providers.codex import _is_primary_codex_session, _read_codex_session_meta
+
+    meta = _read_codex_session_meta(target)
+    if not meta or not _is_primary_codex_session(meta):
+        return None
+    file_cwd = meta.get("cwd", "")
+    if not file_cwd:
+        return None
+    if str(Path(file_cwd).resolve()) != str(Path(cwd).resolve()):
+        return None
+    session_id = meta.get("id", "")
+    if not session_id:
+        return None
+    try:
+        mtime = target.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    return mtime, SessionStartEvent(
+        session_id=session_id,
+        cwd=file_cwd,
+        transcript_path=str(target),
+        window_key=window_key,
+    )
+
+
+def _discover_codex_open_transcript(
+    window_id: str,
+    cwd: str,
+    window_key: str,
+) -> SessionStartEvent | None:
+    pane_pid = _read_tmux_pane_pid(window_id)
+    if pane_pid is None:
+        return None
+
+    candidates: list[tuple[float, SessionStartEvent]] = []
+    for pid in _proc_descendants(pane_pid):
+        for fd_path in _iter_proc_fds(pid):
+            event = _codex_event_from_fd(fd_path, cwd, window_key)
+            if event is not None:
+                candidates.append(event)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
 async def _find_and_register_transcript(
     window_id: str,
     state: "WindowState",
@@ -149,13 +294,22 @@ async def _find_and_register_transcript(
     )
 
     for provider_name, provider in providers_to_try:
+        event = None
+        if provider_name == "codex":
+            event = await asyncio.to_thread(
+                _discover_codex_open_transcript,
+                window_id,
+                state.cwd,
+                window_key,
+            )
         max_age = 0 if pane_alive else None
-        event = await asyncio.to_thread(
-            provider.discover_transcript,
-            state.cwd,
-            window_key,
-            max_age=max_age,
-        )
+        if event is None:
+            event = await asyncio.to_thread(
+                provider.discover_transcript,
+                state.cwd,
+                window_key,
+                max_age=max_age,
+            )
         if not event:
             continue
 
