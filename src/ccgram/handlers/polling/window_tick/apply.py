@@ -126,9 +126,8 @@ async def _transition_to_idle(
 async def _surface_pane_alert(
     bot: "Bot", user_id: int, window_id: str, thread_id: int, pane_id: str
 ) -> None:
-    await handle_interactive_ui(
-        PTBTelegramClient(bot), user_id, window_id, thread_id, pane_id=pane_id
-    )
+    client = PTBTelegramClient(bot)
+    await handle_interactive_ui(client, user_id, window_id, thread_id, pane_id=pane_id)
 
 
 _PANE_OUTPUT_PREVIEW_LINES = 12
@@ -162,10 +161,9 @@ async def _forward_pane_output(
     body = "\n".join(lines)
     text = f"\U0001f4e1 {label}\n```\n{body}\n```"
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+    client = PTBTelegramClient(bot)
     try:
-        await safe_send(
-            PTBTelegramClient(bot), chat_id, text, message_thread_id=thread_id
-        )
+        await safe_send(client, chat_id, text, message_thread_id=thread_id)
     except TelegramError as exc:
         logger.warning(
             "pane output forward failed",
@@ -209,6 +207,7 @@ async def _notify_pane_lifecycle(
         return
 
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+    client = PTBTelegramClient(bot)
     for t in transitions:
         if t.prev_state is not None:
             continue
@@ -220,9 +219,7 @@ async def _notify_pane_lifecycle(
             label = f"{pane.name} ({t.pane_id})" if pane and pane.name else t.pane_id
             text = f"➕ pane {label} created"
         try:
-            await safe_send(
-                PTBTelegramClient(bot), chat_id, text, message_thread_id=thread_id
-            )
+            await safe_send(client, chat_id, text, message_thread_id=thread_id)
         except TelegramError as exc:
             logger.warning(
                 "pane lifecycle notify failed",
@@ -258,9 +255,8 @@ async def _check_interactive_only(
 
     if status is not None and status.is_interactive:
         set_interactive_mode(user_id, window_id, thread_id)
-        handled = await handle_interactive_ui(
-            PTBTelegramClient(bot), user_id, window_id, thread_id
-        )
+        client = PTBTelegramClient(bot)
+        handled = await handle_interactive_ui(client, user_id, window_id, thread_id)
         if not handled:
             clear_interactive_mode(user_id, thread_id)
 
@@ -286,9 +282,8 @@ async def _maybe_check_passive_shell(
     # Lazy: shell.shell_capture imports apply indirectly through the broker
     from ...shell.shell_capture import check_passive_shell_output
 
-    await check_passive_shell_output(
-        PTBTelegramClient(bot), user_id, thread_id, window_id, rendered
-    )
+    client = PTBTelegramClient(bot)
+    await check_passive_shell_output(client, user_id, thread_id, window_id, rendered)
 
 
 # ── Dead window notification ─────────────────────────────────────────────
@@ -304,9 +299,8 @@ async def _handle_dead_window_notification(
     clear_tool_msg_ids_for_topic(user_id, thread_id)
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
     display = thread_router.get_display_name(wid)
-    await update_topic_emoji(
-        PTBTelegramClient(bot), chat_id, thread_id, "dead", display
-    )
+    client = PTBTelegramClient(bot)
+    await update_topic_emoji(client, chat_id, thread_id, "dead", display)
     lifecycle_strategy.start_autoclose_timer(
         user_id, thread_id, "dead", time.monotonic()
     )
@@ -332,14 +326,13 @@ async def _handle_dead_window_notification(
         text = f"⚠ Session `{display}` ended."
         keyboard = None
     sent = await rate_limit_send_message(
-        PTBTelegramClient(bot),
+        client,
         chat_id,
         text,
         message_thread_id=thread_id,
         reply_markup=keyboard,
     )
     if sent is None:
-        client = PTBTelegramClient(bot)
         try:
             await client.unpin_all_forum_topic_messages(
                 chat_id=chat_id, message_thread_id=thread_id
@@ -380,6 +373,7 @@ async def _apply_active_transition(
     decision: TickDecision,
     notif_mode: str,
 ) -> None:
+    client = PTBTelegramClient(bot)
     if decision.send_status:
         claude_task_state.clear_wait_header(window_id)
         claude_task_state.set_last_status(window_id, decision.status_text or "")
@@ -392,7 +386,7 @@ async def _apply_active_transition(
                 label = build_subagent_label(subagent_names)
                 display_status = f"{display_status} ({label})"
             await enqueue_status_update(
-                PTBTelegramClient(bot),
+                client,
                 user_id,
                 window_id,
                 display_status,
@@ -404,9 +398,7 @@ async def _apply_active_transition(
     if thread_id is not None:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
         display = thread_router.get_display_name(window_id)
-        await update_topic_emoji(
-            PTBTelegramClient(bot), chat_id, thread_id, "active", display
-        )
+        await update_topic_emoji(client, chat_id, thread_id, "active", display)
         lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
 
 
@@ -438,6 +430,7 @@ async def _apply_starting_transition(
     window_id: str,
     thread_id: int | None,
 ) -> None:
+    client = PTBTelegramClient(bot)
     ws = terminal_poll_state.peek_state(window_id)
     if ws is None or ws.startup_time is None:
         terminal_poll_state.begin_startup_timer(window_id, time.monotonic())
@@ -445,9 +438,7 @@ async def _apply_starting_transition(
     if thread_id is not None:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
         display = thread_router.get_display_name(window_id)
-        await update_topic_emoji(
-            PTBTelegramClient(bot), chat_id, thread_id, "active", display
-        )
+        await update_topic_emoji(client, chat_id, thread_id, "active", display)
         lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
 
 
@@ -495,9 +486,10 @@ async def _update_status(
     _window: "TmuxWindow | None" = None,
 ) -> None:
     w = _window or await tmux_manager.find_window_by_id(window_id)
+    client = PTBTelegramClient(bot)
     if not w:
         await enqueue_status_update(
-            PTBTelegramClient(bot), user_id, window_id, None, thread_id=thread_id
+            client, user_id, window_id, None, thread_id=thread_id
         )
         return
 
@@ -511,7 +503,6 @@ async def _update_status(
     interactive_window = get_interactive_window(user_id, thread_id)
     should_check_new_ui = True
 
-    client = PTBTelegramClient(bot)
     if interactive_window == window_id:
         if status is not None and status.is_interactive:
             return
