@@ -18,12 +18,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 import asyncio
+import os
 
 import structlog
 from pathlib import Path
 
 from telegram import CallbackQuery, Update
-from ...providers import registry as provider_registry
+from ...providers import (
+    has_yolo_mode,
+    registry as provider_registry,
+)
+from ...providers.shell_infra import KNOWN_SHELLS
 from ...session import session_manager
 from ...session_map import session_map_sync
 from ...telegram_client import PTBTelegramClient
@@ -433,9 +438,6 @@ async def _handle_provider_select(
     Providers without a YOLO flag (e.g. shell) skip the mode picker
     and go directly to window creation with approval_mode="normal".
     """
-    # Lazy: providers package heavy bootstrap
-    from ccgram.providers import has_yolo_mode
-
     provider_name = data[len(CB_PROV_SELECT) :]
     if not provider_registry.is_valid(provider_name):
         await query.answer("Unknown provider", show_alert=True)
@@ -479,12 +481,6 @@ def _parse_mode_select(data: str) -> tuple[str, str] | None:
 
 async def _wait_for_shell_ready(window_id: str, *, attempts: int = 5) -> None:
     """Wait for a freshly created tmux window to show a shell prompt."""
-    # Lazy: only needed inside the shell-detection branch
-    import os
-
-    # Lazy: providers package heavy bootstrap
-    from ccgram.providers.shell import KNOWN_SHELLS
-
     for _ in range(attempts):
         w = await tmux_manager.find_window_by_id(window_id)
         if w and w.pane_current_command:
@@ -547,7 +543,7 @@ async def _create_window_and_bind(
     Shared by _handle_mode_select (after mode picker) and _handle_provider_select
     (when mode picker is skipped for providers without YOLO flags).
     """
-    # Lazy: providers package heavy bootstrap
+    # Lazy: tests patch ccgram.providers.resolve_launch_command at call time.
     from ccgram.providers import resolve_launch_command
 
     pending_thread_id: int | None = (
