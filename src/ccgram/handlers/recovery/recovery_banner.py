@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING, Literal
 
 import structlog
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.error import TelegramError
 
 from ... import window_query
 from ...providers import get_provider, get_provider_for_window, resolve_launch_command
@@ -48,7 +47,7 @@ from ..callback_data import (
 )
 from ..callback_helpers import get_thread_id
 from ..messaging_pipeline.message_sender import safe_edit, safe_send
-from ..status.topic_emoji import format_topic_name_for_mode
+from ..topics.topic_binding import bind_topic_to_window, rename_bound_topic
 from ..user_state import (
     PENDING_THREAD_ID,
     PENDING_THREAD_TEXT,
@@ -272,22 +271,14 @@ async def _create_and_bind_window(
     session_manager.set_window_provider(created_wid, provider.capabilities.name)
     session_manager.set_window_approval_mode(created_wid, approval_mode)
 
-    thread_router.bind_thread(
-        user_id, thread_id, created_wid, window_name=created_wname
+    bind_topic_to_window(
+        query, user_id, thread_id, created_wid, created_wname, router=thread_router
     )
-    chat = query.message.chat if query.message else None
-    if chat and chat.type in ("group", "supergroup"):
-        thread_router.set_group_chat_id(user_id, thread_id, chat.id)
 
     client = PTBTelegramClient(context.bot)
-    try:
-        await client.edit_forum_topic(
-            chat_id=thread_router.resolve_chat_id(user_id, thread_id),
-            message_thread_id=thread_id,
-            name=format_topic_name_for_mode(created_wname, approval_mode),
-        )
-    except TelegramError as e:
-        logger.debug("Failed to rename topic: %s", e)
+    await rename_bound_topic(
+        client, user_id, thread_id, created_wname, approval_mode, router=thread_router
+    )
 
     await safe_edit(query, f"✅ {message}\n\n{success_label}")
 

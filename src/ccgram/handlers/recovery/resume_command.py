@@ -28,7 +28,6 @@ from telegram import (
     InlineKeyboardMarkup,
     Update,
 )
-from telegram.error import TelegramError
 
 from ...config import config
 from ...providers import get_provider, get_provider_for_window, resolve_launch_command
@@ -44,7 +43,7 @@ from ..callback_data import CB_RESUME_CANCEL, CB_RESUME_PAGE, CB_RESUME_PICK
 from ..callback_helpers import get_thread_id
 from ..callback_registry import register
 from ..messaging_pipeline.message_sender import safe_edit, safe_reply
-from ..status.topic_emoji import format_topic_name_for_mode
+from ..topics.topic_binding import bind_topic_to_window, rename_bound_topic
 from ..user_state import RESUME_SESSIONS
 
 if TYPE_CHECKING:
@@ -467,27 +466,20 @@ async def _handle_pick(
         await query.answer("Couldn't create window")
         return
 
-    thread_router.bind_thread(
-        user_id, thread_id, created_wid, window_name=created_wname
+    bind_topic_to_window(
+        query, user_id, thread_id, created_wid, created_wname, router=thread_router
     )
-
-    # Store group chat_id for routing
-    chat = query.message.chat if query.message else None
-    if chat and chat.type in ("group", "supergroup"):
-        thread_router.set_group_chat_id(user_id, thread_id, chat.id)
 
     # Rename topic to match the window
     client = PTBTelegramClient(context.bot)
-    try:
-        await client.edit_forum_topic(
-            chat_id=thread_router.resolve_chat_id(user_id, thread_id),
-            message_thread_id=thread_id,
-            name=format_topic_name_for_mode(
-                created_wname, window_query.get_approval_mode(created_wid)
-            ),
-        )
-    except TelegramError as e:
-        logger.debug("Failed to rename topic: %s", e)
+    await rename_bound_topic(
+        client,
+        user_id,
+        thread_id,
+        created_wname,
+        window_query.get_approval_mode(created_wid),
+        router=thread_router,
+    )
 
     summary_short = picked.get("summary", "")[:40]
     await safe_edit(

@@ -23,10 +23,10 @@ import structlog
 from pathlib import Path
 
 from telegram import CallbackQuery, Update
-from telegram.error import TelegramError
 from ...providers import registry as provider_registry
 from ...session import session_manager
 from ...session_map import session_map_sync
+from ...telegram_client import PTBTelegramClient
 from ...user_preferences import user_preferences
 from ...window_state_store import CCGRAM_CREATED_WINDOW_ORIGIN
 from ...thread_router import thread_router
@@ -54,9 +54,9 @@ from .directory_browser import (
     clear_browse_state,
     get_favorites,
 )
+from .topic_binding import bind_topic_to_window, rename_bound_topic
 from ..callback_registry import register
 from ..messaging_pipeline.message_sender import safe_edit, safe_send
-from ..status.topic_emoji import format_topic_name_for_mode
 from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
 
 if TYPE_CHECKING:
@@ -594,13 +594,14 @@ async def _create_window_and_bind(
     _try_install_messaging_skill(provider_name, selected_path)
 
     if pending_thread_id is not None:
-        thread_router.bind_thread(
-            user_id, pending_thread_id, created_wid, window_name=created_wname
+        bind_topic_to_window(
+            query,
+            user_id,
+            pending_thread_id,
+            created_wid,
+            created_wname,
+            router=thread_router,
         )
-        query_message = query.message
-        chat = query_message.chat if query_message else None
-        if chat and chat.type in ("group", "supergroup"):
-            thread_router.set_group_chat_id(user_id, pending_thread_id, chat.id)
 
     provider = provider_registry.get(provider_name)
     if approval_mode == "yolo" and provider.capabilities.has_yolo_confirmation:
@@ -613,14 +614,14 @@ async def _create_window_and_bind(
         await safe_edit(query, f"✅ {message}")
         return
 
-    try:
-        await context.bot.edit_forum_topic(
-            chat_id=thread_router.resolve_chat_id(user_id, pending_thread_id),
-            message_thread_id=pending_thread_id,
-            name=format_topic_name_for_mode(created_wname, approval_mode),
-        )
-    except TelegramError as e:
-        logger.debug("Failed to rename topic: %s", e)
+    await rename_bound_topic(
+        PTBTelegramClient(context.bot),
+        user_id,
+        pending_thread_id,
+        created_wname,
+        approval_mode,
+        router=thread_router,
+    )
 
     await safe_edit(
         query,
@@ -642,10 +643,6 @@ async def _create_window_and_bind(
 
         # Chat-first providers (shell): route through NL→command approval flow
         if provider_caps.chat_first_command_path:
-            # Lazy: telegram_client wraps PTB Bot; shell.shell_commands
-            # ↔ topics cycle through approval callback wiring.
-            from ...telegram_client import PTBTelegramClient
-
             # Lazy: shell.shell_commands ↔ topics cycle through approval wiring.
             from ..shell.shell_commands import handle_shell_message
 
@@ -660,9 +657,6 @@ async def _create_window_and_bind(
             send_ok, send_msg = await send_to_window(created_wid, pending_text)
             if not send_ok:
                 logger.warning("Failed to forward pending text: %s", send_msg)
-                # Lazy: telegram_client wraps PTB Bot.
-                from ...telegram_client import PTBTelegramClient
-
                 await safe_send(
                     PTBTelegramClient(context.bot),
                     thread_router.resolve_chat_id(user_id, pending_thread_id),
