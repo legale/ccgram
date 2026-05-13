@@ -515,7 +515,7 @@ async def _update_status(
         await handle_interactive_ui(client, user_id, window_id, thread_id)
         return
 
-    if thread_id is not None and config.topic_rename_enabled:
+    if thread_id is not None and config.topic_status_diff_enabled:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
         await update_topic_status_diff(
             client, chat_id, thread_id, window_id, pane_text

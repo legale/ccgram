@@ -15,8 +15,6 @@ import structlog
 from pathlib import Path
 
 from telegram import CallbackQuery, Chat, Update
-from telegram.error import TelegramError
-from ... import window_query
 from ...telegram_client import PTBTelegramClient, TelegramClient
 from ...session import session_manager
 from ...thread_router import thread_router
@@ -35,7 +33,6 @@ from .directory_browser import (
 )
 from ..callback_registry import register
 from ..messaging_pipeline.message_sender import safe_edit, safe_send
-from ..status.topic_emoji import format_topic_name_for_mode
 from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
 
 if TYPE_CHECKING:
@@ -222,17 +219,6 @@ async def _handle_bind(
         user_id=user_id,
         thread_id=thread_id,
     )
-
-    try:
-        await client.edit_forum_topic(
-            chat_id=thread_router.resolve_chat_id(user_id, thread_id),
-            message_thread_id=thread_id,
-            name=format_topic_name_for_mode(
-                display, window_query.get_approval_mode(selected_wid)
-            ),
-        )
-    except TelegramError as e:
-        logger.debug("Failed to rename topic: %s", e)
 
     await safe_edit(
         query,

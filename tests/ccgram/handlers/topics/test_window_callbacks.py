@@ -54,7 +54,6 @@ class TestBindWindowCallback:
                 return_value=mock_window,
             ),
             patch("ccgram.handlers.topics.window_callbacks.safe_edit") as mock_edit,
-            patch("ccgram.handlers.topics.window_callbacks.format_topic_name_for_mode"),
         ):
             mock_tr.resolve_chat_id.return_value = -100
             mock_sm.get_approval_mode.return_value = "normal"
@@ -114,7 +113,6 @@ class TestBindWindowCallback:
                 return_value=mock_window,
             ),
             patch("ccgram.handlers.topics.window_callbacks.safe_edit"),
-            patch("ccgram.handlers.topics.window_callbacks.format_topic_name_for_mode"),
             patch(
                 "ccgram.handlers.topics.window_callbacks.send_to_window",
                 new_callable=AsyncMock,
@@ -209,7 +207,6 @@ class TestBindProviderDetection:
                 return_value=mock_window,
             ),
             patch("ccgram.handlers.topics.window_callbacks.safe_edit"),
-            patch("ccgram.handlers.topics.window_callbacks.format_topic_name_for_mode"),
             patch(
                 "ccgram.providers.detect_provider_from_pane",
                 new_callable=AsyncMock,
@@ -246,7 +243,6 @@ class TestBindProviderDetection:
                 return_value=mock_window,
             ),
             patch("ccgram.handlers.topics.window_callbacks.safe_edit"),
-            patch("ccgram.handlers.topics.window_callbacks.format_topic_name_for_mode"),
             patch(
                 "ccgram.providers.detect_provider_from_pane",
                 new_callable=AsyncMock,
@@ -284,7 +280,6 @@ class TestBindProviderDetection:
                 return_value=mock_window,
             ),
             patch("ccgram.handlers.topics.window_callbacks.safe_edit"),
-            patch("ccgram.handlers.topics.window_callbacks.format_topic_name_for_mode"),
             patch(
                 "ccgram.providers.detect_provider_from_pane",
                 new_callable=AsyncMock,
