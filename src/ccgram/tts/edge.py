@@ -7,6 +7,8 @@ try/except ImportError block; the package is only required when CCGRAM_TTS_PROVI
 
 from __future__ import annotations
 
+from importlib import import_module
+from types import ModuleType
 from typing import Any
 
 import structlog
@@ -16,28 +18,30 @@ from .base import TtsAudio, TtsSynthesisError
 logger = structlog.get_logger()
 
 _edge_tts_available = False
-Communicate: Any = None
+Communicate: Any | None = None
+_EDGE_TTS_ERRORS: tuple[type[BaseException], ...] = (Exception,)
+
+
+def _edge_exc(module: ModuleType, name: str) -> type[BaseException]:
+    exc = getattr(module, name)
+    if isinstance(exc, type) and issubclass(exc, BaseException):
+        return exc
+    return Exception
+
 
 try:
-    from edge_tts import Communicate
-    from edge_tts.exceptions import (
-        NoAudioReceived,
-        UnexpectedResponse,
-        UnknownResponse,
-        WebSocketError,
+    _edge_tts = import_module("edge_tts")
+    _edge_exceptions = import_module("edge_tts.exceptions")
+    Communicate = getattr(_edge_tts, "Communicate")
+    _EDGE_TTS_ERRORS = (
+        _edge_exc(_edge_exceptions, "NoAudioReceived"),
+        _edge_exc(_edge_exceptions, "UnexpectedResponse"),
+        _edge_exc(_edge_exceptions, "UnknownResponse"),
+        _edge_exc(_edge_exceptions, "WebSocketError"),
     )
-
     _edge_tts_available = True
 except ImportError:
-    NoAudioReceived = UnexpectedResponse = UnknownResponse = WebSocketError = Exception  # type: ignore[misc,assignment]
-
-
-_EDGE_TTS_ERRORS = (
-    NoAudioReceived,
-    UnexpectedResponse,
-    UnknownResponse,
-    WebSocketError,
-)
+    pass
 
 
 class EdgeTtsSynthesizer:

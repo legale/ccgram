@@ -43,14 +43,14 @@ async def test_synthesize_wraps_edge_no_audio_as_tts_error(monkeypatch):
 
 async def test_synthesize_wraps_edge_exceptions_as_tts_error(monkeypatch):
     edge_tts = pytest.importorskip("edge_tts")
-    WebSocketError = edge_tts.exceptions.WebSocketError
+    websocket_error = edge_tts.exceptions.WebSocketError
 
     class FailingCommunicate:
         def __init__(self, *a, **kw):
             pass
 
         async def stream(self):
-            raise WebSocketError("connection dropped")
+            raise websocket_error("connection dropped")
             yield  # make it a generator
 
     monkeypatch.setattr("ccgram.tts.edge._edge_tts_available", True)
