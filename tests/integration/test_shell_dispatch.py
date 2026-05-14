@@ -65,8 +65,8 @@ async def app():
     application = Application.builder().token(token).build()
 
     from ccgram.bot import (
+        bind_command,
         history_command,
-        new_command,
         text_handler,
     )
     from ccgram.handlers.callback_registry import (
@@ -85,8 +85,7 @@ async def app():
         filters,
     )
 
-    application.add_handler(CommandHandler("new", new_command))
-    application.add_handler(CommandHandler("start", new_command))
+    application.add_handler(CommandHandler("bind", bind_command))
     application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("sessions", sessions_command))
     application.add_handler(CallbackQueryHandler(callback_handler))

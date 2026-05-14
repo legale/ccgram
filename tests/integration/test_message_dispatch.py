@@ -62,8 +62,8 @@ async def app():
     application = Application.builder().token(token).build()
 
     from ccgram.bot import (
+        bind_command,
         history_command,
-        new_command,
         text_handler,
     )
     from ccgram.handlers.callback_registry import (
@@ -82,8 +82,7 @@ async def app():
         filters,
     )
 
-    application.add_handler(CommandHandler("new", new_command))
-    application.add_handler(CommandHandler("start", new_command))
+    application.add_handler(CommandHandler("bind", bind_command))
     application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("sessions", sessions_command))
     application.add_handler(CallbackQueryHandler(callback_handler))
@@ -143,20 +142,21 @@ async def test_unauthorized_user_rejected(app) -> None:
         mock_handler.assert_not_awaited()
 
 
-async def test_new_command_dispatched(app) -> None:
-    update = _make_update("/new", bot=app.bot)
+async def test_bind_command_dispatched(app) -> None:
+    update = _make_update("/bind", bot=app.bot)
 
     with (
         patch(
-            "ccgram.handlers.topics.new_command.safe_reply", new_callable=AsyncMock
-        ) as mock_reply,
+            "ccgram.handlers.text.text_handler._handle_unbound_topic",
+            new_callable=AsyncMock,
+        ) as mock_handle,
         patch(
-            "ccgram.handlers.topics.new_command.config.is_user_allowed",
+            "ccgram.handlers.topics.bind_command.config.is_user_allowed",
             return_value=True,
         ),
     ):
         await app.process_update(update)
-        mock_reply.assert_awaited_once()
+        mock_handle.assert_awaited_once()
 
 
 async def test_history_command_dispatched(app) -> None:

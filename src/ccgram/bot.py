@@ -35,7 +35,7 @@ from .handlers.messaging_pipeline.message_sender import safe_reply
 from .handlers.recovery.history import history_command
 from .handlers.registry import register_all
 from .handlers.text.text_handler import handle_text_message, text_handler
-from .handlers.topics import new_command
+from .handlers.topics import bind_command
 from .handlers.topics.directory_browser import clear_browse_state
 from .session import session_manager
 from .telegram_request import ResilientPollingHTTPXRequest
@@ -53,7 +53,7 @@ __all__ = [
     "history_command",
     "inline_query_handler",
     "is_user_allowed",
-    "new_command",
+    "bind_command",
     "post_init",
     "post_shutdown",
     "post_stop",
