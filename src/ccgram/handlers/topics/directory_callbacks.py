@@ -553,7 +553,9 @@ async def _create_window_and_bind(
     launch_command = resolve_launch_command(provider_name, approval_mode=approval_mode)
 
     success, message, created_wname, created_wid = await tmux_manager.create_window(
-        selected_path, launch_command=launch_command
+        selected_path,
+        session_name=tmux_manager.topic_session_name(Path(selected_path).name),
+        launch_command=launch_command,
     )
     if not success:
         await safe_edit(query, f"❌ {message}")

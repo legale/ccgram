@@ -68,7 +68,7 @@ def _resolve_toolbar_path() -> str:
 class Config:
     """Application configuration loaded from environment variables."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: PLR0915
         self.config_dir = ccgram_dir()
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -96,7 +96,8 @@ class Config:
                 "Expected comma-separated Telegram user IDs."
             ) from e
 
-        # Tmux session name and window naming
+        # Tmux session naming
+        self.tmux_session_prefix = os.getenv("TMUX_SESSION_PREFIX", "cc_")
         self.tmux_session_name = os.getenv("TMUX_SESSION_NAME", "ccgram")
         self.tmux_main_window_name = "__main__"
         # Own tmux window ID (set by run_bot() after auto-detect, used to skip self in list_windows)

@@ -16,6 +16,7 @@ Key components:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from pathlib import Path
 
 import structlog
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -79,6 +80,7 @@ async def handle_spawn_approval(
 
     success, message, window_name, window_id = await tmux_manager.create_window(
         req.cwd,
+        session_name=tmux_manager.topic_session_name(Path(req.cwd).name),
         launch_command=launch_command,
     )
     if not success:
