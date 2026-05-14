@@ -46,6 +46,7 @@ from ..recovery.recovery_banner import RecoveryBanner, render_banner
 from ..polling.polling_state import lifecycle_strategy
 from ...topic_state_registry import topic_state
 from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT, RECOVERY_WINDOW_ID
+from ..user_state import PENDING_TOPIC_NAME
 from ... import window_query
 from ...thread_router import thread_router
 from ...providers import get_provider_for_window
@@ -200,6 +201,16 @@ async def _handle_unbound_topic(
     if window_id is not None:
         return False
 
+    topic_name = (
+        (message.reply_to_message.forum_topic_created.name or "")
+        if message.reply_to_message and message.reply_to_message.forum_topic_created
+        else ""
+    )
+    if not topic_name and message.reply_to_message and message.reply_to_message.forum_topic_edited:
+        topic_name = message.reply_to_message.forum_topic_edited.name or ""
+    if not topic_name:
+        topic_name = message.chat.title or message.chat.username or "topic"
+
     all_windows = await tmux_manager.list_windows()
     external_windows = await tmux_manager.discover_external_sessions()
     all_windows.extend(external_windows)
@@ -229,6 +240,7 @@ async def _handle_unbound_topic(
             user_data[UNBOUND_WINDOWS_KEY] = win_ids
             user_data[PENDING_THREAD_ID] = thread_id
             user_data[PENDING_THREAD_TEXT] = text
+            user_data[PENDING_TOPIC_NAME] = topic_name
         await safe_reply(message, msg_text, reply_markup=keyboard)
         await safe_reply(message, PENDING_DELIVERY_NOTICE)
         return True
@@ -248,6 +260,7 @@ async def _handle_unbound_topic(
         user_data[BROWSE_DIRS_KEY] = subdirs
         user_data[PENDING_THREAD_ID] = thread_id
         user_data[PENDING_THREAD_TEXT] = text
+        user_data[PENDING_TOPIC_NAME] = topic_name
     await safe_reply(message, msg_text, reply_markup=keyboard)
     await safe_reply(message, PENDING_DELIVERY_NOTICE)
     return True
@@ -428,10 +441,7 @@ async def handle_text_message(
                 context.bot, message, update.effective_chat.id
             )
         else:
-            await safe_reply(
-                message,
-                "\u274c Please use a named topic. Create a new topic to start a session.",
-            )
+            await safe_reply(message, "Use a named topic.")
         return
 
     # Unbound topic — show picker or browser
@@ -456,6 +466,9 @@ async def handle_text_message(
     if not provider.capabilities.supports_mailbox_delivery:
         # Lazy: shell.shell_commands ↔ text_handler via approval callback.
         from ..shell.shell_commands import handle_shell_message
+
+        if window_query.get_window_provider(window_id) == "shell" and not text.startswith("!"):
+            text = f"!{text}"
 
         await handle_shell_message(
             PTBTelegramClient(context.bot),

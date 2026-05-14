@@ -102,6 +102,7 @@ _PEER_INVALID_MARKERS: Final[tuple[str, ...]] = (
     "draft_peer_invalid",
     "peer_invalid",
     "chat not found",
+    "random_id_invalid",
 )
 
 

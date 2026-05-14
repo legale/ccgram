@@ -139,6 +139,3 @@ CB_SEND_DIR = "sf:d:"  # sf:d:<idx> — navigate into dir at index
 CB_SEND_PAGE = "sf:pg:"  # sf:pg:<page> — pagination
 CB_SEND_UP = "sf:up"  # navigate to parent directory
 CB_SEND_CANCEL = "sf:x"  # cancel /send browser
-
-# Idle status sentinel (shared between status_polling and message_queue)
-IDLE_STATUS_TEXT = "\u2713 Ready"

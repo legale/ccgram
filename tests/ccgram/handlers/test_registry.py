@@ -40,6 +40,7 @@ def test_register_all_installs_expected_command_names():
 
     assert set(command_names) == set(COMMAND_NAMES)
     assert len(command_names) == len(COMMAND_NAMES)
+    assert "bind" in command_names
     assert "echo" in command_names
 
 

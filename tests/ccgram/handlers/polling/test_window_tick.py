@@ -238,7 +238,7 @@ class TestUpdateStatusTopicDiff:
             ) as mock_diff,
             patch(
                 "ccgram.handlers.polling.window_tick.apply.decide_tick",
-                return_value=TickDecision(),
+                return_value=TickDecision(transition="active"),
             ),
             patch(
                 "ccgram.handlers.polling.window_tick.apply._apply_tick_decision",
@@ -259,7 +259,7 @@ class TestUpdateStatusTopicDiff:
         from ccgram.config import config
 
         monkeypatch.setattr(config, "topic_rename_enabled", False)
-        monkeypatch.setattr(config, "topic_status_diff_enabled", True)
+        monkeypatch.setattr(config, "topic_status_diff_enabled", False)
 
         bot = AsyncMock(spec=Bot)
         w = _make_window()
@@ -279,7 +279,7 @@ class TestUpdateStatusTopicDiff:
             ) as mock_diff,
             patch(
                 "ccgram.handlers.polling.window_tick.apply.decide_tick",
-                return_value=TickDecision(),
+                return_value=TickDecision(transition="active"),
             ),
             patch(
                 "ccgram.handlers.polling.window_tick.apply._apply_tick_decision",

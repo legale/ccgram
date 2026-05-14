@@ -1227,19 +1227,11 @@ class TestRunningReaction:
             patch(
                 "ccgram.handlers.shell.shell_capture.mark_telegram_command"
             ) as mock_mark,
-            patch(f"{_MOD}.react", new_callable=AsyncMock) as mock_react,
         ):
             mock_tm.find_window_by_id = AsyncMock(return_value=None)
             mock_tm.capture_pane = AsyncMock(return_value=None)
             await handle_shell_message(bot, 1, 42, "@0", "!ls", message)
 
-        mock_react.assert_awaited_once()
-        args = mock_react.call_args.args
-        assert args[1] == -100
-        assert args[2] == 4242
-        from ccgram.handlers.reactions import REACT_RUNNING
-
-        assert args[3] == REACT_RUNNING
         # mark_telegram_command receives the user-msg id for completion react
         mock_mark.assert_called_once_with("@0", "ls", 1, 42, 4242)
 
@@ -1259,13 +1251,11 @@ class TestRunningReaction:
             patch(
                 "ccgram.handlers.shell.shell_capture.mark_telegram_command"
             ) as mock_mark,
-            patch(f"{_MOD}.react", new_callable=AsyncMock) as mock_react,
         ):
             mock_tm.find_window_by_id = AsyncMock(return_value=None)
             mock_tm.capture_pane = AsyncMock(return_value=None)
             await handle_shell_message(bot, 1, 42, "@0", "!ls", message=None)
 
-        mock_react.assert_not_awaited()
         mock_mark.assert_called_once_with("@0", "ls", 1, 42, 0)
 
     async def test_run_callback_passes_stored_message_id(self) -> None:

@@ -242,7 +242,7 @@ def _codex_event_from_fd(
     file_cwd = meta.get("cwd", "")
     if not file_cwd:
         return None
-    if str(Path(file_cwd).resolve()) != str(Path(cwd).resolve()):
+    if cwd and str(Path(file_cwd).resolve()) != str(Path(cwd).resolve()):
         return None
     session_id = meta.get("id", "")
     if not session_id:
@@ -374,13 +374,6 @@ async def discover_and_register_transcript(
         provider = get_provider_for_window(window_id, state.provider_name)
         if provider.capabilities.supports_hook:
             return
-
-    if not state.cwd:
-        if not w or not w.cwd:
-            return
-        session_manager.set_window_provider(
-            window_id, state.provider_name or "", cwd=w.cwd
-        )
 
     providers_to_try = _resolve_providers_to_try(window_id, state, w)
     if providers_to_try is None:

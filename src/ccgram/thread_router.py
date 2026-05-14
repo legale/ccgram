@@ -1,6 +1,6 @@
-"""Thread routing — Telegram topic to tmux window binding.
+"""Thread routing — Telegram topic to tmux session binding.
 
-Maps Telegram topics (user_id + thread_id) to tmux windows (window_id)
+Maps Telegram topics (user_id + thread_id) to tmux sessions (window_id)
 bidirectionally.  Manages group chat IDs for multi-group forum topic
 routing and display names for windows.
 
@@ -31,7 +31,7 @@ logger = structlog.get_logger()
 
 
 class ThreadRouter:
-    """Bidirectional mapping between Telegram topics and tmux windows.
+    """Bidirectional mapping between Telegram topics and tmux sessions.
 
     Owns thread_bindings, group_chat_ids, window_display_names, and
     the reverse index _window_to_thread.
@@ -136,9 +136,9 @@ class ThreadRouter:
     def bind_thread(
         self, user_id: int, thread_id: int, window_id: str, window_name: str = ""
     ) -> None:
-        """Bind a Telegram topic thread to a tmux window.
+        """Bind a Telegram topic thread to a tmux session.
 
-        Enforces 1 topic = 1 window: if another thread is already bound to
+        Enforces 1 topic = 1 tmux session: if another thread is already bound to
         the same window_id, that stale binding is removed first.
         """
         if user_id not in self.thread_bindings:
@@ -153,7 +153,7 @@ class ThreadRouter:
         for tid in stale:
             del self.thread_bindings[user_id][tid]
             logger.info(
-                "Evicted stale binding: thread %d -> window_id %s "
+                "Evicted stale tg_topic binding: thread %d -> tmux_session %s "
                 "(replaced by thread %d)",
                 tid,
                 window_id,
@@ -172,7 +172,7 @@ class ThreadRouter:
         self._schedule_save()
         display = window_name or self.get_display_name(window_id)
         logger.info(
-            "Bound thread %d -> window_id %s (%s) for user %d",
+            "Bound tg_topic %d -> tmux_session %s (%s) for user %d",
             thread_id,
             window_id,
             display,
@@ -180,7 +180,7 @@ class ThreadRouter:
         )
 
     def unbind_thread(self, user_id: int, thread_id: int) -> str | None:
-        """Remove a thread binding.  Returns the previously bound window_id.
+        """Remove a thread binding.  Returns the previously bound tmux_session.
 
         Cleans up the reverse index and group_chat_id.  Does NOT touch
         display names — the caller (SessionManager) handles display-name
@@ -194,7 +194,7 @@ class ThreadRouter:
         if not bindings:
             del self.thread_bindings[user_id]
         logger.info(
-            "Unbound thread %d (was %s) for user %d",
+            "Unbound tg_topic %d (was tmux_session %s) for user %d",
             thread_id,
             window_id,
             user_id,
@@ -217,7 +217,7 @@ class ThreadRouter:
         return window_id
 
     def get_window_for_thread(self, user_id: int, thread_id: int) -> str | None:
-        """Look up the window_id bound to a thread."""
+        """Look up the tmux_session bound to a thread."""
         bindings = self.thread_bindings.get(user_id)
         if not bindings:
             return None

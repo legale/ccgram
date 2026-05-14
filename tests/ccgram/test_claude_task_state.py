@@ -334,12 +334,12 @@ class TestFormatCompletionText:
 
     def test_bare_ready_when_nothing_available(self) -> None:
         result = claude_task_state.format_completion_text("@0")
-        assert result == "\u2713 Ready"
+        assert result == ""
 
     def test_with_last_status_only(self) -> None:
         claude_task_state.set_last_status("@0", "Running make test")
         result = claude_task_state.format_completion_text("@0")
-        assert "\u2713 Ready" in result
+        assert "Ready" not in result
         assert "Last: Running make test" in result
 
     def test_with_last_status_and_turns(self) -> None:
@@ -383,9 +383,9 @@ class TestFormatCompletionText:
             ],
         )
         result = claude_task_state.format_completion_text("@0", num_turns=5)
-        assert "\u2713 Ready" in result
-        assert "\u2714 write tests" in result
-        assert "run linter" in result
+        assert "Ready" not in result
+        assert "done: write tests" in result
+        assert "pending: run linter" in result
         assert "1/2 tasks done" in result
         assert "5 turns" in result
 

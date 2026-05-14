@@ -659,7 +659,7 @@ class TmuxManager:
                     check=False,
                 )
             return True
-        except subprocess.TimeoutExpired, OSError:
+        except (subprocess.TimeoutExpired, OSError):
             logger.exception("Failed to send keys to foreign window %s", target)
             return False
 
@@ -1245,7 +1245,7 @@ async def send_to_window(
 
     display = thread_router.get_display_name(window_id)
     logger.debug(
-        "send_to_window: window_id=%s (%s), text_len=%d",
+        "send_to_tmux_session: tmux_session=%s (%s), text_len=%d",
         window_id,
         display,
         len(text),

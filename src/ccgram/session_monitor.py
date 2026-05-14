@@ -145,6 +145,33 @@ class SessionMonitor:
         if session_id:
             self._idle_tracker.record_activity(session_id)
 
+    def _add_bound_state_sessions(self, current_map: dict) -> dict:
+        """Add persisted tg_topic -> tmux_session sessions to the poll map."""
+        try:
+            from .thread_router import thread_router
+            from .window_state_store import window_store
+        except (ImportError, RuntimeError):
+            return current_map
+
+        merged = dict(current_map)
+        for _user_id, _thread_id, window_id in thread_router.iter_thread_bindings():
+            if window_id in merged:
+                continue
+
+            state = window_store.window_states.get(window_id)
+            if not state or not state.session_id or not state.transcript_path:
+                continue
+
+            merged[window_id] = {
+                "session_id": state.session_id,
+                "cwd": state.cwd,
+                "window_name": state.window_name,
+                "transcript_path": state.transcript_path,
+                "provider_name": state.provider_name,
+            }
+
+        return merged
+
     async def check_for_updates(self, current_map: dict) -> list[NewMessage]:
         """Check all sessions for new assistant messages.
 
@@ -152,6 +179,7 @@ class SessionMonitor:
         delegates the actual I/O to TranscriptReader. Uses _get_active_cwds()
         for fallback session discovery so tests can stub tmux calls.
         """
+        current_map = self._add_bound_state_sessions(current_map)
         new_messages: list[NewMessage] = []
         sid_to_wid = {v["session_id"]: wid for wid, v in current_map.items()}
 

@@ -145,17 +145,17 @@ def render_banner(banner: RecoveryBanner) -> tuple[str, InlineKeyboardMarkup]:
 
     keyboard = build_recovery_keyboard(banner.window_id)
     help_text = _recovery_help_text(banner.window_id)
-    cwd_line = f"\n\U0001f4c2 `{banner.cwd}`" if banner.cwd else ""
+    cwd_line = f"\nPath `{banner.cwd}`" if banner.cwd else ""
     label = banner.display or banner.window_id
 
     if banner.mode == "restore":
-        title = f"\U0001f504 Restore `{label}`."
+        title = f"Restore `{label}`."
         prompt = f"Choose how to continue.\n{help_text}"
     elif banner.mode == "resume":
-        title = f"⏪ Resume `{label}`."
+        title = f"Resume `{label}`."
         prompt = f"Pick a session below or use the menu.\n{help_text}"
     else:
-        title = f"⚠ Session `{label}` ended."
+        title = f"Session `{label}` ended."
         prompt = f"Tap a button or send a message to recover.\n{help_text}"
 
     text = f"{title}{cwd_line}\n\n{prompt}"
@@ -193,29 +193,29 @@ def build_recovery_keyboard(window_id: str) -> InlineKeyboardMarkup:
     ).capabilities
     options: list[InlineKeyboardButton] = [
         InlineKeyboardButton(
-            "\U0001f195 Fresh",
+            "Fresh",
             callback_data=f"{CB_RECOVERY_FRESH}{window_id}"[:64],
         ),
     ]
     if caps.supports_continue:
         options.append(
             InlineKeyboardButton(
-                "▶ Continue",
+                "Continue",
                 callback_data=f"{CB_RECOVERY_CONTINUE}{window_id}"[:64],
             )
         )
     if caps.supports_resume:
         options.append(
             InlineKeyboardButton(
-                "⏪ Resume",
+                "Resume",
                 callback_data=f"{CB_RECOVERY_RESUME}{window_id}"[:64],
             )
         )
     return InlineKeyboardMarkup(
         [
             options,
-            [InlineKeyboardButton("✖ Cancel", callback_data=CB_RECOVERY_CANCEL)],
-        ]
+        [InlineKeyboardButton("Cancel", callback_data=CB_RECOVERY_CANCEL)],
+    ]
     )
 
 

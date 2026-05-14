@@ -10,6 +10,8 @@ from ccgram.monitor_state import TrackedSession
 from ccgram.providers.claude import ClaudeProvider
 from ccgram.providers.codex import CodexProvider
 from ccgram.session_monitor import NewWindowEvent, SessionMonitor
+from ccgram.thread_router import ThreadRouter
+from ccgram.window_state_store import WindowState, WindowStateStore
 
 
 @pytest.fixture
@@ -130,6 +132,31 @@ class TestNewWindowDetection:
 
 
 class TestPerWindowProviderResolution:
+    async def test_process_session_file_backfills_hookless_initial_message(
+        self, tmp_path
+    ) -> None:
+        """Hookless providers should not drop the first visible assistant reply."""
+        session_file = tmp_path / "codex.jsonl"
+        session_file.write_text(
+            '{"timestamp":"2026-03-23T00:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi what do you want?"}]}}\n'
+        )
+
+        monitor = SessionMonitor(
+            projects_path=tmp_path / "projects",
+            state_file=tmp_path / "ms.json",
+        )
+
+        new_messages = []
+        await monitor._process_session_file(
+            "sess-codex",
+            session_file,
+            new_messages,
+            window_id="@42",
+        )
+
+        assert len(new_messages) == 1
+        assert new_messages[0].text == "hi what do you want?"
+
     async def test_process_session_file_passes_window_id(self, tmp_path) -> None:
         """_process_session_file uses window_id for per-window provider resolution."""
         session_file = tmp_path / "transcript.jsonl"
@@ -148,9 +175,13 @@ class TestPerWindowProviderResolution:
         monitor.state.update_session(tracked)
 
         new_messages = []
-        await monitor._process_session_file(
-            "sess-pw", session_file, new_messages, window_id="@42"
-        )
+        with patch(
+            "ccgram.transcript_reader.get_provider_for_window",
+            return_value=ClaudeProvider(),
+        ):
+            await monitor._process_session_file(
+                "sess-pw", session_file, new_messages, window_id="@42"
+            )
         assert len(new_messages) == 1
         assert "hello" in new_messages[0].text
 
@@ -230,6 +261,52 @@ class TestPerWindowProviderResolution:
         }
         await monitor.check_for_updates(current_map)
         assert "@7" in captured_window_ids
+
+    async def test_check_for_updates_uses_bound_window_state_when_map_empty(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        """Bound tg_topic sessions still poll transcripts when session_map is empty."""
+        session_file = tmp_path / "codex.jsonl"
+        session_file.write_text('{"type":"summary"}\n')
+
+        router = ThreadRouter(
+            schedule_save=lambda: None,
+            has_window_state=lambda _window_id: True,
+        )
+        router.bind_thread(86872, 605159, "ccgram-ruslan:@14", "ccgram-ruslan")
+
+        store = WindowStateStore(
+            schedule_save=lambda: None,
+            on_hookless_provider_switch=lambda _window_id: None,
+        )
+        store.window_states["ccgram-ruslan:@14"] = WindowState(
+            session_id="sess-bound",
+            cwd="/home/ruslan",
+            window_name="ccgram-ruslan",
+            transcript_path=str(session_file),
+            provider_name="codex",
+        )
+
+        monkeypatch.setattr("ccgram.thread_router.thread_router", router)
+        monkeypatch.setattr("ccgram.window_state_store.window_store", store)
+
+        monitor = SessionMonitor(
+            projects_path=tmp_path / "projects",
+            state_file=tmp_path / "ms.json",
+        )
+
+        captured = []
+
+        async def spy(session_id, file_path, new_messages, window_id=""):
+            captured.append((session_id, str(file_path), window_id))
+
+        monitor._process_session_file = spy
+
+        await monitor.check_for_updates({})
+
+        assert captured == [
+            ("sess-bound", str(session_file), "ccgram-ruslan:@14"),
+        ]
 
 
 class TestReadNewLines:
@@ -377,7 +454,11 @@ class TestCheckForUpdates:
                 "transcript_path": str(session_file),
             },
         }
-        msgs = await monitor.check_for_updates(current_map)
+        with patch(
+            "ccgram.transcript_reader.get_provider_for_window",
+            return_value=ClaudeProvider(),
+        ):
+            msgs = await monitor.check_for_updates(current_map)
 
         assert msgs == []
         tracked = monitor.state.get_session("sess-direct")
@@ -514,7 +595,11 @@ class TestCheckForUpdates:
                 "transcript_path": str(session_file),
             },
         }
-        msgs = await monitor.check_for_updates(current_map)
+        with patch(
+            "ccgram.transcript_reader.get_provider_for_window",
+            return_value=ClaudeProvider(),
+        ):
+            msgs = await monitor.check_for_updates(current_map)
 
         assert len(msgs) == 1
         assert msgs[0].session_id == "sess-d"

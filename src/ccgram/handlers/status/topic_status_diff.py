@@ -1,10 +1,10 @@
-"""Editable terminal-screen diff message for noisy topic status changes."""
+"""Editable terminal-screen delta message for noisy topic status changes."""
 
 from __future__ import annotations
 
-import difflib
+import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from telegram.error import RetryAfter, TelegramError
 
@@ -17,12 +17,18 @@ from ..messaging_pipeline.message_sender import edit_with_fallback, rate_limit_s
 
 _BODY_LIMIT = TELEGRAM_MAX_MESSAGE_LENGTH - 256
 _SNAPSHOT_LINES = 30
+_RE_ANSI = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]|"
+    r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
+    r"\x1b[@-_]",
+)
+_RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 @dataclass
 class _DiffState:
     window_id: str
-    prev_bytes: bytes = b""
+    prev_lines: list[str] = field(default_factory=list)
     message_id: int = 0
     last_edit_ts: float = 0.0
 
@@ -30,12 +36,11 @@ class _DiffState:
 _diff_states: dict[tuple[int, int], _DiffState] = {}
 
 
-def _screen_bytes(pane_text: str) -> bytes:
-    return pane_text.encode("utf-8", errors="replace")
-
-
-def _decode_lines(data: bytes) -> list[str]:
-    return data.decode("utf-8", errors="replace").splitlines()
+def _normalize_screen_text(pane_text: str) -> list[str]:
+    text = _RE_ANSI.sub("", pane_text)
+    text = _RE_CONTROL.sub("", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\t", "    ")
+    return text.splitlines()
 
 
 def _cap_lines(lines: list[str], limit: int) -> list[str]:
@@ -51,30 +56,27 @@ def _cap_lines(lines: list[str], limit: int) -> list[str]:
     return out
 
 
-def _format_snapshot(window_id: str, data: bytes) -> str:
-    lines = _decode_lines(data)
+def _format_snapshot(window_id: str, lines: list[str]) -> str:
     if len(lines) > _SNAPSHOT_LINES:
         lines = ["... snapshot truncated ...", *lines[-_SNAPSHOT_LINES:]]
     body = "\n".join(_cap_lines(lines, _BODY_LIMIT))
     return f"Screen snapshot {window_id} {time.strftime('%H:%M:%S')}\n```\n{body}\n```"
 
 
-def _format_diff(window_id: str, old: bytes, new: bytes) -> str:
-    old_lines = _decode_lines(old)
-    new_lines = _decode_lines(new)
-    diff = list(
-        difflib.unified_diff(
-            old_lines,
-            new_lines,
-            fromfile="previous",
-            tofile="current",
-            lineterm="",
-        )
-    )
-    if not diff:
-        diff = ["screen changed"]
-    body = "\n".join(_cap_lines(diff, _BODY_LIMIT))
-    return f"Screen diff {window_id} {time.strftime('%H:%M:%S')}\n```diff\n{body}\n```"
+def _format_delta(window_id: str, old: list[str], new: list[str]) -> str:
+    out: list[str] = []
+    max_len = max(len(old), len(new))
+    for idx in range(max_len):
+        old_line = old[idx] if idx < len(old) else ""
+        new_line = new[idx] if idx < len(new) else ""
+        if old_line == new_line:
+            continue
+        if new_line:
+            out.append(new_line)
+    if not out:
+        out = ["screen changed"]
+    body = "\n".join(_cap_lines(out, _BODY_LIMIT))
+    return f"Screen delta {window_id} {time.strftime('%H:%M:%S')}\n```\n{body}\n```"
 
 
 def _get_state(chat_id: int, thread_id: int, window_id: str) -> _DiffState:
@@ -133,32 +135,34 @@ async def update_topic_status_diff(
     thread_id: int,
     window_id: str,
     pane_text: str,
+    *,
+    active: bool,
 ) -> None:
-    if not config.topic_status_diff_enabled or not pane_text:
+    if not config.topic_status_diff_enabled or not pane_text or not active:
         return
 
     state = _get_state(chat_id, thread_id, window_id)
-    current = _screen_bytes(pane_text)
+    current = _normalize_screen_text(pane_text)
     now = time.monotonic()
 
-    if not state.prev_bytes:
+    if not state.prev_lines:
         if await _send_new(
             client, chat_id, thread_id, state, _format_snapshot(window_id, current)
         ):
-            state.prev_bytes = current
+            state.prev_lines = current
             state.last_edit_ts = now
         return
 
-    if current == state.prev_bytes:
+    if current == state.prev_lines:
         return
 
     if now - state.last_edit_ts < config.topic_status_diff_interval:
-        state.prev_bytes = current
+        state.prev_lines = current
         return
 
-    text = _format_diff(window_id, state.prev_bytes, current)
+    text = _format_delta(window_id, state.prev_lines, current)
     if await _edit_or_send(client, chat_id, thread_id, state, text):
-        state.prev_bytes = current
+        state.prev_lines = current
         state.last_edit_ts = time.monotonic()
 
 

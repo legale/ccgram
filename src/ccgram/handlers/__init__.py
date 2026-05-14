@@ -16,7 +16,7 @@ added ``commands/``):
   - status/: status bubble lifecycle, status-bar actions, topic emoji updates
   - text/: text message routing (UI guards, unbound/dead window, forwarding)
   - toolbar/: /toolbar inline keyboard builder and callbacks
-  - topics/: topic lifecycle, directory browser, window picker, /new command
+  - topics/: topic lifecycle, directory browser, window picker
   - voice/: voice transcription, confirm keyboard, callbacks
 
 Top-level modules (leaves and cross-cutting concerns):

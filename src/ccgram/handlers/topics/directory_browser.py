@@ -105,8 +105,8 @@ def _window_label(window_id: str, window_name: str) -> tuple[str, str]:
     if is_foreign_window(window_id):
         provider = parse_emdash_provider(window_id.rsplit(":", 1)[0])
         suffix = f" ({provider})" if provider else ""
-        return "📎", f"{window_name}{suffix}"
-    return "🖥", window_name
+        return "linked", f"{window_name}{suffix}"
+    return "local", window_name
 
 
 def build_window_picker(
@@ -122,10 +122,11 @@ def build_window_picker(
     window_ids = [wid for wid, _, _ in windows]
 
     lines = [
-        "*Bind to Existing Window*\n",
-        "These windows are running but not bound to any topic.",
-        "Pick one to attach it here, or start a new session.\n",
+        "*Topic is not bound yet*\n",
+        "Pick an existing session to attach it here, or create a new one.\n",
     ]
+    if not windows:
+        lines.append("No running sessions found.\n")
     for wid, name, cwd in windows:
         display_cwd = cwd.replace(str(Path.home()), "~")
         icon, display_name = _window_label(wid, name)
@@ -152,7 +153,7 @@ def build_window_picker(
 
     buttons.append(
         [
-            InlineKeyboardButton("➕ New Session", callback_data=CB_WIN_NEW),
+            InlineKeyboardButton("New Session", callback_data=CB_WIN_NEW),
             InlineKeyboardButton("Cancel", callback_data=CB_WIN_CANCEL),
         ]
     )
@@ -204,10 +205,10 @@ def _build_favorites_buttons(
             if len(display_fav) > _MAX_FAV_LABEL_LEN
             else display_fav
         )
-        star_icon = "⭐" if fav_path in starred_set else "☆"
+        star_icon = "*" if fav_path in starred_set else "-"
         rows.append(
             [
-                InlineKeyboardButton(f"📌 {label}", callback_data=f"{CB_DIR_FAV}{idx}"),
+                InlineKeyboardButton(f"Fav {label}", callback_data=f"{CB_DIR_FAV}{idx}"),
                 InlineKeyboardButton(star_icon, callback_data=f"{CB_DIR_STAR}{idx}"),
             ]
         )
@@ -256,7 +257,7 @@ def build_directory_browser(
                 name[:12] + "\u2026" if len(name) > _MAX_BUTTON_LABEL_LEN else name
             )
             badge = _detect_project_badge(path, name)
-            icon = badge if badge else "\U0001f4c1"
+            icon = badge if badge else "dir"
             idx = start + i + j
             row.append(
                 InlineKeyboardButton(
@@ -284,7 +285,7 @@ def build_directory_browser(
     # Allow going up unless at filesystem root
     if path != path.parent:
         action_row.append(InlineKeyboardButton("..", callback_data=CB_DIR_UP))
-    action_row.append(InlineKeyboardButton("\U0001f3e0", callback_data=CB_DIR_HOME))
+    action_row.append(InlineKeyboardButton("Home", callback_data=CB_DIR_HOME))
     action_row.append(InlineKeyboardButton("Select", callback_data=CB_DIR_CONFIRM))
     action_row.append(InlineKeyboardButton("Cancel", callback_data=CB_DIR_CANCEL))
     buttons.append(action_row)
@@ -300,10 +301,10 @@ def build_directory_browser(
 
 # Provider display metadata: (label, icon)
 _PROVIDER_META: dict[str, tuple[str, str]] = {
-    "claude": ("Claude", "\U0001f7e0"),
-    "codex": ("Codex", "\U0001f9e9"),
-    "gemini": ("Gemini", "\u264a"),
-    "shell": ("Shell", "\U0001f41a"),
+    "claude": ("Claude", "claude"),
+    "codex": ("Codex", "codex"),
+    "gemini": ("Gemini", "gemini"),
+    "shell": ("Shell", "shell"),
 }
 
 
@@ -340,7 +341,7 @@ def build_mode_picker(
     """
     display_path = selected_path.replace(str(Path.home()), "~")
     provider_label, provider_icon = _PROVIDER_META.get(
-        provider_name, (provider_name.title(), "🤖")
+        provider_name, (provider_name.title(), "agent")
     )
     text = (
         "*Select Session Mode*\n\n"
@@ -351,13 +352,13 @@ def build_mode_picker(
     buttons = [
         [
             InlineKeyboardButton(
-                "✅ Standard",
+                "Standard",
                 callback_data=f"{CB_MODE_SELECT}{provider_name}:normal",
             )
         ],
         [
             InlineKeyboardButton(
-                "🎲 YOLO",
+                "YOLO",
                 callback_data=f"{CB_MODE_SELECT}{provider_name}:yolo",
             )
         ],

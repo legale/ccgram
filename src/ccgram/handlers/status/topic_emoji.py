@@ -90,7 +90,7 @@ async def update_topic_emoji(
     key = (chat_id, thread_id)
     clean_name, _ = _resolve_topic_name(key, display_name)
     logger.debug(
-        "Ignored topic state update: chat=%d thread=%d state=%s name='%s'",
+        "Ignored tg_topic state update: chat=%d thread=%d state=%s name='%s'",
         chat_id,
         thread_id,
         state,
@@ -122,6 +122,11 @@ def update_stored_topic_name(chat_id: int, thread_id: int, new_clean_name: str) 
     Called from FORUM_TOPIC_EDITED handler.
     """
     _topic_names[(chat_id, thread_id)] = new_clean_name
+
+
+def get_stored_topic_name(chat_id: int, thread_id: int) -> str | None:
+    """Return the cached clean topic name, if any."""
+    return _topic_names.get((chat_id, thread_id))
 
 
 @topic_state.register("chat")

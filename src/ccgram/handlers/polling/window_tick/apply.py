@@ -31,7 +31,7 @@ from ....telegram_client import PTBTelegramClient
 from ....thread_router import thread_router
 from ....tmux_manager import tmux_manager
 from ....window_state_store import window_store
-from ...callback_data import IDLE_STATUS_TEXT
+from ....claude_task_state import IDLE_STATUS_TEXT
 from ...cleanup import clear_topic_state
 from ...interactive import (
     clear_interactive_mode,
@@ -323,7 +323,7 @@ async def _handle_dead_window_notification(
         )
         text, keyboard = render_banner(banner)
     else:
-        text = f"⚠ Session `{display}` ended."
+        text = f"Session `{display}` ended."
         keyboard = None
     sent = await rate_limit_send_message(
         client,
@@ -515,15 +515,20 @@ async def _update_status(
         await handle_interactive_ui(client, user_id, window_id, thread_id)
         return
 
-    if thread_id is not None and config.topic_status_diff_enabled:
-        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-        await update_topic_status_diff(
-            client, chat_id, thread_id, window_id, pane_text
-        )
-
     notification_mode = window_query.get_notification_mode(window_id)
     ctx = build_context(window_id, w, status, notification_mode=notification_mode)
     decision = decide_tick(ctx)
+
+    if (
+        thread_id is not None
+        and config.topic_status_diff_enabled
+        and decision.transition == "active"
+    ):
+        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+        await update_topic_status_diff(
+            client, chat_id, thread_id, window_id, pane_text, active=True
+        )
+
     await _apply_tick_decision(
         bot,
         user_id,

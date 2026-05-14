@@ -202,8 +202,14 @@ async def _handle_stop(event: HookEvent, client: TelegramClient) -> None:
             status_text = claude_task_state.format_completion_text(
                 window_id, num_turns=num_turns
             )
-            if summary and status_text:
-                status_text = status_text.replace("✓ Ready", f"✓ Done — {summary}", 1)
+            if summary:
+                status_text = (
+                    f"✓ Done — {summary}\n{status_text}"
+                    if status_text
+                    else f"✓ Done — {summary}"
+                )
+            elif not status_text:
+                status_text = None
         await enqueue_status_update(
             client, user_id, window_id, status_text, thread_id=thread_id
         )

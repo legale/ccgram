@@ -270,7 +270,12 @@ class TestDraftStreamPeerCache:
         bot.do_api_request.assert_awaited_once()
 
     async def test_peer_invalid_marker_variants(self) -> None:
-        for marker in ("draft_peer_invalid", "PEER_INVALID", "Bad: Chat not found"):
+        for marker in (
+            "draft_peer_invalid",
+            "PEER_INVALID",
+            "Bad: Chat not found",
+            "Random_id_invalid",
+        ):
             reset_draft_state()
             bot = _make_bot()
             bot.do_api_request.side_effect = BadRequest(marker)

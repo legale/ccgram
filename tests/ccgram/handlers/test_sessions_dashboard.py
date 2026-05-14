@@ -12,6 +12,7 @@ from ccgram.handlers.callback_data import (
 )
 from ccgram.handlers.sessions_dashboard import (
     _build_dashboard,
+    _create_session_for_topic,
     handle_sessions_refresh,
     sessions_command,
 )
@@ -233,7 +234,32 @@ class TestSessionsCommand:
 
         with patch("ccgram.handlers.sessions_dashboard.safe_reply") as mock_reply:
             await sessions_command(update, MagicMock())
-            mock_reply.assert_not_called()
+        mock_reply.assert_not_called()
+
+
+class TestSessionsNew:
+    async def test_creates_session_for_topic(self, _patch_deps) -> None:
+        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
+        mock_tm.topic_session_name.side_effect = lambda name: f"cc_{name}"
+        mock_tm.create_window = AsyncMock(
+            return_value=(True, "ok", "codex", "@5")
+        )
+
+        query = AsyncMock()
+        query.message = MagicMock()
+        query.message.chat.id = -100
+        query.message.message_thread_id = 42
+        query.message.chat.type = "supergroup"
+
+        with patch(
+            "ccgram.handlers.sessions_dashboard.get_stored_topic_name",
+            return_value="codex",
+        ):
+            await _create_session_for_topic(query, 100, 42, MagicMock())
+
+        mock_tm.create_window.assert_awaited_once()
+        mock_tr.bind_thread.assert_called_once_with(100, 42, "@5", window_name="codex")
+
 
     async def test_no_message(self) -> None:
         update = MagicMock()

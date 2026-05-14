@@ -1,7 +1,8 @@
 """Topics subpackage — topic creation, lifecycle, directory browser, window picker.
 
 Bundles the modules that drive Telegram-topic ↔ tmux-window binding:
-``topic_orchestration`` (new-window/new-topic flow, retries),
+``topic_orchestration`` (new-window flow, retries),
+``bind_command`` (/bind unbound-topic attach flow),
 ``topic_lifecycle`` (autoclose timers, unbound TTL, topic close/edit
 handlers), ``directory_browser`` (directory + window picker UI),
 ``directory_callbacks`` (browser callback dispatcher), and
@@ -29,7 +30,6 @@ from .directory_browser import (
     get_favorites,
 )
 from .directory_callbacks import handle_directory_callback
-from .new_command import new_command
 from .topic_lifecycle import (
     check_autoclose_timers,
     check_unbound_window_ttl,
@@ -45,6 +45,7 @@ from .topic_orchestration import (
     create_topic_in_chat,
     handle_new_window,
 )
+from .bind_command import bind_command
 from .window_callbacks import handle_window_callback
 
 __all__ = [
@@ -66,13 +67,13 @@ __all__ = [
     "clear_browse_state",
     "clear_topic_create_retry",
     "clear_window_picker_state",
+    "bind_command",
     "collect_target_chats",
     "create_topic_in_chat",
     "get_favorites",
     "handle_directory_callback",
     "handle_new_window",
     "handle_window_callback",
-    "new_command",
     "probe_topic_existence",
     "prune_stale_state",
     "topic_closed_handler",

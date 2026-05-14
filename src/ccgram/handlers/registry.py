@@ -43,7 +43,7 @@ from .send import send_command
 from .sessions_dashboard import sessions_command
 from .sync_command import sync_command
 from .text.text_handler import text_handler
-from .topics import new_command
+from .topics import bind_command
 from .topics.topic_lifecycle import topic_closed_handler, topic_edited_handler
 from .upgrade import upgrade_command
 from .voice import handle_voice_message
@@ -75,8 +75,6 @@ def register_all(
     MessageHandler, which must precede the TEXT MessageHandler.
     """
     command_specs: list[CommandSpec] = [
-        CommandSpec("new", new_command),
-        CommandSpec("start", new_command),  # compat alias
         CommandSpec("history", history_command),
         CommandSpec("commands", commands_command),
         CommandSpec("sessions", sessions_command),
@@ -93,6 +91,7 @@ def register_all(
         CommandSpec("verbose", verbose_command),
         CommandSpec("toolcalls", toolcalls_command),
         CommandSpec("restore", restore_command),
+        CommandSpec("bind", bind_command),
         CommandSpec("echo", echo_command),
     ]
 
@@ -153,13 +152,12 @@ def register_all(
 
 
 COMMAND_NAMES: tuple[str, ...] = (
-    "new",
-    "start",
     "history",
     "commands",
     "sessions",
     "resume",
     "unbind",
+    "bind",
     "upgrade",
     "recall",
     "screenshot",

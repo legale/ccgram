@@ -43,8 +43,6 @@ from ..callback_data import (
 from ..callback_helpers import get_thread_id
 from ..callback_registry import register
 from ..messaging_pipeline.message_sender import (
-    REACT_RUNNING,
-    react,
     safe_edit,
     safe_reply,
     safe_send,
@@ -223,9 +221,6 @@ async def handle_shell_message(
 
     # ⚡ Persistent ack so the user sees the bot is working before
     # tmux/LLM round-trip completes; replaced by ✅/❌ once exit is known.
-    if message is not None:
-        await react(client, message.chat.id, message.message_id, REACT_RUNNING)
-
     if text.startswith("!"):
         raw = text[1:].lstrip()
         if not raw:

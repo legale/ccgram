@@ -31,9 +31,9 @@ from ..callback_data import (
     CB_STATUS_RECALL,
     CB_STATUS_REMOTE,
     CB_STATUS_SCREENSHOT,
-    IDLE_STATUS_TEXT,
     NOTIFY_MODE_ICONS,
 )
+from ...claude_task_state import IDLE_STATUS_TEXT
 from ..messaging_pipeline.message_sender import edit_with_fallback, rate_limit_send
 from ..messaging_pipeline.message_task import (
     StatusClearTask,
@@ -110,7 +110,7 @@ def build_status_keyboard(
     Layout:
       Row 1 (optional): up to 2 history-recall buttons
       Row 2: [Esc] [Screenshot] [Bell] [RC]
-      Row 3 (optional): [🪟 Dashboard] when Mini App is enabled and user_id is set
+      Row 3 (optional): [Dashboard] when Mini App is enabled and user_id is set
     """
     # Lazy: command_history → messaging_pipeline → status → status_bubble
     # forms a cycle when imported at module top. Keep lazy.
@@ -136,7 +136,7 @@ def build_status_keyboard(
 
     mode = get_notification_mode(window_id)
     bell = NOTIFY_MODE_ICONS.get(mode, "\U0001f514")
-    rc_label = "📡✓" if rc_active else "📡"
+    rc_label = "RC on" if rc_active else "RC"
     rows.append(
         [
             InlineKeyboardButton(
@@ -189,7 +189,7 @@ def _get_idle_history(
 # When a window has this many or more visible panes, the per-pane block is
 # rendered as an expandable blockquote so the bubble stays compact.
 _PANE_BLOCK_EXPAND_THRESHOLD = 4
-_PANE_BLOCKED_GLYPH = "⏸"  # ⏸
+_PANE_BLOCKED_GLYPH = "[blocked]"
 _SECONDS_PER_MINUTE = 60
 _MINUTES_PER_HOUR = 60
 

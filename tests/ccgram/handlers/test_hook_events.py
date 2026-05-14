@@ -5,8 +5,6 @@ import pytest
 from telegram import Bot
 
 from ccgram.claude_task_state import claude_task_state
-from ccgram.handlers.callback_data import IDLE_STATUS_TEXT
-
 from ccgram.claude_task_state import (
     _active_subagents,
     build_subagent_label,
@@ -150,8 +148,7 @@ class TestHandleStop:
             mock_emoji.assert_not_called()
             mock_enqueue.assert_called_once()
             status_text = mock_enqueue.call_args[0][3]
-            assert status_text is not None
-            assert IDLE_STATUS_TEXT in status_text
+            assert status_text is None
 
     @pytest.mark.parametrize("mode", ["muted", "errors_only"])
     async def test_stop_silent_mode_clears_status(self, monkeypatch, mode) -> None:

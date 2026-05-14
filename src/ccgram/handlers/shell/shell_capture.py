@@ -29,11 +29,8 @@ from ...providers.shell import match_prompt
 from ...thread_router import thread_router
 from ...tmux_manager import tmux_manager
 from ..messaging_pipeline.message_sender import (
-    REACT_DONE,
-    REACT_FAIL,
     edit_with_fallback,
     rate_limit_send_message,
-    react,
 )
 from ...topic_state_registry import topic_state
 
@@ -41,13 +38,10 @@ logger = structlog.get_logger()
 
 
 async def _react_exit(
-    client: TelegramClient, chat_id: int, message_id: int, exit_code: int
+    _client: TelegramClient, _chat_id: int, _message_id: int, _exit_code: int
 ) -> None:
-    """Persistent ✅/❌ ack on the user's command message after completion."""
-    if not message_id:
-        return
-    emoji = REACT_DONE if exit_code == 0 else REACT_FAIL
-    await react(client, chat_id, message_id, emoji)
+    """Reaction path disabled."""
+    return
 
 
 class CommandApprovalCallback(Protocol):
@@ -552,13 +546,6 @@ async def _relay_passive_output(
         await _update_error_message(
             client, chat_id, state.msg_id, passive.exit_code, passive.text
         )
-
-    # ✅/❌ reaction on the user's source message once exit is known.
-    # Skips when the message was already reacted (dedupe in react()).
-    if passive.exit_code is not None and state.telegram_message_id:
-        await _react_exit(client, chat_id, state.telegram_message_id, passive.exit_code)
-        if passive.exit_code == 0:
-            state.telegram_message_id = 0
 
     # If this was a Telegram-initiated command, suggest a fix via LLM
     if (

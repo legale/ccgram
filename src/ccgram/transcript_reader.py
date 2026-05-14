@@ -119,6 +119,14 @@ class TranscriptReader:
                     provider.read_transcript_file, str(file_path), 0
                 )
 
+            if not provider.capabilities.supports_hook:
+                await self._backfill_initial_message(
+                    provider,
+                    file_path,
+                    session_id,
+                    new_messages,
+                )
+
             tracked = TrackedSession(
                 session_id=session_id,
                 file_path=str(file_path),
@@ -189,6 +197,45 @@ class TranscriptReader:
             )
 
         self._state.update_session(tracked)
+
+    async def _backfill_initial_message(
+        self,
+        provider: Any,
+        file_path: Path,
+        session_id: str,
+        new_messages: list[NewMessage],
+    ) -> None:
+        """Emit the latest assistant message when we first discover a hookless session."""
+        try:
+            with file_path.open(encoding="utf-8") as handle:
+                entries = []
+                for line in handle:
+                    parsed = provider.parse_transcript_line(line)
+                    if parsed:
+                        entries.append(parsed)
+        except OSError:
+            return
+
+        if not entries:
+            return
+
+        messages, _ = provider.parse_transcript_entries(entries, {}, cwd=None)
+        for entry in reversed(messages):
+            if entry.role != "assistant" or not entry.text:
+                continue
+            new_messages.append(
+                NewMessage(
+                    session_id=session_id,
+                    text=entry.text,
+                    is_complete=entry.is_complete,
+                    content_type=entry.content_type,
+                    phase=entry.phase,
+                    tool_use_id=entry.tool_use_id,
+                    role=entry.role,
+                    tool_name=entry.tool_name,
+                )
+            )
+            break
 
     async def _read_new_lines(
         self, session: TrackedSession, file_path: Path, window_id: str = ""

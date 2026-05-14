@@ -33,7 +33,7 @@ from .directory_browser import (
 )
 from ..callback_registry import register
 from ..messaging_pipeline.message_sender import safe_edit, safe_send
-from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
+from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT, PENDING_TOPIC_NAME
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -222,7 +222,7 @@ async def _handle_bind(
 
     await safe_edit(
         query,
-        f"✅ Bound to window `{display}`",
+        f"Bound to window `{display}`",
     )
 
     pending_text = (
@@ -285,6 +285,7 @@ async def _handle_cancel(
     if context.user_data is not None:
         context.user_data.pop(PENDING_THREAD_ID, None)
         context.user_data.pop(PENDING_THREAD_TEXT, None)
+        context.user_data.pop(PENDING_TOPIC_NAME, None)
     await safe_edit(query, "Cancelled")
     await query.answer("Cancelled")
 

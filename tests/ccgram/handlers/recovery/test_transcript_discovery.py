@@ -4,6 +4,49 @@ from unittest.mock import MagicMock
 from ccgram.providers.base import SessionStartEvent
 
 
+async def test_codex_open_transcript_does_not_require_cwd(monkeypatch) -> None:
+    from ccgram.handlers.recovery import transcript_discovery as mod
+
+    transcript = "/tmp/open.jsonl"
+    provider = MagicMock()
+    provider.discover_transcript.return_value = None
+    state = SimpleNamespace(
+        session_id="",
+        cwd="",
+        transcript_path="",
+        provider_name="codex",
+    )
+    session_map_sync = MagicMock()
+
+    monkeypatch.setattr(mod, "session_map_sync", session_map_sync)
+    monkeypatch.setattr(mod.config, "tmux_session_name", "ccgram")
+    monkeypatch.setattr(
+        mod,
+        "_discover_codex_open_transcript",
+        lambda window_id, cwd, window_key: SessionStartEvent(
+            session_id="open-session",
+            cwd="/proj",
+            transcript_path=transcript,
+            window_key=window_key,
+        ),
+    )
+
+    await mod._find_and_register_transcript(
+        "@7",
+        state,
+        [("codex", provider)],
+        pane_alive=True,
+    )
+
+    session_map_sync.register_hookless_session.assert_called_once_with(
+        window_id="@7",
+        session_id="open-session",
+        cwd="/proj",
+        transcript_path=transcript,
+        provider_name="codex",
+    )
+
+
 async def test_codex_open_transcript_wins_over_cwd_discovery(monkeypatch) -> None:
     from ccgram.handlers.recovery import transcript_discovery as mod
 

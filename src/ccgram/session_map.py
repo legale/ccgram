@@ -311,7 +311,7 @@ class SessionMapSync:
             )
         ]
         for wid in stale_wids:
-            logger.info("Removing stale window_state: %s", wid)
+            logger.info("Removing stale tmux_session state: %s", wid)
             window_store.remove_window(wid)
         return bool(stale_wids)
 
@@ -352,7 +352,7 @@ class SessionMapSync:
                     info = session_map.get(key, {})
                     if info.get("session_id"):
                         logger.debug(
-                            "session_map entry found for window_id %s", window_id
+                            "session_map entry found for tmux_session %s", window_id
                         )
                         await self.load_session_map()
                         return True
@@ -521,7 +521,7 @@ class SessionMapSync:
                     }
                     atomic_write_json(map_file, session_map)
                     logger.info(
-                        "Registered hookless session: %s -> session_id=%s, cwd=%s",
+                        "Registered hookless tmux_session: %s -> session_id=%s, cwd=%s",
                         window_key,
                         session_id,
                         cwd,
@@ -592,7 +592,7 @@ class SessionMapSync:
             changed = True
         if state.session_id != new_sid or state.cwd != new_cwd:
             logger.info(
-                "Session map: window_id %s updated sid=%s, cwd=%s",
+                "Session map: tmux_session %s updated sid=%s, cwd=%s",
                 window_id,
                 new_sid,
                 new_cwd,

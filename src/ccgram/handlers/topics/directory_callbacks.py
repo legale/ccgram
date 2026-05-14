@@ -62,7 +62,7 @@ from .directory_browser import (
 from .topic_binding import bind_topic_to_window, rename_bound_topic
 from ..callback_registry import register
 from ..messaging_pipeline.message_sender import safe_edit, safe_send
-from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
+from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT, PENDING_TOPIC_NAME
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -188,7 +188,7 @@ async def _handle_star(
     if context.user_data is not None:
         context.user_data[BROWSE_DIRS_KEY] = subdirs
     await safe_edit(query, msg_text, reply_markup=keyboard)
-    await query.answer("⭐ Starred" if now_starred else "☆ Unstarred")
+    await query.answer("Starred" if now_starred else "Unstarred")
 
 
 async def _handle_select(
@@ -382,7 +382,7 @@ async def _handle_confirm(
             clear_browse_state(context.user_data)
             await safe_edit(
                 query,
-                f"✅ Already bound to window {display}.",
+                f"Already bound to window {display}.",
             )
             return
 
@@ -420,7 +420,7 @@ async def _validate_provider_select(
                 existing_wid,
                 display,
             )
-            await safe_edit(query, f"✅ Already bound to window {display}.")
+            await safe_edit(query, f"Already bound to window {display}.")
             return False
 
     return True
@@ -549,12 +549,16 @@ async def _create_window_and_bind(
     pending_thread_id: int | None = (
         context.user_data.get(PENDING_THREAD_ID) if context.user_data else None
     )
+    pending_topic_name = ""
+    if context.user_data is not None:
+        pending_topic_name = context.user_data.get(PENDING_TOPIC_NAME, "")
 
     launch_command = resolve_launch_command(provider_name, approval_mode=approval_mode)
+    topic_session_name = pending_topic_name or Path(selected_path).name
 
     success, message, created_wname, created_wid = await tmux_manager.create_window(
         selected_path,
-        session_name=tmux_manager.topic_session_name(Path(selected_path).name),
+        session_name=tmux_manager.topic_session_name(topic_session_name),
         launch_command=launch_command,
     )
     if not success:
@@ -562,6 +566,7 @@ async def _create_window_and_bind(
         if pending_thread_id is not None and context.user_data is not None:
             context.user_data.pop(PENDING_THREAD_ID, None)
             context.user_data.pop(PENDING_THREAD_TEXT, None)
+            context.user_data.pop(PENDING_TOPIC_NAME, None)
         return
 
     user_preferences.update_user_mru(user_id, selected_path)
@@ -609,7 +614,7 @@ async def _create_window_and_bind(
         await session_map_sync.wait_for_session_map_entry(created_wid)
 
     if pending_thread_id is None:
-        await safe_edit(query, f"✅ {message}")
+        await safe_edit(query, message)
         return
 
     await rename_bound_topic(
@@ -623,7 +628,7 @@ async def _create_window_and_bind(
 
     await safe_edit(
         query,
-        f"✅ {message}\n\nBound to this topic. Send messages here.",
+        f"{message}\n\nBound to this topic. Send messages here.",
     )
 
     pending_text = (
@@ -638,6 +643,7 @@ async def _create_window_and_bind(
         if context.user_data is not None:
             context.user_data.pop(PENDING_THREAD_TEXT, None)
             context.user_data.pop(PENDING_THREAD_ID, None)
+            context.user_data.pop(PENDING_TOPIC_NAME, None)
 
         # Chat-first providers (shell): route through NL→command approval flow
         if provider_caps.chat_first_command_path:
@@ -663,6 +669,7 @@ async def _create_window_and_bind(
                 )
     elif context.user_data is not None:
         context.user_data.pop(PENDING_THREAD_ID, None)
+        context.user_data.pop(PENDING_TOPIC_NAME, None)
 
 
 async def _handle_mode_select(

@@ -181,7 +181,7 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if is_setup:
         try:
             await accept_offer(window_id)
-            await query.edit_message_text("✅ Shell prompt marker configured")
+            await query.edit_message_text("Shell prompt marker configured")
         except TelegramError as exc:
             logger.debug("shell_setup_edit_failed", error=str(exc))
         except OSError as exc:
@@ -190,9 +190,9 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             with contextlib.suppress(TelegramError):
                 await query.edit_message_text(
-                    "❌ Setup failed — window may have closed"
+                    "Setup failed - window may have closed"
                 )
     else:
         record_skip(window_id)
         with contextlib.suppress(TelegramError):
-            await query.edit_message_text("⏭ Skipped — send ! prefix for raw commands")
+            await query.edit_message_text("Skipped - send ! prefix for raw commands")

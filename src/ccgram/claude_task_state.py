@@ -13,9 +13,8 @@ from typing import Any
 
 from .topic_state_registry import topic_state
 
-# Idle status sentinel — lives here (core) rather than in handlers/callback_data
-# to avoid a core → handler layer violation.
-IDLE_STATUS_TEXT = "\u2713 Ready"
+# Idle status sentinel used for idle screen detection.
+IDLE_STATUS_TEXT = "idle"
 
 _WAITING_INPUT = "Waiting for input"
 _PLAN_APPROVAL = "Plan approval needed"
@@ -164,43 +163,42 @@ class ClaudeTaskStateStore:
         return self._last_status.get(window_id)
 
     def format_completion_text(self, window_id: str, num_turns: int = 0) -> str:
-        """Build an enriched Ready message with task checklist and last status.
+        """Build a compact completion message from task checklist and last status.
 
         Returns:
-            Enriched text like::
+            Compact text like::
 
-                ✓ Ready
                 ━━━━━━━━━━━━━━━━━━━━
                 ✔ write unit tests
                 ✔ run linter
                 3/3 tasks done · 12 turns
 
-            Falls back to ``"✓ Ready\\nLast: <status> · N turns"`` when no
-            task checklist, or bare ``"✓ Ready"`` when nothing available.
+            Falls back to ``"Last: <status> · N turns"`` when no task
+            checklist, or ``""`` when nothing available.
         """
         snapshot = self.get_snapshot(window_id)
         last_status = self.get_last_status(window_id)
 
         if snapshot is None and last_status is None:
-            return IDLE_STATUS_TEXT
+            return ""
 
-        lines: list[str] = [IDLE_STATUS_TEXT]
+        lines: list[str] = []
 
         if snapshot is not None:
             lines.append("\u2501" * 20)
             for item in snapshot.items[:8]:
                 if item.status == "completed":
-                    glyph = "\u2714"
+                    glyph = "done"
                 elif item.status == "in_progress":
-                    glyph = "\u25d4"
+                    glyph = "active"
                 else:
-                    glyph = "\u25fb"
+                    glyph = "pending"
                 label = (
                     item.active_form
                     if item.status == "in_progress" and item.active_form
                     else item.subject
                 )
-                lines.append(f"{glyph} {label}")
+                lines.append(f"{glyph}: {label}")
 
             hidden = max(0, snapshot.total_count - 8)
             if hidden > 0:
@@ -209,12 +207,12 @@ class ClaudeTaskStateStore:
             summary_parts = [f"{snapshot.done_count}/{snapshot.total_count} tasks done"]
             if num_turns:
                 summary_parts.append(f"{num_turns} turns")
-            lines.append(" \u00b7 ".join(summary_parts))
+            lines.append(" - ".join(summary_parts))
         elif last_status:
-            suffix = f" \u00b7 {num_turns} turns" if num_turns else ""
+            suffix = f" - {num_turns} turns" if num_turns else ""
             lines.append(f"Last: {last_status}{suffix}")
 
-        return "\n".join(lines)
+        return "\n".join(lines).strip()
 
     def rebuild_from_entries(
         self,

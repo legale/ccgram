@@ -113,7 +113,7 @@ async def _auto_detect_provider(window_id: str) -> None:
     if detected:
         session_manager.set_window_provider(window_id, detected)
         logger.info(
-            "Auto-detected provider %r for window %s (command=%s)",
+            "Auto-detected provider %r for tmux_session %s (command=%s)",
             detected,
             window_id,
             w.pane_current_command,

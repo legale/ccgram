@@ -15,6 +15,7 @@ Key functions:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from pathlib import Path
 import structlog
 
 from telegram import (
@@ -28,6 +29,7 @@ from ..telegram_client import PTBTelegramClient, TelegramClient
 from ..thread_router import thread_router
 from ..tmux_manager import tmux_manager
 from ..window_query import view_window
+from .status.topic_emoji import get_stored_topic_name
 from .callback_data import (
     CB_SESSIONS_KILL,
     CB_SESSIONS_KILL_CONFIRM,
@@ -40,6 +42,7 @@ from .callback_helpers import user_owns_window
 from .callback_registry import register
 from .cleanup import clear_topic_state
 from .messaging_pipeline.message_sender import safe_edit, safe_reply
+from .topics.topic_binding import bind_topic_to_window
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -131,6 +134,39 @@ async def handle_sessions_refresh(query: CallbackQuery, user_id: int) -> None:
     await safe_edit(query, text, reply_markup=keyboard)
 
 
+async def _create_session_for_topic(
+    query: CallbackQuery, user_id: int, thread_id: int, _client: TelegramClient
+) -> None:
+    chat = query.message.chat if query.message else None
+    if chat is None:
+        await safe_edit(query, "Cannot determine topic")
+        return
+
+    topic_name = get_stored_topic_name(chat.id, thread_id)
+    if not topic_name:
+        topic_name = f"topic-{thread_id}"
+
+    success, message, created_name, created_wid = await tmux_manager.create_window(
+        str(Path.cwd()),
+        session_name=tmux_manager.topic_session_name(topic_name),
+        window_name=topic_name,
+    )
+    if not success:
+        await safe_edit(query, f"Failed to create session: {message}")
+        return
+
+    display = created_name
+    bind_topic_to_window(
+        query,
+        user_id,
+        thread_id,
+        created_wid,
+        display,
+        router=thread_router,
+    )
+    await safe_edit(query, f"Created session `{display}`")
+
+
 async def handle_sessions_kill(
     query: CallbackQuery, _user_id: int, window_id: str
 ) -> None:
@@ -209,7 +245,14 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await handle_sessions_refresh(query, user.id)
         await query.answer("Refreshed")
     elif data == CB_SESSIONS_NEW:
-        await query.answer("Create a new topic to start a session.")
+        thread_id = query.message.message_thread_id if query.message else None
+        if thread_id is None:
+            await query.answer("Use in a topic", show_alert=True)
+            return
+        await _create_session_for_topic(
+            query, user.id, thread_id, PTBTelegramClient(context.bot)
+        )
+        await query.answer("Created")
     elif data.startswith(CB_SESSIONS_KILL_CONFIRM):
         window_id = data[len(CB_SESSIONS_KILL_CONFIRM) :]
         if not user_owns_window(user.id, window_id):

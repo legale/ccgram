@@ -636,7 +636,7 @@ class TestClearSeenStatus:
 
 class TestTransitionToIdle:
     async def test_sends_idle_text(self) -> None:
-        from ccgram.handlers.callback_data import IDLE_STATUS_TEXT
+        from ccgram.claude_task_state import IDLE_STATUS_TEXT
         from ccgram.handlers.polling.window_tick import _transition_to_idle
 
         bot = AsyncMock(spec=Bot)
