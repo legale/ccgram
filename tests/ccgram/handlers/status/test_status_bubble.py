@@ -443,7 +443,7 @@ class TestFormatPaneBlock:
         assert result is not None
         assert result.startswith("└ ")
         assert "%5 active" in result
-        assert "%6 ⏸ blocked" in result
+        assert "%6 [blocked] blocked" in result
         # Single line for ≤3 panes — no expandable quote sentinel.
         assert "\n" not in result
         assert EXPANDABLE_QUOTE_START not in result
@@ -461,7 +461,7 @@ class TestFormatPaneBlock:
         assert result is not None
         assert "api-gateway active" in result
         assert "%5 active" not in result  # name preferred over pane_id
-        assert "%6 ⏸ blocked" in result
+        assert "%6 [blocked] blocked" in result
         assert " · " in result
 
     def test_idle_age_renders_minutes(self, _isolated_window_store):

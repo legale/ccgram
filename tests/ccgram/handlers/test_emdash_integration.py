@@ -292,17 +292,17 @@ class TestKillWindowForeignGuard:
 class TestWindowLabel:
     def test_native_window(self) -> None:
         icon, name = _window_label("@5", "myproject")
-        assert icon == "🖥"
+        assert icon == "local"
         assert name == "myproject"
 
     def test_emdash_claude_window(self) -> None:
         icon, name = _window_label("emdash-claude-main-abc:@0", "claude-main-abc")
-        assert icon == "📎"
+        assert icon == "linked"
         assert "claude" in name
 
     def test_emdash_codex_window(self) -> None:
         icon, name = _window_label("emdash-codex-main-xyz:@0", "codex-main-xyz")
-        assert icon == "📎"
+        assert icon == "linked"
         assert "codex" in name
 
 
@@ -316,8 +316,8 @@ class TestBuildWindowPickerEmdash:
 
         assert "emdash-claude-main-abc:@0" in win_ids
         assert "@5" in win_ids
-        assert "📎" in text
-        assert "🖥" in text
+        assert "linked" in text
+        assert "local" in text
 
 
 # ── Resolve stale IDs skips foreign windows ───────────────────────────

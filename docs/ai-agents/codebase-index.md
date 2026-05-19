@@ -55,7 +55,7 @@ Telegram handler surface (post Round 4 F1 — feature subpackages):
 - `src/ccgram/handlers/live/pane_callbacks.py`: per-pane callbacks (rename, screenshot select).
 - `src/ccgram/handlers/hook_events.py`: hook event dispatcher (Notification, Stop, Subagent*, Team*).
 - `src/ccgram/handlers/cleanup.py`: centralized topic state teardown on close/delete.
-- `src/ccgram/handlers/status/topic_emoji.py`: debounced topic name emoji updates (active/idle/done/dead). Color scheme is configurable via `CCGRAM_STATUS_MODE` (`system`: green=working; `user`: green=ready).
+- `src/ccgram/handlers/status/topic_emoji.py`: legacy topic-name normalization/cache for old emoji-prefixed Telegram topic names. Status changes no longer rename topics.
 - `src/ccgram/handlers/status/status_bubble.py`: status-bubble keyboard + status message lifecycle.
 - `src/ccgram/handlers/status/status_bar_actions.py`: status-bubble button callbacks.
 - `src/ccgram/handlers/file_handler.py`: photo/document upload → `.ccgram-uploads/` → agent notification.
@@ -164,9 +164,9 @@ Change tool-call visibility (hide/show `tool_use`/`tool_result`):
 - `src/ccgram/handlers/messaging_pipeline/message_queue.py` (`_handle_content_task`): visibility gate sits before batch eligibility; hidden entries are dropped before `_tool_msg_ids` registration. Hook events bypass the gate via `StatusUpdateTask`.
 - `/toolcalls` command (in `src/ccgram/handlers/messaging_pipeline/topic_commands.py`): cycles per-window mode via `WindowStateStore` cycle method.
 
-Change topic emoji color scheme:
+Change topic-name normalization:
 
-- `src/ccgram/handlers/status/topic_emoji.py`: maps internal status (`active`/`idle`/`done`/`dead`) to Telegram emoji color via `CCGRAM_STATUS_MODE`. Add new modes by extending the mode→colorname dispatch.
+- `src/ccgram/handlers/status/topic_emoji.py`: strips old status/approval emoji prefixes and caches clean topic names. Do not reintroduce Telegram topic renames for status display.
 
 Change PTB handler registration / lifecycle:
 

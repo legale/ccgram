@@ -2,6 +2,7 @@
 
 Provides utility functions used by multiple callback handler modules:
   - user_owns_window: Check if a user has any thread binding to a window
+  - get_bound_window: Resolve a user's topic binding
   - get_thread_id: Extract thread_id from a Telegram update
 """
 
@@ -13,6 +14,16 @@ from ..thread_router import thread_router
 def user_owns_window(user_id: int, window_id: str) -> bool:
     """Check if a user has any thread binding to the given window."""
     return window_id in thread_router.get_all_thread_windows(user_id).values()
+
+
+def get_bound_window(user_id: int, thread_id: int) -> str | None:
+    """Return the window bound to a user's topic, if any."""
+    return thread_router.get_window_for_thread(user_id, thread_id)
+
+
+def get_window_display_name(window_id: str) -> str:
+    """Return the display name for a bound window."""
+    return thread_router.get_display_name(window_id)
 
 
 def parse_target(target: str) -> tuple[str, str | None]:

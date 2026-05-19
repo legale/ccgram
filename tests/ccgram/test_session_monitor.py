@@ -133,13 +133,19 @@ class TestNewWindowDetection:
 
 class TestPerWindowProviderResolution:
     async def test_process_session_file_backfills_hookless_initial_message(
-        self, tmp_path
+        self, tmp_path, monkeypatch
     ) -> None:
         """Hookless providers should not drop the first visible assistant reply."""
         session_file = tmp_path / "codex.jsonl"
         session_file.write_text(
             '{"timestamp":"2026-03-23T00:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hi what do you want?"}]}}\n'
         )
+
+        from ccgram.config import config
+        from ccgram.providers import _reset_provider
+
+        monkeypatch.setattr(config, "provider_name", "codex")
+        _reset_provider()
 
         monitor = SessionMonitor(
             projects_path=tmp_path / "projects",
@@ -156,6 +162,7 @@ class TestPerWindowProviderResolution:
 
         assert len(new_messages) == 1
         assert new_messages[0].text == "hi what do you want?"
+        _reset_provider()
 
     async def test_process_session_file_passes_window_id(self, tmp_path) -> None:
         """_process_session_file uses window_id for per-window provider resolution."""

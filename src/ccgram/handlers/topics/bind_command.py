@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from telegram import Update
 
 from ...config import config
-from ...thread_router import thread_router
+from ..callback_helpers import get_bound_window, get_window_display_name
 from ..messaging_pipeline.message_sender import safe_reply
 
 if TYPE_CHECKING:
@@ -27,12 +27,13 @@ async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(message, "Use /bind inside a topic.")
         return
 
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
+    window_id = get_bound_window(user.id, thread_id)
     if window_id is not None:
-        display = thread_router.get_display_name(window_id)
+        display = get_window_display_name(window_id)
         await safe_reply(message, f"Already bound to session `{display}`.")
         return
 
+    # Lazy: text_handler imports topic handlers during normal message dispatch.
     from ..text.text_handler import _handle_unbound_topic
 
     await _handle_unbound_topic(user.id, thread_id, "", context.user_data, message)

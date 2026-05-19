@@ -8,11 +8,6 @@ from ccgram.handlers.text.text_handler import (
     _bash_capture_tasks,
     cancel_bash_capture,
 )
-from ccgram.handlers.status.topic_emoji import (
-    _MAX_DISABLED_CHATS,
-    _disabled_chats,
-    clear_disabled_chat,
-)
 from ccgram.handlers.topics.topic_orchestration import (
     _topic_create_retry_until,
     clear_topic_create_retry,
@@ -53,21 +48,3 @@ class TestClearTopicCreateRetry:
     def test_missing_key_no_error(self) -> None:
         _topic_create_retry_until.clear()
         clear_topic_create_retry(-999)
-
-
-class TestClearDisabledChat:
-    def test_removes_chat_from_set(self) -> None:
-        _disabled_chats.add(-100)
-        clear_disabled_chat(-100)
-        assert -100 not in _disabled_chats
-
-    def test_missing_chat_no_error(self) -> None:
-        _disabled_chats.clear()
-        clear_disabled_chat(-999)
-
-    def test_size_guard_clears_all(self) -> None:
-        _disabled_chats.clear()
-        for i in range(_MAX_DISABLED_CHATS + 2):
-            _disabled_chats.add(i)
-        clear_disabled_chat(0)
-        assert len(_disabled_chats) == 0

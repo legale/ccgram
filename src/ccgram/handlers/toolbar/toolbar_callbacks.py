@@ -57,9 +57,9 @@ async def _dispatch_key(
     )
     if action.read_state:
         short_label = await refresh_button_label(action, query, window_id)
-        await query.answer(f"{action.emoji} {short_label}")
+        await query.answer(short_label)
     else:
-        await query.answer(f"{action.emoji} {action.text}")
+        await query.answer(action.text)
 
 
 async def _dispatch_text(
@@ -73,9 +73,9 @@ async def _dispatch_text(
     await tmux_manager.send_keys(w.window_id, action.payload, enter=True, literal=True)
     if action.read_state:
         short_label = await refresh_button_label(action, query, window_id)
-        await query.answer(f"{action.emoji} {short_label}")
+        await query.answer(short_label)
     else:
-        await query.answer(f"{action.emoji} {action.text}")
+        await query.answer(action.text)
 
 
 # ──────────────────────────────────────────────────────────────────────

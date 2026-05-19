@@ -135,19 +135,7 @@ All settings accept both CLI flags and environment variables. CLI flags take pre
 | `CCGRAM_LLM_TEMPERATURE`                             | `0.1`                | LLM sampling temperature (0 = deterministic)                                           |
 | `CCGRAM_LIVE_VIEW_INTERVAL` / `--live-view-interval` | `5`                  | Live view refresh interval in seconds (min 1)                                          |
 | `CCGRAM_LIVE_VIEW_TIMEOUT` / `--live-view-timeout`   | `300`                | Live view auto-stop timeout in seconds (min 1)                                         |
-| `CCGRAM_STATUS_MODE` / `--status-mode`               | `system`             | Topic emoji color scheme: `system` (green=working) or `user` (green=ready)             |
 | `CCGRAM_HIDE_TOOL_CALLS` / `--hide-tool-calls`       | `false`              | Globally hide `tool_use`/`tool_result` messages (per-window override via `/toolcalls`) |
-
-## Topic Emoji Color Scheme
-
-Topic emojis change color to reflect agent status. The mapping between color and meaning is configurable:
-
-| Mode               | 🟢 Green                        | 🟡 Yellow        | When to pick                       |
-| ------------------ | ------------------------------- | ---------------- | ---------------------------------- |
-| `system` (default) | agent is working                | agent is idle    | "is anything running right now?"   |
-| `user`             | agent is idle / ready for input | agent is working | "does anything need my attention?" |
-
-Set globally via `CCGRAM_STATUS_MODE=user` or `--status-mode user`. Invalid values fall back to `system`.
 
 ## Tool-Call Visibility
 
@@ -332,19 +320,19 @@ Agents running in tmux windows can discover each other, exchange messages, broad
 
 ```mermaid
 graph LR
-  subgraph agents["🖥️ tmux — Agent Windows"]
-    A["🟠 Agent A<br>claude · @0"]
-    B["🟠 Agent B<br>claude · @3"]
+  subgraph agents["tmux — Agent Windows"]
+    A["Agent A<br>claude · @0"]
+    B["Agent B<br>claude · @3"]
   end
 
-  subgraph bot["⚙️ ccgram Bot"]
-    MBX["📬 Mailbox<br>~/.ccgram/mailbox/"]
-    BRK["🔄 Broker<br>idle detection · send_keys"]
+  subgraph bot["ccgram Bot"]
+    MBX["Mailbox<br>~/.ccgram/mailbox/"]
+    BRK["Broker<br>idle detection · send_keys"]
   end
 
-  subgraph tg["📱 Telegram"]
-    TA["💬 Topic A"]
-    TB["💬 Topic B"]
+  subgraph tg["Telegram"]
+    TA["Topic A"]
+    TB["Topic B"]
   end
 
   A -- "ccgram msg send<br>ccgram:@3 'help'" --> MBX

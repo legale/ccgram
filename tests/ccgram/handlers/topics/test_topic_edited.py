@@ -46,12 +46,17 @@ class TestTopicEditedHandler:
 
         mock_tr.get_window_for_chat_thread.return_value = "@0"
         mock_tr.get_display_name.return_value = "old-name"
+        mock_tm.find_window_by_id = AsyncMock(
+            return_value=MagicMock(window_id="cc_old:@0")
+        )
         mock_tm.rename_window = AsyncMock(return_value=True)
+        mock_tm.rename_session = AsyncMock(return_value=True)
 
         update = _make_update("new-name")
         await topic_edited_handler(update, MagicMock())
 
-        mock_tm.rename_window.assert_called_once_with("@0", "new-name")
+        mock_tm.rename_window.assert_called_once_with("cc_old:@0", "new-name")
+        mock_tm.rename_session.assert_called_once_with("cc_old", "cc_new-name")
         mock_sm.set_display_name.assert_called_once_with("@0", "new-name")
 
     @_PATCH_ALLOWED
@@ -64,13 +69,16 @@ class TestTopicEditedHandler:
 
         mock_tr.get_window_for_chat_thread.return_value = "@0"
         mock_tr.get_display_name.return_value = "myproject"
+        mock_tm.find_window_by_id = AsyncMock()
         mock_tm.rename_window = AsyncMock()
+        mock_tm.rename_session = AsyncMock()
 
         # Bot set "🟢 myproject" — clean name matches current display
         update = _make_update("\U0001f7e2 myproject")
         await topic_edited_handler(update, MagicMock())
 
         mock_tm.rename_window.assert_not_called()
+        mock_tm.rename_session.assert_not_called()
 
     @patch("ccgram.handlers.topics.topic_lifecycle.tmux_manager")
     @patch("ccgram.handlers.topics.topic_lifecycle.thread_router")
@@ -79,13 +87,16 @@ class TestTopicEditedHandler:
     ) -> None:
         from ccgram.handlers.topics.topic_lifecycle import topic_edited_handler
 
+        mock_tm.find_window_by_id = AsyncMock()
         mock_tm.rename_window = AsyncMock()
+        mock_tm.rename_session = AsyncMock()
 
         update = _make_update(None)
         await topic_edited_handler(update, MagicMock())
 
         mock_tr.get_window_for_chat_thread.assert_not_called()
         mock_tm.rename_window.assert_not_called()
+        mock_tm.rename_session.assert_not_called()
 
     @_PATCH_ALLOWED
     @patch("ccgram.handlers.topics.topic_lifecycle.tmux_manager")
@@ -96,12 +107,15 @@ class TestTopicEditedHandler:
         from ccgram.handlers.topics.topic_lifecycle import topic_edited_handler
 
         mock_tr.get_window_for_chat_thread.return_value = None
+        mock_tm.find_window_by_id = AsyncMock()
         mock_tm.rename_window = AsyncMock()
+        mock_tm.rename_session = AsyncMock()
 
         update = _make_update("new-name")
         await topic_edited_handler(update, MagicMock())
 
         mock_tm.rename_window.assert_not_called()
+        mock_tm.rename_session.assert_not_called()
 
     @_PATCH_ALLOWED
     @patch("ccgram.handlers.topics.topic_lifecycle.tmux_manager")
@@ -115,7 +129,11 @@ class TestTopicEditedHandler:
         _topic_names[(-100, 42)] = "old-name"
         mock_tr.get_window_for_chat_thread.return_value = "@0"
         mock_tr.get_display_name.return_value = "old-name"
+        mock_tm.find_window_by_id = AsyncMock(
+            return_value=MagicMock(window_id="cc_old:@0")
+        )
         mock_tm.rename_window = AsyncMock(return_value=True)
+        mock_tm.rename_session = AsyncMock(return_value=True)
 
         update = _make_update("new-name")
         await topic_edited_handler(update, MagicMock())
@@ -134,7 +152,11 @@ class TestTopicEditedHandler:
         _topic_names[(-100, 42)] = "old-name"
         mock_tr.get_window_for_chat_thread.return_value = "@0"
         mock_tr.get_display_name.return_value = "old-name"
+        mock_tm.find_window_by_id = AsyncMock(
+            return_value=MagicMock(window_id="cc_old:@0")
+        )
         mock_tm.rename_window = AsyncMock(return_value=False)
+        mock_tm.rename_session = AsyncMock(return_value=False)
 
         update = _make_update("new-name")
         await topic_edited_handler(update, MagicMock())

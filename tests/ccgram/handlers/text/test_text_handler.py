@@ -7,9 +7,13 @@ from ccgram.handlers.text.text_handler import (
     _check_ui_guards,
     _forward_message,
     _handle_dead_window,
+    _handle_session_start_directory_input,
     _handle_unbound_topic,
 )
 from ccgram.handlers.topics.directory_browser import (
+    BROWSE_DIRS_KEY,
+    BROWSE_PAGE_KEY,
+    BROWSE_PATH_KEY,
     STATE_BROWSING_DIRECTORY,
     STATE_KEY,
     STATE_SELECTING_WINDOW,
@@ -17,6 +21,7 @@ from ccgram.handlers.topics.directory_browser import (
 from ccgram.handlers.user_state import (
     PENDING_THREAD_ID,
     PENDING_THREAD_TEXT,
+    PENDING_TOPIC_NAME,
     RECOVERY_WINDOW_ID,
 )
 
@@ -112,6 +117,40 @@ class TestHandleUnboundTopic:
         assert mock_reply.call_count == 2
         assert user_data[STATE_KEY] == STATE_SELECTING_WINDOW
         assert user_data[PENDING_THREAD_TEXT] == "hello"
+
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    @patch(f"{_TH}.tmux_manager")
+    @patch(f"{_TH}.thread_router")
+    async def test_message_path_shows_provider_picker(
+        self,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        mock_reply: AsyncMock,
+        tmp_path,
+    ) -> None:
+        mock_tr.get_window_for_thread.return_value = None
+        message = MagicMock()
+        message.chat.title = "topic"
+        message.reply_to_message = None
+        user_data: dict = {}
+
+        result = await _handle_unbound_topic(
+            100,
+            42,
+            f"cd {tmp_path}",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        mock_tm.list_windows.assert_not_called()
+        mock_reply.assert_called_once()
+        assert "Select Provider" in mock_reply.call_args.args[1]
+        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
+        assert user_data[BROWSE_PATH_KEY] == str(tmp_path)
+        assert user_data[PENDING_THREAD_ID] == 42
+        assert PENDING_THREAD_TEXT not in user_data
+        assert user_data[PENDING_TOPIC_NAME] == "topic"
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.build_directory_browser")
@@ -345,6 +384,89 @@ class TestHandleDeadWindow:
         assert result is True
         mock_tr.unbind_thread.assert_called_once_with(100, 42)
         mock_browser.assert_called_once()
+
+
+class TestHandleSessionStartDirectoryInput:
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    async def test_switches_window_picker_to_provider_picker(
+        self,
+        mock_reply: AsyncMock,
+        tmp_path,
+    ) -> None:
+        user_data = {
+            STATE_KEY: STATE_SELECTING_WINDOW,
+            PENDING_THREAD_ID: 42,
+            PENDING_TOPIC_NAME: "topic",
+        }
+        message = AsyncMock()
+
+        result = await _handle_session_start_directory_input(
+            42,
+            f"cd {tmp_path}",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        mock_reply.assert_called_once()
+        assert "Select Provider" in mock_reply.call_args.args[1]
+        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
+        assert user_data[BROWSE_PATH_KEY] == str(tmp_path)
+
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    @patch(f"{_TH}.build_directory_browser")
+    async def test_non_path_text_from_window_picker_opens_directory_browser(
+        self,
+        mock_browser: MagicMock,
+        mock_reply: AsyncMock,
+    ) -> None:
+        user_data = {
+            STATE_KEY: STATE_SELECTING_WINDOW,
+            PENDING_THREAD_ID: 42,
+            PENDING_TOPIC_NAME: "topic",
+        }
+        message = AsyncMock()
+        message.from_user.id = 100
+        mock_browser.return_value = ("Browse:", MagicMock(), ["a", "b"])
+
+        result = await _handle_session_start_directory_input(
+            42,
+            "new session please",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        mock_browser.assert_called_once()
+        mock_reply.assert_called_once()
+        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
+        assert user_data[BROWSE_PAGE_KEY] == 0
+        assert user_data[BROWSE_DIRS_KEY] == ["a", "b"]
+
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    async def test_rejects_missing_directory(
+        self,
+        mock_reply: AsyncMock,
+        tmp_path,
+    ) -> None:
+        user_data = {
+            STATE_KEY: STATE_BROWSING_DIRECTORY,
+            PENDING_THREAD_ID: 42,
+            BROWSE_PATH_KEY: str(tmp_path),
+        }
+        message = AsyncMock()
+        missing = tmp_path / "missing"
+
+        result = await _handle_session_start_directory_input(
+            42,
+            f"cd {missing}",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        mock_reply.assert_called_once()
+        assert "Directory not found" in mock_reply.call_args.args[1]
 
 
 class TestShellProviderRouting:

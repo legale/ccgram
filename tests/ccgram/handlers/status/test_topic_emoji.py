@@ -1,14 +1,9 @@
 from unittest.mock import AsyncMock
+from collections.abc import Generator
 
 import pytest
 
 from ccgram.handlers.status.topic_emoji import (
-    EMOJI_ACTIVE,
-    EMOJI_DEAD,
-    EMOJI_DONE,
-    EMOJI_IDLE,
-    EMOJI_RC,
-    EMOJI_YOLO,
     clear_topic_emoji_state,
     format_topic_name_for_mode,
     reset_all_state,
@@ -20,7 +15,7 @@ from ccgram.handlers.status.topic_emoji import (
 
 
 @pytest.fixture(autouse=True)
-def _reset() -> None:
+def _reset() -> Generator[None]:
     reset_all_state()
     yield
     reset_all_state()
@@ -28,9 +23,17 @@ def _reset() -> None:
 
 class TestStripEmojiPrefix:
     @pytest.mark.parametrize(
-        "emoji", [EMOJI_ACTIVE, EMOJI_IDLE, EMOJI_DONE, EMOJI_DEAD, EMOJI_RC, EMOJI_YOLO]
+        "emoji",
+        [
+            "\U0001f7e2",
+            "\U0001f7e1",
+            "\u2705",
+            "\U0001f4a5",
+            "\U0001f4e1",
+            "\U0001f3b2",
+        ],
     )
-    def test_strips_known_emoji(self, emoji: str) -> None:
+    def test_strips_legacy_emoji(self, emoji: str) -> None:
         assert strip_emoji_prefix(f"{emoji} myproject") == "myproject"
 
     def test_no_prefix(self) -> None:
@@ -39,12 +42,12 @@ class TestStripEmojiPrefix:
 
 class TestTopicNameHelpers:
     def test_format_topic_name_returns_plain_text(self) -> None:
-        assert format_topic_name_for_mode(f"{EMOJI_ACTIVE} myproject", "yolo") == "myproject"
+        assert format_topic_name_for_mode("\U0001f7e2 myproject", "yolo") == "myproject"
 
     @pytest.mark.asyncio
     async def test_sync_topic_name_is_cache_only(self) -> None:
         bot = AsyncMock()
-        await sync_topic_name(bot, -100, 42, f"{EMOJI_IDLE} myproject")
+        await sync_topic_name(bot, -100, 42, "\U0001f7e1 myproject")
         bot.edit_forum_topic.assert_not_called()
 
     @pytest.mark.asyncio

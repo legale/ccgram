@@ -195,7 +195,7 @@ def _build_interactive_keyboard(
     rows.append(
         [
             InlineKeyboardButton("⎋ Esc", callback_data=f"{CB_ASK_ESC}{target}"[:64]),
-            InlineKeyboardButton("🔄", callback_data=f"{CB_ASK_REFRESH}{target}"[:64]),
+            InlineKeyboardButton("Refresh", callback_data=f"{CB_ASK_REFRESH}{target}"[:64]),
             InlineKeyboardButton(
                 "⏎ Enter", callback_data=f"{CB_ASK_ENTER}{target}"[:64]
             ),

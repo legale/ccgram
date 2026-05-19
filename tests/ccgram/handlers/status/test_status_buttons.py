@@ -116,7 +116,7 @@ class TestBuildStatusKeyboard:
             if isinstance(btn.callback_data, str)
             and btn.callback_data.startswith(CB_STATUS_REMOTE)  # type: ignore[union-attr]
         ][0]
-        assert rc_btn.text == "\U0001f4e1"
+        assert rc_btn.text == "RC"
 
     def test_rc_button_label_active(self) -> None:
         kb = build_status_keyboard("@0", rc_active=True)
@@ -127,7 +127,7 @@ class TestBuildStatusKeyboard:
             if isinstance(btn.callback_data, str)
             and btn.callback_data.startswith(CB_STATUS_REMOTE)  # type: ignore[union-attr]
         ][0]
-        assert rc_btn.text == "\U0001f4e1\u2713"
+        assert rc_btn.text == "RC on"
 
 
 class TestDashboardButtonRow:

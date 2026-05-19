@@ -1,11 +1,11 @@
-"""Status subpackage — status bubble, status-bar callbacks, topic emoji.
+"""Status subpackage — status bubble, status-bar callbacks, topic names.
 
 Bundles the modules that own the per-topic status surface:
 ``status_bubble`` (status message lifecycle, keyboard layout, task-list
 formatting, status-to-content conversion), ``status_bar_actions``
 (inline-button callbacks for the status bubble — notify toggle, recall,
-remote control, esc, quick keys), and ``topic_emoji`` (forum topic name
-emoji updates with debounced state transitions).
+remote control, esc, quick keys), and ``topic_emoji`` (legacy forum topic
+name normalization/cache).
 
 Public surface re-exported here is the entry point for ``bot.py`` and
 the rest of ``handlers/``; internals stay in the per-module files.
@@ -23,13 +23,6 @@ from .status_bubble import (
     send_status_text,
 )
 from .topic_emoji import (
-    EMOJI_ACTIVE,
-    EMOJI_DEAD,
-    EMOJI_DONE,
-    EMOJI_IDLE,
-    EMOJI_RC,
-    EMOJI_YOLO,
-    clear_disabled_chat,
     clear_topic_emoji_state,
     format_topic_name_for_mode,
     reset_all_state,
@@ -40,15 +33,8 @@ from .topic_emoji import (
 )
 
 __all__ = [
-    "EMOJI_ACTIVE",
-    "EMOJI_DEAD",
-    "EMOJI_DONE",
-    "EMOJI_IDLE",
-    "EMOJI_RC",
-    "EMOJI_YOLO",
     "build_dashboard_button",
     "build_status_keyboard",
-    "clear_disabled_chat",
     "clear_status_message",
     "clear_status_msg_info",
     "clear_topic_emoji_state",

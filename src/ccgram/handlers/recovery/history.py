@@ -135,18 +135,18 @@ async def send_history(
 
     if total == 0:
         if is_unread:
-            text = f"📬 [{display_name}] No unread messages."
+            text = f"[{display_name}] No unread messages."
         else:
-            text = f"📋 [{display_name}] No messages yet."
+            text = f"[{display_name}] No messages yet."
         keyboard = None
     else:
         _start = EXPANDABLE_QUOTE_START
         _end = EXPANDABLE_QUOTE_END
 
         if is_unread:
-            header = f"📬 [{display_name}] {total} unread messages"
+            header = f"[{display_name}] {total} unread messages"
         else:
-            header = f"📋 [{display_name}] Messages ({total} total)"
+            header = f"[{display_name}] Messages ({total} total)"
 
         lines = [header]
         for msg in messages:
@@ -170,7 +170,7 @@ async def send_history(
             # Add prefix based on role/type
             if msg_role == "user":
                 # User message with emoji prefix (no newline)
-                lines.append(f"👤 {msg_text}")
+                lines.append(f"User: {msg_text}")
             elif content_type == "thinking":
                 lines.append(f"\U0001f9e0 Thinking\u2026\n{msg_text}")
             else:
@@ -223,7 +223,7 @@ async def history_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -
     thread_id = _get_thread_id(update)
     window_id = thread_router.resolve_window_for_thread(user.id, thread_id)
     if not window_id:
-        await safe_reply(update.message, "❌ No session bound to this topic.")
+        await safe_reply(update.message, "No session bound to this topic.")
         return
 
     provider = get_provider_for_window(

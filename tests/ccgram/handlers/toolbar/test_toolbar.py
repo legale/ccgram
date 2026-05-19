@@ -66,11 +66,10 @@ class TestBuildToolbarKeyboard:
         labels_unknown = [[b.text for b in row] for row in kb_unknown.inline_keyboard]
         assert labels_default == labels_unknown
 
-    def test_emoji_text_style_renders_emoji_and_text(self) -> None:
+    def test_default_style_renders_text(self) -> None:
         kb = build_toolbar_keyboard("@1", "claude")
         first = kb.inline_keyboard[0][0]
         assert "Screen" in first.text
-        assert "\U0001f4f7" in first.text
 
 
 class TestBuildToolbarKeyboardCustom:
@@ -91,7 +90,7 @@ class TestBuildToolbarKeyboardCustom:
         assert kb.inline_keyboard[0][0].text == "Ctrl-C"
         assert kb.inline_keyboard[0][1].text == "Esc"
 
-    def test_emoji_style_renders_emoji_only(self) -> None:
+    def test_emoji_style_uses_compat_label(self) -> None:
         custom_layout = ToolbarLayout(
             style="emoji",
             buttons=(("ctrlc",),),
@@ -105,7 +104,7 @@ class TestBuildToolbarKeyboardCustom:
             return_value=custom_cfg,
         ):
             kb = build_toolbar_keyboard("@7", "claude")
-        assert kb.inline_keyboard[0][0].text == "\u23f9"
+        assert kb.inline_keyboard[0][0].text == "Ctrl-C"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -212,7 +211,7 @@ class TestDispatchKey:
         mock_tmux.send_keys.assert_awaited_once_with(
             "@5", "\x1b[Z", enter=False, literal=True
         )
-        query.answer.assert_awaited_once_with("\U0001f500 Edit")
+        query.answer.assert_awaited_once_with("Edit")
 
     async def test_window_not_found_alerts(self) -> None:
         query = _make_query("tb:@5:esc")
@@ -417,7 +416,6 @@ class TestRefreshButtonLabel:
                     break
         assert mode_btn is not None
         assert "Plan" in mode_btn.text
-        assert "\U0001f500" in mode_btn.text
 
     async def test_seed_button_states_populates_mode_label(self) -> None:
         _clear_toolbar_labels("@111")

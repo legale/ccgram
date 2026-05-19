@@ -348,7 +348,7 @@ class TestBuildFileBrowser:
 
     def test_text_contains_path_indicator(self, tmp_path: Path) -> None:
         text, _, _ = build_file_browser(tmp_path, tmp_path, 0)
-        assert "📂" in text
+        assert text == "."
 
     def test_dirs_before_files_in_items(self, tmp_path: Path) -> None:
         d = tmp_path / "adir"

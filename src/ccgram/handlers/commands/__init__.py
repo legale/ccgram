@@ -66,7 +66,7 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
     thread_id = _get_thread_id(update)
     window_id = thread_router.resolve_window_for_thread(user.id, thread_id)
     if not window_id:
-        await safe_reply(update.message, "❌ No session bound to this topic.")
+        await safe_reply(update.message, "No session bound to this topic.")
         return
 
     provider = get_provider_for_window(
@@ -110,12 +110,12 @@ async def toolbar_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -
                 update.get_bot(), update.message, update.effective_chat.id
             )
         else:
-            await safe_reply(update.message, "❌ Use this command inside a topic.")
+            await safe_reply(update.message, "Use this command inside a topic.")
         return
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     if not window_id:
-        await safe_reply(update.message, "❌ This topic is not bound to any session.")
+        await safe_reply(update.message, "This topic is not bound to any session.")
         return
 
     provider_name = window_query.get_window_provider(window_id) or "claude"

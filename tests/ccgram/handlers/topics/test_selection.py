@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 from telegram import InlineKeyboardMarkup
@@ -19,7 +19,11 @@ from ccgram.handlers.topics.directory_callbacks import (
     _handle_provider_select,
     _try_install_messaging_skill,
 )
-from ccgram.handlers.user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
+from ccgram.handlers.user_state import (
+    PENDING_THREAD_ID,
+    PENDING_THREAD_TEXT,
+    PENDING_TOPIC_NAME,
+)
 
 
 class TestBuildProviderPicker:
@@ -271,12 +275,65 @@ class TestHandleModeSelect:
         mock_resolve_launch.assert_called_once_with("codex", approval_mode="yolo")
         mock_tmux.create_window.assert_called_once_with(
             "/tmp/proj",
+            session_name=ANY,
+            window_name="proj",
             launch_command="codex --dangerously-bypass-approvals-and-sandbox",
         )
         mock_tmux.stamp_pane_title.assert_awaited_once_with("@5", "codex")
         mock_sm.set_window_provider.assert_called_once_with("@5", "codex")
         mock_sm.set_window_approval_mode.assert_called_once_with("@5", "yolo")
         mock_tr.set_group_chat_id.assert_called_once_with(100, 42, -100999)
+
+    @patch("ccgram.providers.resolve_launch_command")
+    @patch(
+        "ccgram.handlers.topics.directory_callbacks.safe_edit", new_callable=AsyncMock
+    )
+    @patch("ccgram.handlers.topics.directory_callbacks.session_manager")
+    @patch("ccgram.handlers.topics.directory_callbacks.tmux_manager")
+    @patch("ccgram.handlers.topics.directory_callbacks.provider_registry")
+    @patch("ccgram.handlers.topics.directory_callbacks.thread_router")
+    async def test_uses_pending_topic_name_for_window_name(
+        self,
+        mock_tr: MagicMock,
+        mock_registry: MagicMock,
+        mock_tmux: MagicMock,
+        mock_sm: MagicMock,
+        mock_edit: AsyncMock,
+        mock_resolve_launch: MagicMock,
+    ) -> None:
+        mock_registry.is_valid.return_value = True
+        mock_provider = MagicMock()
+        mock_provider.capabilities.supports_hook = False
+        mock_provider.capabilities.has_yolo_confirmation = False
+        mock_provider.capabilities.chat_first_command_path = False
+        mock_registry.get.return_value = mock_provider
+
+        mock_resolve_launch.return_value = "codex"
+        mock_tmux.create_window = AsyncMock(
+            return_value=(True, "Created window 'backend-api'", "backend-api", "@5")
+        )
+        mock_tmux.stamp_pane_title = AsyncMock()
+        mock_tr.get_window_for_thread.return_value = None
+
+        user_data = {
+            "browse_path": "/tmp/ruslan",
+            PENDING_THREAD_ID: 42,
+            PENDING_TOPIC_NAME: "backend-api",
+        }
+        query = _make_query(data=f"{CB_MODE_SELECT}codex:normal")
+        update = _make_update(thread_id=42)
+        context = _make_context(user_data)
+
+        await _handle_mode_select(
+            query, 100, f"{CB_MODE_SELECT}codex:normal", update, context
+        )
+
+        mock_tmux.create_window.assert_called_once_with(
+            "/tmp/ruslan",
+            session_name=ANY,
+            window_name="backend-api",
+            launch_command="codex",
+        )
 
     @patch(
         "ccgram.handlers.topics.directory_callbacks._accept_yolo_confirmation",

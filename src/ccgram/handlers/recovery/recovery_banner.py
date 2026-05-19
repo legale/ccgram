@@ -251,13 +251,17 @@ async def _create_and_bind_window(
     else:
         provider = get_provider()
         approval_mode = "normal"
+    topic_name = thread_router.get_display_name(old_window_id) if old_window_id else ""
+    if not isinstance(topic_name, str) or not topic_name:
+        topic_name = cwd.rstrip("/").rsplit("/", 1)[-1] or cwd
     launch_command = resolve_launch_command(
         provider.capabilities.name, approval_mode=approval_mode
     )
 
     success, message, created_wname, created_wid = await tmux_manager.create_window(
         cwd,
-        session_name=tmux_manager.topic_session_name(Path(cwd).name),
+        session_name=tmux_manager.topic_session_name(topic_name),
+        window_name=topic_name,
         agent_args=agent_args,
         launch_command=launch_command,
     )
@@ -280,7 +284,13 @@ async def _create_and_bind_window(
 
     client = PTBTelegramClient(context.bot)
     await rename_bound_topic(
-        client, user_id, thread_id, created_wname, approval_mode, router=thread_router
+        client,
+        user_id,
+        thread_id,
+        created_wid,
+        created_wname,
+        approval_mode,
+        router=thread_router,
     )
 
     await safe_edit(query, f"✅ {message}\n\n{success_label}")

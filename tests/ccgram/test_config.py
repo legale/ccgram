@@ -11,6 +11,14 @@ def _base_env(monkeypatch, tmp_path):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test:token")
     monkeypatch.setenv("ALLOWED_USERS", "12345")
     monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
+    for name in (
+        "CCGRAM_INSTANCE_NAME",
+        "CCGRAM_PROVIDER",
+        "CCGRAM_HIDE_TOOL_CALLS",
+        "MONITOR_POLL_INTERVAL",
+        "CCGRAM_STATUS_POLL_INTERVAL",
+    ):
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.mark.usefixtures("_base_env")
@@ -142,43 +150,7 @@ class TestHideToolCalls:
 
 
 @pytest.mark.usefixtures("_base_env")
-class TestStatusMode:
-    def test_default_is_system(self, monkeypatch):
-        monkeypatch.delenv("CCGRAM_STATUS_MODE", raising=False)
-        assert Config().status_mode == "system"
-
-    @pytest.mark.parametrize("value", ["user", "USER", "User", " user "])
-    def test_user_mode_normalized(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_STATUS_MODE", value)
-        assert Config().status_mode == "user"
-
-    @pytest.mark.parametrize("value", ["system", "SYSTEM", " System "])
-    def test_system_mode_normalized(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_STATUS_MODE", value)
-        assert Config().status_mode == "system"
-
-    @pytest.mark.parametrize("value", ["", "garbage", "1", "off", "default"])
-    def test_invalid_falls_back_to_system(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_STATUS_MODE", value)
-        assert Config().status_mode == "system"
-
-
-@pytest.mark.usefixtures("_base_env")
 class TestTopicStatusConfig:
-    def test_topic_rename_default_false(self, monkeypatch):
-        monkeypatch.delenv("CCGRAM_TOPIC_RENAME_ENABLED", raising=False)
-        assert Config().topic_rename_enabled is False
-
-    @pytest.mark.parametrize("value", ["1", "true", "yes", "True", "YES"])
-    def test_topic_rename_enabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_TOPIC_RENAME_ENABLED", value)
-        assert Config().topic_rename_enabled is True
-
-    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
-    def test_topic_rename_disabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_TOPIC_RENAME_ENABLED", value)
-        assert Config().topic_rename_enabled is False
-
     def test_status_diff_default_true(self, monkeypatch):
         monkeypatch.delenv("CCGRAM_TOPIC_STATUS_DIFF_ENABLED", raising=False)
         assert Config().topic_status_diff_enabled is True

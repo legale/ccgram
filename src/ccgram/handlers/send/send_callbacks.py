@@ -50,7 +50,7 @@ from ..user_state import (
 
 
 async def _react_uploaded(client: TelegramClient, sent: Message | None) -> None:
-    """Best-effort persistent ✅ on the just-uploaded file message."""
+    """Best-effort persistent reaction on the just-uploaded file message."""
     if sent is None:
         return
     await react(client, sent.chat_id, sent.message_id, REACT_DONE)

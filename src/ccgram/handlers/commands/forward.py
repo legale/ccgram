@@ -113,13 +113,13 @@ async def forward_command_handler(
     args = parts[1] if len(parts) > 1 else ""
     window_id = thread_router.resolve_window_for_thread(user.id, thread_id)
     if not window_id:
-        await safe_reply(update.message, "❌ No session bound to this topic.")
+        await safe_reply(update.message, "No session bound to this topic.")
         return
 
     w = await tmux_manager.find_window_by_id(window_id)
     if not w:
         display = thread_router.get_display_name(window_id)
-        await safe_reply(update.message, f"❌ Window '{display}' no longer exists.")
+        await safe_reply(update.message, f"Window '{display}' no longer exists.")
         return
 
     display = thread_router.get_display_name(window_id)
@@ -145,7 +145,7 @@ async def forward_command_handler(
     ):
         await safe_reply(
             update.message,
-            f"❌ [{display}] `{command_token}` is not supported by "
+            f"[{display}] `{command_token}` is not supported by "
             f"`{provider.capabilities.name}`.\n"
             f"{_short_supported_commands(current_supported)}\n"
             "Use /commands for the full list.",
@@ -170,12 +170,12 @@ async def forward_command_handler(
     lifecycle_strategy.clear_probe_failures(window_id)
     success, error_msg = await send_to_window(window_id, cc_slash)
     if not success:
-        await safe_reply(update.message, f"❌ {error_msg}")
+        await safe_reply(update.message, error_msg)
         return
 
     if thread_id is not None:
         record_command(user.id, thread_id, cc_slash)
-    await safe_reply(update.message, f"⚡ [{display}] Sent: {cc_slash}")
+    await safe_reply(update.message, f"[{display}] Sent: {cc_slash}")
     await _maybe_send_status_snapshot(
         update.message,
         window_id,

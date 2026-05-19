@@ -559,6 +559,7 @@ async def _create_window_and_bind(
     success, message, created_wname, created_wid = await tmux_manager.create_window(
         selected_path,
         session_name=tmux_manager.topic_session_name(topic_session_name),
+        window_name=topic_session_name,
         launch_command=launch_command,
     )
     if not success:
@@ -621,6 +622,7 @@ async def _create_window_and_bind(
         PTBTelegramClient(context.bot),
         user_id,
         pending_thread_id,
+        created_wid,
         created_wname,
         approval_mode,
         router=thread_router,

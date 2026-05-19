@@ -1,13 +1,26 @@
 """Tests for window picker callback handlers."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram import Bot, CallbackQuery, Update
 from telegram.ext import ContextTypes
 
 from ccgram.handlers.callback_data import CB_WIN_BIND, CB_WIN_CANCEL, CB_WIN_NEW
-from ccgram.handlers.topics.directory_browser import UNBOUND_WINDOWS_KEY
-from ccgram.handlers.user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
+from ccgram.handlers.topics.directory_browser import (
+    BROWSE_DIRS_KEY,
+    BROWSE_PAGE_KEY,
+    BROWSE_PATH_KEY,
+    STATE_BROWSING_DIRECTORY,
+    STATE_KEY,
+    STATE_SELECTING_WINDOW,
+    UNBOUND_WINDOWS_KEY,
+)
+from ccgram.handlers.user_state import (
+    PENDING_THREAD_ID,
+    PENDING_THREAD_TEXT,
+    PENDING_TOPIC_NAME,
+)
 from ccgram.handlers.topics.window_callbacks import handle_window_callback
 
 
@@ -129,21 +142,34 @@ class TestBindWindowCallback:
 
 class TestNewWindowCallback:
     async def test_transitions_to_directory_browser(self) -> None:
-        user_data = {PENDING_THREAD_ID: 42}
+        user_data = {
+            STATE_KEY: STATE_SELECTING_WINDOW,
+            PENDING_THREAD_ID: 42,
+            PENDING_THREAD_TEXT: "hello",
+            PENDING_TOPIC_NAME: "backend-api",
+            UNBOUND_WINDOWS_KEY: ["@5"],
+        }
         query, update, context = _make_query_update_context(user_data=user_data)
 
         with (
             patch(
                 "ccgram.handlers.topics.window_callbacks.build_directory_browser",
-                return_value=("Browse:", MagicMock(), ["/a", "/b"]),
+                return_value=("Browse:", MagicMock(), ["a", "b"]),
             ),
             patch("ccgram.handlers.topics.window_callbacks.safe_edit") as mock_edit,
-            patch("ccgram.handlers.topics.window_callbacks.clear_window_picker_state"),
         ):
             await handle_window_callback(query, 100, CB_WIN_NEW, update, context)
 
             mock_edit.assert_called_once()
             query.answer.assert_called_once_with()
+            assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
+            assert user_data[BROWSE_PATH_KEY] == str(Path.cwd())
+            assert user_data[BROWSE_PAGE_KEY] == 0
+            assert user_data[BROWSE_DIRS_KEY] == ["a", "b"]
+            assert UNBOUND_WINDOWS_KEY not in user_data
+            assert user_data[PENDING_THREAD_ID] == 42
+            assert user_data[PENDING_THREAD_TEXT] == "hello"
+            assert user_data[PENDING_TOPIC_NAME] == "backend-api"
 
     async def test_new_stale_topic_mismatch(self) -> None:
         user_data = {PENDING_THREAD_ID: 99}
@@ -155,6 +181,50 @@ class TestNewWindowCallback:
         query.answer.assert_called_once_with(
             "Stale picker (topic mismatch)", show_alert=True
         )
+
+    @patch(
+        "ccgram.handlers.text.text_handler.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_new_then_directory_input_reaches_provider_picker(
+        self,
+        mock_reply: AsyncMock,
+        tmp_path,
+    ) -> None:
+        from ccgram.handlers.text.text_handler import (
+            _handle_session_start_directory_input,
+        )
+
+        user_data = {
+            STATE_KEY: STATE_SELECTING_WINDOW,
+            PENDING_THREAD_ID: 42,
+            PENDING_TOPIC_NAME: "backend-api",
+            UNBOUND_WINDOWS_KEY: ["@5"],
+        }
+        query, update, context = _make_query_update_context(user_data=user_data)
+
+        with (
+            patch(
+                "ccgram.handlers.topics.window_callbacks.build_directory_browser",
+                return_value=("Browse:", MagicMock(), []),
+            ),
+            patch("ccgram.handlers.topics.window_callbacks.safe_edit"),
+        ):
+            await handle_window_callback(query, 100, CB_WIN_NEW, update, context)
+
+        message = AsyncMock()
+        result = await _handle_session_start_directory_input(
+            42,
+            f"cd {tmp_path}",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
+        assert user_data[BROWSE_PATH_KEY] == str(tmp_path)
+        mock_reply.assert_called_once()
+        assert "Select Provider" in mock_reply.call_args.args[1]
 
 
 class TestCancelCallback:
@@ -224,7 +294,7 @@ class TestBindProviderDetection:
         mock_sm.set_window_provider.assert_called_once_with("@5", "shell")
         mock_ensure.assert_awaited_once()
         call_args = mock_ensure.call_args
-        assert call_args[0] == ("@5", "external_bind")
+        assert call_args[0] == ("@5", "auto")
 
     async def test_bind_claude_window_does_not_offer_prompt_setup(self) -> None:
         user_data = {UNBOUND_WINDOWS_KEY: ["@5"], PENDING_THREAD_ID: 42}

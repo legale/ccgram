@@ -15,10 +15,13 @@ import structlog
 from pathlib import Path
 
 from telegram import CallbackQuery, Chat, Update
+from ... import window_query
 from ...telegram_client import PTBTelegramClient, TelegramClient
 from ...session import session_manager
 from ...thread_router import thread_router
 from ...tmux_manager import send_to_window, tmux_manager
+from ..status.topic_emoji import get_stored_topic_name
+from .topic_binding import rename_bound_topic
 from ..callback_data import CB_WIN_BIND, CB_WIN_CANCEL, CB_WIN_NEW
 from ..callback_helpers import get_thread_id
 from .directory_browser import (
@@ -113,10 +116,9 @@ async def _detect_and_setup_provider(
         if provider and provider.capabilities.chat_first_command_path:
             # Lazy: shell ↔ topics cycle via prompt-marker callbacks.
             from ..shell.shell_prompt_orchestrator import ensure_setup
-
             await ensure_setup(
                 window_id,
-                "external_bind",
+                "auto",
                 client=client,
                 chat_id=thread_router.resolve_chat_id(user_id, thread_id),
                 thread_id=thread_id,
@@ -223,6 +225,21 @@ async def _handle_bind(
     await safe_edit(
         query,
         f"Bound to window `{display}`",
+    )
+
+    chat = _get_topic_chat(update, query)
+    topic_name = (
+        get_stored_topic_name(chat.id, thread_id) if chat is not None else None
+    )
+    if not topic_name:
+        topic_name = display
+    await rename_bound_topic(
+        client,
+        user_id,
+        thread_id,
+        selected_wid,
+        topic_name,
+        window_query.get_approval_mode(selected_wid),
     )
 
     pending_text = (

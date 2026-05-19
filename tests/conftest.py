@@ -15,6 +15,16 @@ import pytest
 os.environ["TELEGRAM_BOT_TOKEN"] = "test:0000000000:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 os.environ["ALLOWED_USERS"] = "12345"
 os.environ["CCGRAM_DIR"] = tempfile.mkdtemp(prefix="ccgram-test-")
+for _key in (
+    "CCGRAM_PROVIDER",
+    "CCBOT_PROVIDER",
+    "CCGRAM_INSTANCE_NAME",
+    "CCGRAM_HIDE_TOOL_CALLS",
+    "MONITOR_POLL_INTERVAL",
+    "CCGRAM_STATUS_POLL_INTERVAL",
+    "TMUX_SESSION_NAME",
+):
+    os.environ.pop(_key, None)
 
 
 @pytest.fixture(autouse=True)

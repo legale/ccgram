@@ -53,7 +53,7 @@ logger = structlog.get_logger()
 
 _MAX_PANE_NAME_LEN = 32
 _RENAME_PROMPT = (
-    "✏️ Reply with a name for pane {pane_id} "
+    "Reply with a name for pane {pane_id} "
     f"(max {_MAX_PANE_NAME_LEN} chars). Send '-' to clear."
 )
 
@@ -85,7 +85,7 @@ def build_pane_buttons(
         ),
         InlineKeyboardButton(sub_label, callback_data=sub_data[:64]),
         InlineKeyboardButton(
-            "✏️ Rename",
+            "Rename",
             callback_data=f"{CB_PANE_RENAME}{window_id}:{pane_id}"[:64],
         ),
     ]
@@ -131,7 +131,7 @@ async def _toggle_subscribe(
             return
     window_store.upsert_pane(window_id, pane_id, subscribed=subscribed)
     label = "Subscribed" if subscribed else "Unsubscribed"
-    await query.answer(f"✓ {label} {pane_id}")
+    await query.answer(f"{label} {pane_id}")
 
 
 async def _handle_subscribe(query: CallbackQuery, user_id: int, data: str) -> None:
@@ -183,7 +183,7 @@ async def _handle_rename(
         logger.warning("pane rename prompt failed: %s", exc)
         await query.answer("Failed to open rename prompt", show_alert=True)
         return
-    await query.answer("✏️ Rename")
+    await query.answer("Rename")
 
 
 async def apply_pane_rename(
@@ -213,18 +213,18 @@ async def apply_pane_rename(
     name = text.strip()
     if name == "-" or name == "":
         window_store.upsert_pane(window_id, pane_id, name=None)
-        await safe_reply(message, f"✓ Cleared name for {pane_id}")
+        await safe_reply(message, f"Cleared name for {pane_id}")
         return True
     if len(name) > _MAX_PANE_NAME_LEN:
         # Reject loudly so the user doesn't see a different name from what
         # they typed. They can resend a shorter version.
         await safe_reply(
             message,
-            f"❌ Name too long ({len(name)} chars, max {_MAX_PANE_NAME_LEN}).",
+            f"Name too long ({len(name)} chars, max {_MAX_PANE_NAME_LEN}).",
         )
         return True
     window_store.upsert_pane(window_id, pane_id, name=name)
-    await safe_reply(message, f"✓ Renamed {pane_id} → {name}")
+    await safe_reply(message, f"Renamed {pane_id} -> {name}")
     return True
 
 
@@ -244,7 +244,7 @@ async def _handle_lifecycle_toggle(
     new_value = not current
     window_store.set_pane_lifecycle_notify(window_id, new_value)
     label = "on" if new_value else "off"
-    await query.answer(f"✓ Pane lifecycle notifications {label}")
+    await query.answer(f"Pane lifecycle notifications {label}")
 
 
 @register(

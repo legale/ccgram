@@ -248,6 +248,10 @@ class TestLoadHandlers:
                 f"expected prefix starting with {expected!r} in registry"
             )
 
+    def test_load_handlers_registers_window_picker_new_callback(self) -> None:
+        load_handlers()
+        assert "wb:new" in _registry
+
     def test_load_handlers_imports_modules(self) -> None:
         load_handlers()
         expected_modules = [

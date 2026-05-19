@@ -82,19 +82,19 @@ async def _handle_send(
     )
     pending_text = pending_store.pop((msg.chat.id, message_id), None)
     if pending_text is None:
-        await query.answer("⚠️ Session expired, resend voice message", show_alert=True)
+        await query.answer("Session expired, resend voice message", show_alert=True)
         return
 
     thread_id = get_thread_id(update)
     window_id = thread_router.resolve_window_for_thread(user_id, thread_id)
     if not window_id:
         pending_store[(msg.chat.id, message_id)] = pending_text
-        await query.answer("⚠️ No session bound.", show_alert=True)
+        await query.answer("No session bound.", show_alert=True)
         return
 
     client = PTBTelegramClient(msg.get_bot())
 
-    # 👀 ack: persistent "I see you" indicator on the original voice message.
+    # Persistent reaction ack on the original voice message.
     await react(client, msg.chat.id, message_id, REACT_SEEN)
 
     # Shell provider: route through LLM for NL→command generation
@@ -112,7 +112,7 @@ async def _handle_send(
         except (OSError, TelegramError) as exc:
             logger.warning("Shell message handling failed: %s", exc)
             pending_store[(msg.chat.id, message_id)] = pending_text
-            await query.answer("❌ Failed to send", show_alert=True)
+            await query.answer("Failed to send", show_alert=True)
             return
         await _ack_delivered(client, msg, query, message_id)
         return
@@ -123,15 +123,15 @@ async def _handle_send(
         await _ack_delivered(client, msg, query, message_id)
     else:
         pending_store[(msg.chat.id, message_id)] = pending_text
-        await query.answer(f"❌ {err}", show_alert=True)
+        await query.answer(str(err), show_alert=True)
 
 
 async def _ack_delivered(
     client: PTBTelegramClient, msg: Message, query: CallbackQuery, message_id: int
 ) -> None:
-    """Replace the previous "✓ Sent" toast with a persistent reaction.
+    """Replace the previous sent toast with a persistent reaction.
 
-    Order matters: REACT_DONE replaces the prior 👀; ack_reaction (if user
+    Order matters: REACT_DONE replaces the prior seen reaction; ack_reaction (if user
     configured ``CCGRAM_ACK_REACTION``) overrides REACT_DONE in turn.
     """
     await react(client, msg.chat.id, message_id, REACT_DONE)

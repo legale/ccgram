@@ -217,7 +217,6 @@ class TestUpdateStatusTopicDiff:
     async def test_calls_update_topic_status_diff_when_enabled(self, monkeypatch):
         from ccgram.config import config
 
-        monkeypatch.setattr(config, "topic_rename_enabled", True)
         monkeypatch.setattr(config, "topic_status_diff_enabled", True)
 
         bot = AsyncMock(spec=Bot)
@@ -258,7 +257,6 @@ class TestUpdateStatusTopicDiff:
     ):
         from ccgram.config import config
 
-        monkeypatch.setattr(config, "topic_rename_enabled", False)
         monkeypatch.setattr(config, "topic_status_diff_enabled", False)
 
         bot = AsyncMock(spec=Bot)
@@ -778,8 +776,8 @@ class TestPaneLifecycleNotify:
         # Created (%5) and closed (%6) only — state-change (%7) is skipped
         assert mock_send.await_count == 2
         texts = [call.args[2] for call in mock_send.call_args_list]
-        assert any("➕" in t and "%5" in t and "created" in t for t in texts)
-        assert any("➖" in t and "%6" in t and "closed" in t for t in texts)
+        assert any("%5" in t and "created" in t for t in texts)
+        assert any("%6" in t and "closed" in t for t in texts)
 
     async def test_per_window_override_disables(self, transitions):
         from ccgram.handlers.polling import window_tick

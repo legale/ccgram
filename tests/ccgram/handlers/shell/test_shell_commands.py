@@ -737,7 +737,7 @@ class TestDangerousCommandPrefix:
 
         mock_send.assert_called_once()
         sent_text = mock_send.call_args[0][2]
-        assert "\u26a0\ufe0f *Potentially dangerous*" in sent_text
+        assert "*Potentially dangerous*" in sent_text
         assert "rm -rf /" in sent_text
 
     async def test_non_dangerous_result_no_warning_prefix(self) -> None:

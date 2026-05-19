@@ -1,5 +1,9 @@
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
+
+from telegram import Update
+from telegram.ext import ContextTypes
 
 from ccgram.handlers.echo_command import _json_chunks, echo_command
 
@@ -31,7 +35,10 @@ def _make_update() -> SimpleNamespace:
 async def test_echo_command_replies_with_update_payload() -> None:
     update = _make_update()
 
-    await echo_command(update, SimpleNamespace())
+    await echo_command(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, SimpleNamespace()),
+    )
 
     update.effective_message.reply_text.assert_awaited_once()
     text = update.effective_message.reply_text.await_args.args[0]
@@ -44,7 +51,10 @@ async def test_echo_command_replies_with_update_payload() -> None:
 async def test_echo_command_noops_without_message() -> None:
     update = SimpleNamespace(effective_message=None)
 
-    await echo_command(update, SimpleNamespace())
+    await echo_command(
+        cast(Update, update),
+        cast(ContextTypes.DEFAULT_TYPE, SimpleNamespace()),
+    )
 
 
 def test_json_chunks_split_large_payload() -> None:

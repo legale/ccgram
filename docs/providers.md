@@ -14,7 +14,7 @@ CCGram supports multiple agent CLI backends. Each Telegram topic can use a diffe
 
 ## Choosing a Provider
 
-**From Telegram**: When you create a new topic and select a directory, a provider picker appears with Claude (default), Codex, Gemini, Pi, and Shell options. After provider selection, CCGram asks for session mode:
+**From Telegram**: When you create a new topic and select a directory, a provider picker appears with Claude (default), Codex, Gemini, Pi, and Shell options. You can also send an explicit path like `~/work/repo` or `cd ~/work/repo` directly in the topic to preselect the working directory without clicking through the browser. After provider selection, CCGram asks for session mode:
 
 - `✅ Standard` (normal approvals)
 - `🚀 YOLO` (provider-specific permissive mode)

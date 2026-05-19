@@ -203,15 +203,6 @@ class Config:
             "CCGRAM_HIDE_TOOL_CALLS", "true"
         ).lower() in ("1", "true", "yes")
 
-        # Color mapping for the topic state emoji prefix.
-        # "system" (default): green=active, yellow=idle (system POV: green=working).
-        # "user": green=idle, yellow=active (user POV: green=ready for me).
-        # Invalid values fall back to "system".
-        raw_status_mode = os.getenv("CCGRAM_STATUS_MODE", "").strip().lower()
-        self.status_mode: str = (
-            raw_status_mode if raw_status_mode in ("system", "user") else "system"
-        )
-
         logger.debug(
             "Config initialized: dir=%s, token=%s..., allowed_users=%d, "
             "tmux_session=%s",
@@ -275,9 +266,6 @@ class Config:
         self._init_miniapp()
 
     def _init_topic_status(self) -> None:
-        self.topic_rename_enabled: bool = _parse_bool_env(
-            "CCGRAM_TOPIC_RENAME_ENABLED", False
-        )
         self.topic_status_diff_enabled: bool = _parse_bool_env(
             "CCGRAM_TOPIC_STATUS_DIFF_ENABLED", True
         )

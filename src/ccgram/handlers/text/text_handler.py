@@ -29,6 +29,7 @@ from ..topics.directory_browser import (
     STATE_SELECTING_WINDOW,
     UNBOUND_WINDOWS_KEY,
     build_directory_browser,
+    build_provider_picker,
     build_window_picker,
     clear_browse_state,
     clear_window_picker_state,
@@ -65,6 +66,123 @@ PENDING_DELIVERY_NOTICE = "\U0001f4ac Will deliver once the agent starts."
 
 # Active bash capture tasks: (user_id, thread_id) -> asyncio.Task
 _bash_capture_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
+
+_DIR_INPUT_PREFIXES = ("cd ", "dir ", "path ")
+
+
+def _extract_directory_input(text: str) -> str:
+    """Return explicit directory input from a Telegram message, or empty string."""
+    raw = text.strip()
+    if not raw:
+        return ""
+
+    lower = raw.lower()
+    for prefix in _DIR_INPUT_PREFIXES:
+        if lower.startswith(prefix):
+            return raw[len(prefix) :].strip()
+
+    if raw.startswith(("~", "/", "./", "../")):
+        return raw
+    return ""
+
+
+def _resolve_directory_input(text: str, base_path: str | None = None) -> str:
+    """Resolve explicit directory input to an existing absolute directory path."""
+    raw_path = _extract_directory_input(text)
+    if not raw_path:
+        return ""
+
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        base = Path(base_path).expanduser() if base_path else Path.cwd()
+        path = base / path
+
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return ""
+
+    try:
+        if not resolved.is_dir():
+            return ""
+    except OSError:
+        return ""
+
+    return str(resolved)
+
+
+async def _show_provider_picker_for_directory(
+    message: Message,
+    user_data: dict | None,
+    thread_id: int,
+    selected_path: str,
+    topic_name: str = "",
+) -> None:
+    """Store the selected directory and show the provider picker."""
+    text, keyboard = build_provider_picker(selected_path)
+    if user_data is not None:
+        clear_window_picker_state(user_data)
+        user_data[STATE_KEY] = STATE_BROWSING_DIRECTORY
+        user_data[BROWSE_PATH_KEY] = selected_path
+        user_data[BROWSE_PAGE_KEY] = 0
+        user_data[BROWSE_DIRS_KEY] = []
+        user_data[PENDING_THREAD_ID] = thread_id
+        if topic_name:
+            user_data[PENDING_TOPIC_NAME] = topic_name
+    await safe_reply(message, text, reply_markup=keyboard)
+
+
+async def _handle_session_start_directory_input(
+    thread_id: int | None,
+    text: str,
+    user_data: dict | None,
+    message: Message,
+) -> bool:
+    """Handle explicit directory input while session-start UI is active."""
+    if thread_id is None or not user_data:
+        return False
+
+    state = user_data.get(STATE_KEY)
+    if state not in (STATE_SELECTING_WINDOW, STATE_BROWSING_DIRECTORY):
+        return False
+
+    pending_tid = user_data.get(PENDING_THREAD_ID)
+    if pending_tid != thread_id:
+        return False
+
+    base_path = ""
+    if state == STATE_BROWSING_DIRECTORY:
+        base_path = user_data.get(BROWSE_PATH_KEY, "")
+
+    raw_path = _extract_directory_input(text)
+    if not raw_path:
+        if state != STATE_SELECTING_WINDOW:
+            return False
+        start_path = str(Path.cwd())
+        msg_text, keyboard, subdirs = build_directory_browser(
+            start_path, user_id=message.from_user.id if message.from_user else None
+        )
+        clear_window_picker_state(user_data)
+        user_data[STATE_KEY] = STATE_BROWSING_DIRECTORY
+        user_data[BROWSE_PATH_KEY] = start_path
+        user_data[BROWSE_PAGE_KEY] = 0
+        user_data[BROWSE_DIRS_KEY] = subdirs
+        await safe_reply(message, msg_text, reply_markup=keyboard)
+        return True
+
+    selected_path = _resolve_directory_input(text, base_path)
+    if not selected_path:
+        await safe_reply(message, f"Directory not found: `{raw_path}`")
+        return True
+
+    await _show_provider_picker_for_directory(
+        message,
+        user_data,
+        thread_id,
+        selected_path,
+        user_data.get(PENDING_TOPIC_NAME, ""),
+    )
+    return True
 
 
 @topic_state.register("topic")
@@ -210,6 +328,23 @@ async def _handle_unbound_topic(
         topic_name = message.reply_to_message.forum_topic_edited.name or ""
     if not topic_name:
         topic_name = message.chat.title or message.chat.username or "topic"
+
+    selected_path = _resolve_directory_input(text)
+    if selected_path:
+        logger.info(
+            "Unbound topic: path from message selected %s (user=%d, thread=%d)",
+            selected_path,
+            user_id,
+            thread_id,
+        )
+        await _show_provider_picker_for_directory(
+            message,
+            user_data,
+            thread_id,
+            selected_path,
+            topic_name,
+        )
+        return True
 
     all_windows = await tmux_manager.list_windows()
     external_windows = await tmux_manager.discover_external_sessions()
@@ -425,6 +560,14 @@ async def handle_text_message(
     chat = message.chat
     if chat.type in ("group", "supergroup") and thread_id is not None:
         thread_router.set_group_chat_id(user.id, thread_id, chat.id)
+
+    if await _handle_session_start_directory_input(
+        thread_id,
+        text,
+        context.user_data,
+        message,
+    ):
+        return
 
     # UI guards (window picker / directory browser active)
     if await _check_ui_guards(context.user_data, thread_id, message):

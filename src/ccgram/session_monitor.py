@@ -148,7 +148,9 @@ class SessionMonitor:
     def _add_bound_state_sessions(self, current_map: dict) -> dict:
         """Add persisted tg_topic -> tmux_session sessions to the poll map."""
         try:
+            # Lazy: stores are wired after SessionMonitor construction.
             from .thread_router import thread_router
+            # Lazy: stores are wired after SessionMonitor construction.
             from .window_state_store import window_store
         except (ImportError, RuntimeError):
             return current_map

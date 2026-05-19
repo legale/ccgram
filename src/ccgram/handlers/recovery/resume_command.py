@@ -405,13 +405,17 @@ async def _create_resume_window(
     else:
         provider = get_provider()
         approval_mode = "normal"
+    topic_name = thread_router.get_display_name(old_window_id) if old_window_id else ""
+    if not isinstance(topic_name, str) or not topic_name:
+        topic_name = cwd.rstrip("/").rsplit("/", 1)[-1] or cwd
     launch_args = provider.make_launch_args(resume_id=session_id)
     launch_command = resolve_launch_command(
         provider.capabilities.name, approval_mode=approval_mode
     )
     success, message, created_wname, created_wid = await tmux_manager.create_window(
         cwd,
-        session_name=tmux_manager.topic_session_name(Path(cwd).name),
+        session_name=tmux_manager.topic_session_name(topic_name),
+        window_name=topic_name,
         agent_args=launch_args,
         launch_command=launch_command,
     )
@@ -479,6 +483,7 @@ async def _handle_pick(
         client,
         user_id,
         thread_id,
+        created_wid,
         created_wname,
         window_query.get_approval_mode(created_wid),
         router=thread_router,

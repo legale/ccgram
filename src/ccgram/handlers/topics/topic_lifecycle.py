@@ -324,13 +324,22 @@ async def topic_edited_handler(
         )
         return
 
-    session_name = window_id.rsplit(":", 1)[0] if ":" in window_id else window_id
-    renamed = await tmux_manager.rename_session(session_name, clean_name)
-    if renamed:
+    window = await tmux_manager.find_window_by_id(window_id)
+    if not window or ":" not in window.window_id:
+        return
+
+    window_renamed = await tmux_manager.rename_window(window.window_id, clean_name)
+    session_name = window.window_id.rsplit(":", 1)[0]
+    session_renamed = await tmux_manager.rename_session(
+        session_name,
+        f"{config.tmux_session_prefix}{clean_name}",
+    )
+    if window_renamed or session_renamed:
         session_manager.set_display_name(window_id, clean_name)
         update_stored_topic_name(chat_id, thread_id, clean_name)
         logger.info(
-            "Topic renamed: session %s → %r (thread=%d)",
+            "Topic renamed: window %s, session %s → %r (thread=%d)",
+            window.window_id,
             session_name,
             clean_name,
             thread_id,

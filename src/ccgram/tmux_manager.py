@@ -153,7 +153,8 @@ class TmuxManager:
 
     def _split_qualified(self, window_id: str) -> tuple[str, str]:
         if ":" in window_id and not window_id.startswith("@"):
-            return window_id.rsplit(":", 1)
+            session_name, bare_id = window_id.rsplit(":", 1)
+            return session_name, bare_id
         return self.session_name, window_id
 
     def get_session(self, session_name: str | None = None) -> libtmux.Session | None:
@@ -1193,6 +1194,11 @@ class TmuxManager:
 
                 # Set CCGRAM_WINDOW_ID so agents can self-identify
                 qualified_id = f"{session.session_name}:{new_window_id}"
+                returned_window_id = (
+                    qualified_id
+                    if session.session_name != self.session_name
+                    else new_window_id
+                )
                 if pane and new_window_id:
                     pane.send_keys(
                         f"export CCGRAM_WINDOW_ID={shlex.quote(qualified_id)}",
@@ -1220,7 +1226,7 @@ class TmuxManager:
                     True,
                     f"Created window '{final_window_name}' at {path}",
                     final_window_name,
-                    new_window_id,
+                    returned_window_id,
                 )
 
             except _TmuxError as e:

@@ -326,7 +326,7 @@ class TestHandleVoiceMessage:
         )
 
         mock_reply.assert_called()
-        assert "❌" in mock_reply.call_args.args[1]
+        assert "Transcription failed: 401" in mock_reply.call_args.args[1]
 
     @patch(f"{_VH}.thread_router")
     @patch(f"{_VH}.config")
@@ -528,7 +528,7 @@ class TestHandleVoiceCallback:
         await voice_callbacks.handle_voice_callback(update, context)
 
         update.callback_query.answer.assert_called_once_with(
-            "⚠️ No session bound.", show_alert=True
+            "No session bound.", show_alert=True
         )
         assert (999, 42) in context.user_data.get(VOICE_PENDING, {})
 
@@ -566,7 +566,7 @@ class TestHandleVoiceCallback:
         await voice_callbacks.handle_voice_callback(update, context)
 
         update.callback_query.answer.assert_called_once_with(
-            f"❌ {error_msg}", show_alert=True
+            error_msg, show_alert=True
         )
         assert (999, 42) in context.user_data.get(VOICE_PENDING, {})
 
@@ -670,7 +670,7 @@ class TestHandleVoiceCallback:
 
         assert context.user_data[VOICE_PENDING][(999, 42)] == "list files"
         update.callback_query.answer.assert_called_once_with(
-            "❌ Failed to send", show_alert=True
+            "Failed to send", show_alert=True
         )
         mock_send_to_window.assert_not_called()
 

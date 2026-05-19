@@ -36,3 +36,27 @@ class TestSendKeysVimProbe:
         assert sent is True
         calls = [call.args[1] for call in tmux._pane_send.call_args_list]
         assert calls == ["i", "hello", ""]
+
+
+class TestCreateWindowIds:
+    async def test_custom_session_returns_qualified_window_id(self, tmp_path) -> None:
+        tmux = TmuxManager(session_name="main")
+        tmux.find_window_by_name = AsyncMock(return_value=None)
+
+        pane = MagicMock()
+        window = MagicMock()
+        window.window_id = "@7"
+        window.active_pane = pane
+        session = MagicMock()
+        session.session_name = "cc_topic"
+        session.new_window.return_value = window
+        tmux.get_or_create_session = MagicMock(return_value=session)
+
+        ok, _msg, _name, window_id = await tmux.create_window(
+            str(tmp_path),
+            session_name="cc_topic",
+            start_agent=False,
+        )
+
+        assert ok is True
+        assert window_id == "cc_topic:@7"

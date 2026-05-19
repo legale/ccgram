@@ -18,12 +18,7 @@ from typing import TYPE_CHECKING
 from pathlib import Path
 import structlog
 
-from telegram import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Update,
-)
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from ..config import config
 from ..telegram_client import PTBTelegramClient, TelegramClient
 from ..thread_router import thread_router
@@ -245,7 +240,7 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await handle_sessions_refresh(query, user.id)
         await query.answer("Refreshed")
     elif data == CB_SESSIONS_NEW:
-        thread_id = query.message.message_thread_id if query.message else None
+        thread_id = getattr(query.message, "message_thread_id", None)
         if thread_id is None:
             await query.answer("Use in a topic", show_alert=True)
             return

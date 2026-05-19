@@ -30,23 +30,23 @@ Other Telegram bots wrap agent SDKs into isolated API sessions that can't be res
 
 ```mermaid
 graph LR
-  subgraph phone["📱 Telegram Group (Forum Topics)"]
+  subgraph phone["Telegram Group (Forum Topics)"]
     direction TB
-    T1["💬 api — Claude"]
-    T2["💬 ui — Codex"]
-    T3["💬 data — Gemini"]
-    T4["💬 ops — Shell"]
-    T5["💬 lab — Pi"]
+    T1["api — Claude"]
+    T2["ui — Codex"]
+    T3["data — Gemini"]
+    T4["ops — Shell"]
+    T5["lab — Pi"]
   end
 
-  subgraph bridge["⚡ CCGram"]
+  subgraph bridge["CCGram"]
     direction TB
     B1["read output\n(transcripts + terminal)"]
     B2["send keystrokes\n(tmux send-keys)"]
     B3["instant notifications\n(Claude hooks)"]
   end
 
-  subgraph machine["🖥️ Your Machine — tmux session"]
+  subgraph machine["Your Machine — tmux session"]
     direction TB
     W1["window @0 · claude"]
     W2["window @1 · codex"]
@@ -81,12 +81,11 @@ Each Telegram Forum topic binds to one tmux window. Messages you type are sent a
 - **Terminal live view** — auto-refreshing screenshots every 5 seconds via **Live** button or `/live` command; content-hash gating skips edits when nothing changed; auto-stops after timeout (configurable)
 - **File delivery** (`/send`) — send workspace files to Telegram: exact path (`/send docs/arch.png`), glob (`/send *.png`), substring search (`/send arch`), or interactive browser (`/send`). Project-scoped with security filtering (hidden files, credentials, gitignored, >50 MB denied)
 - **Action toolbar** (`/toolbar`) — provider-specific inline buttons. Universal row: Screenshot, Ctrl-C, Live, Send. Provider row varies: Claude (Mode, Think, Esc), Codex (Esc, Enter, Tab), Gemini (Mode, YOLO, Esc), Pi (Esc, Enter, Tab), Shell (Enter, EOF, Suspend)
-- **Remote Control** — 📡 topic badge when RC is active; one-tap activation from status keyboard
+- **Remote Control** — one-tap activation from the status keyboard
 
 ### Real-Time Monitoring
 
-- **Full status context** — status line shows what the agent is actually doing ("📝 Writing tests for auth module"), not a generic label
-- **Configurable topic emoji color scheme** — `CCGRAM_STATUS_MODE=system` (default, green = agent working) or `user` (green = idle, ready for input) — pick the convention that matches how you scan the topic list
+- **Full status context** — status line shows what the agent is actually doing ("Writing tests for auth module"), not a generic label
 - **Completion summaries** — when an agent finishes, a single-line LLM summary of what was accomplished edits the Ready message in-place (~1-2s delay; static enriched Ready appears immediately)
 - **Enriched Ready message** — task checklist, turn count, and last status shown on completion
 - **Tool results** — tool use/result pairs, thinking content, Bash exit codes, and error/success indicators in batched output
@@ -108,11 +107,11 @@ Each Telegram Forum topic binds to one tmux window. Messages you type are sent a
 graph TB
   subgraph providers["Agent Providers"]
     direction LR
-    C["🟠 Claude Code\nhook events · resume · JSONL"]
-    X["🧩 Codex CLI\nresume · continue · JSONL"]
-    G["♊ Gemini CLI\nresume · continue · JSONL"]
-    P["🥧 Pi\nresume · continue · JSONL"]
-    S["🐚 Shell\nnl→command · raw mode"]
+    C["Claude Code\nhook events · resume · JSONL"]
+    X["Codex CLI\nresume · continue · JSONL"]
+    G["Gemini CLI\nresume · continue · JSONL"]
+    P["Pi\nresume · continue · JSONL"]
+    S["Shell\nnl→command · raw mode"]
   end
 
   subgraph detection["Auto-Detection"]
@@ -227,7 +226,7 @@ Registers Claude Code hooks for automatic session tracking, instant interactive 
 ccgram
 ```
 
-Open your Telegram group, create a new topic, send a message — a directory browser appears. Pick a project directory, choose your agent (Claude, Codex, Gemini, Pi, or Shell), choose session mode (`✅ Standard` or `🚀 YOLO`), and you're connected.
+Open your Telegram group, create a new topic, send a message — a directory browser appears. Pick a project directory, or send an explicit path like `~/work/repo` or `cd ~/work/repo` right in the topic, then choose your agent (Claude, Codex, Gemini, Pi, or Shell), choose session mode (Standard or YOLO), and you're connected.
 
 ---
 
@@ -241,9 +240,7 @@ Open your Telegram group, create a new topic, send a message — a directory bro
 | `CCGRAM_PROVIDER`              | `claude`                       | Default provider (`claude`, `codex`, `gemini`, `pi`, `shell`)                                               |
 | `CCGRAM_<NAME>_COMMAND`        | _(from provider)_              | Override launch command per provider                                                                        |
 | `CCGRAM_GROUP_ID`              | _(all groups)_                 | Restrict to one Telegram group                                                                              |
-| `CCGRAM_STATUS_MODE`           | `system`                       | Topic emoji color scheme: `system` (green=working) or `user` (green=ready)                                  |
 | `CCGRAM_HIDE_TOOL_CALLS`       | `true`                         | Global default for hiding `tool_use`/`tool_result` messages                                                 |
-| `CCGRAM_TOPIC_RENAME_ENABLED`  | `false`                        | Enable periodic topic title updates (emoji prefix + status diff messages)                                   |
 | `CCGRAM_TOPIC_STATUS_DIFF_INTERVAL` | `10`                      | Minimum seconds between status diff edits/sends                                                             |
 | `CCGRAM_LLM_PROVIDER`          | _(disabled)_                   | LLM for shell command generation + completion summaries                                                     |
 | `CCGRAM_LLM_API_KEY`           | _(empty)_                      | LLM API key (env only)                                                                                      |
@@ -291,7 +288,7 @@ The Mini App is **disabled by default**. When `CCGRAM_MINIAPP_BASE_URL` is unset
 3. In [@BotFather](https://t.me/BotFather):
    - `/setdomain` — register your domain
    - `/newapp` — create a Mini App entry pointing to the same URL
-4. Restart `ccgram`. A new "🪟 Dashboard" button appears on the status bubble.
+4. Restart `ccgram`. A new "Dashboard" button appears on the status bubble.
 
 Tokens are HMAC-signed with the bot token, scoped to a single window + user, and expire on a short clock. There is no cross-window access — every API route validates the token on every call.
 
@@ -317,8 +314,12 @@ cd ccgram
 uv sync --extra dev
 
 make check        # fmt + lint + typecheck + unit + integration tests
+make test         # unit tests via `uv run pytest ...`
 make test-e2e     # E2E tests (requires agent CLIs, see docs/guides.md)
 ```
+
+Development commands in this repo are expected to run through `uv`.
+Use `make test` or `uv run pytest ...`, not a bare system `pytest`.
 
 ---
 

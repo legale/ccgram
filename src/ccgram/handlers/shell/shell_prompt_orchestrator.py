@@ -136,7 +136,7 @@ async def _show_offer_keyboard(
         [
             [
                 InlineKeyboardButton(
-                    "⚙️ Set up", callback_data=f"{CB_SHELL_SETUP}{window_id}"
+                    "Set up", callback_data=f"{CB_SHELL_SETUP}{window_id}"
                 ),
                 InlineKeyboardButton(
                     "⏭ Skip", callback_data=f"{CB_SHELL_SKIP}{window_id}"

@@ -116,9 +116,12 @@ max-statements = 60
 
 [tool.deptry.per_rule_ignores]
 # DEP002: dev/CLI tools (never imported in src/)
-DEP002 = ["deptry", "pyright", "pytest", "pytest-asyncio", "pytest-cov", "pytest-timeout", "ruff", "hypothesis"]
+DEP002 = ["deptry", "pyright", "pytest", "pytest-asyncio", "pytest-cov", "pytest-timeout", "ruff", "hypothesis", "edge-tts"]
 # DEP003: optional extras — imported only when installed (guarded by try/except ImportError)
 DEP003 = ["edge-tts"]
+
+[tool.deptry.package_module_name_map]
+edge-tts = "edge_tts"
 
 [tool.pyright]
 pythonVersion = "3.14"

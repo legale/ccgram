@@ -77,11 +77,11 @@ def _issue_summary_lines(audit: AuditResult) -> list[str]:
 
     if category_counts:
         return [
-            f"⚠ {count} {_CATEGORY_LABELS.get(cat, cat)}"
+            f"warning: {count} {_CATEGORY_LABELS.get(cat, cat)}"
             for cat, count in category_counts.items()
         ]
     if audit.total_bindings > 0:
-        return ["✓ No orphaned entries", "✓ Tmux display cache in sync"]
+        return ["No orphaned entries", "Tmux display cache in sync"]
     return []
 
 
@@ -119,7 +119,7 @@ def _format_report(
 
     if fixed_count > 0:
         issue_word = "issue" if fixed_count == 1 else "issues"
-        lines.append(f"✅ Fixed {fixed_count} {issue_word}\n")
+        lines.append(f"Fixed {fixed_count} {issue_word}\n")
     else:
         lines.append("\U0001f50d State audit\n")
 
@@ -135,11 +135,11 @@ def _format_report(
     if audit.total_bindings == 0:
         lines.append("ℹ No topic bindings")
     elif audit.live_binding_count == audit.total_bindings:
-        lines.append(f"✓ {audit.total_bindings} topics bound, all windows alive")
+        lines.append(f"{audit.total_bindings} topics bound, all windows alive")
     else:
         dead = audit.total_bindings - audit.live_binding_count
         lines.append(
-            f"⚠ {dead} ghost binding(s) "
+            f"warning: {dead} ghost binding(s) "
             f"({audit.live_binding_count}/{audit.total_bindings} alive)"
         )
 
@@ -147,7 +147,7 @@ def _format_report(
     dead_topic_count = sum(1 for i in audit.issues if i.category == "dead_topic")
     if dead_topic_count > 0:
         topic_word = "topic" if dead_topic_count == 1 else "topics"
-        lines.append(f"⚠ {dead_topic_count} dead {topic_word} (deleted in Telegram)")
+        lines.append(f"warning: {dead_topic_count} dead {topic_word} (deleted in Telegram)")
 
     lines.extend(_issue_summary_lines(audit))
 
@@ -164,7 +164,7 @@ def _format_report(
                         f"\U0001f527 Fix {fixable} {issue_word}",
                         callback_data=CB_SYNC_FIX,
                     ),
-                    InlineKeyboardButton("✕ Dismiss", callback_data=CB_SYNC_DISMISS),
+                    InlineKeyboardButton("Dismiss", callback_data=CB_SYNC_DISMISS),
                 ]
             ]
         )

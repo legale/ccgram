@@ -22,13 +22,13 @@ TOML schema::
 
     # Optional: define your own actions or override built-ins by name.
     [actions.clear]
-    emoji = "🧹"
+    emoji = "Clean"
     text  = "Clear"
     type  = "text"
     payload = "/clear"
 
     [actions.deepthink]
-    emoji = "🧠"
+    emoji = "Deep"
     text  = "Deep"
     type  = "key"
     payload = "Tab"
@@ -150,16 +150,16 @@ BUILTIN_ACTIONS: dict[str, ToolbarAction] = {
     a.name: a
     for a in (
         # Builtin handlers (specialized dispatch in toolbar_callbacks.py)
-        _b("screen", "\U0001f4f7", "Screen", "builtin", "screenshot"),
-        _b("ctrlc", "\u23f9", "Ctrl-C", "builtin", "ctrlc"),
-        _b("live", "\U0001f4fa", "Live", "builtin", "live"),
-        _b("send", "\U0001f4e4", "Send", "builtin", "send"),
-        _b("close", "\u2716", "Close", "builtin", "dismiss"),
+        _b("screen", "Screen", "Screen", "builtin", "screenshot"),
+        _b("ctrlc", "Ctrl-C", "Ctrl-C", "builtin", "ctrlc"),
+        _b("live", "Live", "Live", "builtin", "live"),
+        _b("send", "Send", "Send", "builtin", "send"),
+        _b("close", "Close", "Close", "builtin", "dismiss"),
         # Mode toggle — cycles Claude's permission modes via Shift-Tab.
         # read_state=True so the button label updates to Def/Edit/Plan/Full.
         _b(
             "mode",
-            "\U0001f500",
+            "Mode",
             "Mode",
             "key",
             "\x1b[Z",
@@ -168,12 +168,12 @@ BUILTIN_ACTIONS: dict[str, ToolbarAction] = {
         ),
         # Claude Code uses Meta+T (Alt+T) to toggle extended thinking.
         # Thinking has no persistent chrome indicator, so no read_state.
-        _b("think", "\U0001f4ad", "Think", "key", "M-t"),
-        _b("yolo", "\U0001f1fe", "YOLO", "key", "C-y", read_state=True),
+        _b("think", "Think", "Think", "key", "M-t"),
+        _b("yolo", "YOLO", "YOLO", "key", "C-y", read_state=True),
         # Plain key sends.
-        _b("esc", "\u238b", "Esc", "key", "Escape"),
-        _b("enter", "\u23ce", "Enter", "key", "Enter"),
-        _b("tab", "\u21e5", "Tab", "key", "Tab"),
+        _b("esc", "Esc", "Esc", "key", "Escape"),
+        _b("enter", "Enter", "Enter", "key", "Enter"),
+        _b("tab", "Tab", "Tab", "key", "Tab"),
         _b("eof", "^D", "EOF", "key", "C-d"),
         _b("susp", "^Z", "Susp", "key", "C-z"),
     )
@@ -181,12 +181,12 @@ BUILTIN_ACTIONS: dict[str, ToolbarAction] = {
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Default per-provider layouts (3 rows × 3 buttons each, emoji_text).
+# Default per-provider layouts (3 rows x 3 buttons each, text).
 # ──────────────────────────────────────────────────────────────────────
 
 DEFAULT_LAYOUTS: dict[str, ToolbarLayout] = {
     "claude": ToolbarLayout(
-        style="emoji_text",
+        style="text",
         buttons=(
             ("screen", "ctrlc", "live"),
             ("mode", "think", "esc"),
@@ -194,7 +194,7 @@ DEFAULT_LAYOUTS: dict[str, ToolbarLayout] = {
         ),
     ),
     "codex": ToolbarLayout(
-        style="emoji_text",
+        style="text",
         buttons=(
             ("screen", "ctrlc", "live"),
             ("esc", "enter", "tab"),
@@ -202,7 +202,7 @@ DEFAULT_LAYOUTS: dict[str, ToolbarLayout] = {
         ),
     ),
     "gemini": ToolbarLayout(
-        style="emoji_text",
+        style="text",
         buttons=(
             ("screen", "ctrlc", "live"),
             ("mode", "yolo", "esc"),
@@ -210,7 +210,7 @@ DEFAULT_LAYOUTS: dict[str, ToolbarLayout] = {
         ),
     ),
     "pi": ToolbarLayout(
-        style="emoji_text",
+        style="text",
         buttons=(
             ("screen", "ctrlc", "live"),
             ("esc", "enter", "tab"),
@@ -218,7 +218,7 @@ DEFAULT_LAYOUTS: dict[str, ToolbarLayout] = {
         ),
     ),
     "shell": ToolbarLayout(
-        style="emoji_text",
+        style="text",
         buttons=(
             ("screen", "ctrlc", "live"),
             ("enter", "eof", "susp"),

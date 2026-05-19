@@ -216,7 +216,7 @@ async def notify_messages_delivered(
         message_thread_id=thread_id,
         disable_notification=True,
     )
-    # 📬 ack so the inter-agent delivery is visible in the topic without
+    # Reaction ack so the inter-agent delivery is visible in the topic without
     # competing with the agent's own status updates.
     if sent is not None:
         await react(client, chat_id, sent.message_id, REACT_INBOX)
@@ -241,7 +241,7 @@ async def notify_reply_received(
     subj = _format_subject(original_msg.subject)
     subj_part = f" for: {subj}" if subj else ""
 
-    text = f"✓ Reply received from {from_wid} ({from_name}){subj_part}"
+    text = f"Reply received from {from_wid} ({from_name}){subj_part}"
 
     await rate_limit_send_message(
         client,
@@ -276,7 +276,7 @@ async def notify_pending_shell(
         body_preview += "..."
 
     text = (
-        f"✉ Pending from {from_wid} ({from_name})"
+        f"Pending from {from_wid} ({from_name})"
         f" [{message.type}]{subj_part} {body_preview}"
     )
 
@@ -325,7 +325,7 @@ async def notify_loop_detected(
     _loop_alert_pairs[pair_hash] = (window_a, window_b)
 
     text = (
-        f"⚠ Messaging loop detected between {wid_a} ({name_a}) and {wid_b} ({name_b})"
+        f"Messaging loop detected between {wid_a} ({name_a}) and {wid_b} ({name_b})"
     )
 
     keyboard = InlineKeyboardMarkup(

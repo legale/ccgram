@@ -94,10 +94,10 @@ def format_batch_message(
     """Render a batch of tool calls as a single compact message.
 
     Format:
-        ⚡ 3 tool calls [🤖 write-tests]
-        📖 Read  src/foo.py       ⎿  42 lines
-        ✏️ Edit  src/foo.py       ⎿  +3 −1
-        ⚡ Bash  make test        ⏳
+        3 tool calls [write-tests]
+        Read  src/foo.py       42 lines
+        Edit  src/foo.py       +3 -1
+        Bash  make test        running
     """
     task_create_message = _format_task_create_batch(entries, subagent_label)
     if task_create_message is not None:

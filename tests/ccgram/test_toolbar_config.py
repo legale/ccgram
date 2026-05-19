@@ -301,9 +301,9 @@ class TestBuiltins:
                         f"{provider} references unknown action {name!r}"
                     )
 
-    def test_default_style_is_emoji_text(self) -> None:
+    def test_default_style_is_text(self) -> None:
         for layout in DEFAULT_LAYOUTS.values():
-            assert layout.style == "emoji_text"
+            assert layout.style == "text"
 
 
 # ── End-to-end ────────────────────────────────────────────────────────

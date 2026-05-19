@@ -93,7 +93,7 @@ class TestBuildReport:
     def test_fixed_mode_header(self) -> None:
         audit = AuditResult(issues=[], total_bindings=3, live_binding_count=3)
         text, _keyboard = _format_report(audit, fixed_count=2)
-        assert "\u2705 Fixed 2 issues" in text
+        assert "Fixed 2 issues" in text
 
     def test_multiple_fixable_issues(self) -> None:
         audit = AuditResult(
@@ -250,7 +250,7 @@ class TestSyncFix:
             mock_sm.prune_stale_window_states.assert_called_once_with(set())
             assert mock_sm.audit_state.call_count == 2
             mock_edit.assert_called_once()
-            assert "\u2705 Fixed 1 issue" in mock_edit.call_args[0][1]
+            assert "Fixed 1 issue" in mock_edit.call_args[0][1]
 
     async def test_fix_computes_actual_fixed_count(self, _patch_deps) -> None:
         mock_sm, _, _, _, _, _ = _patch_deps
@@ -276,7 +276,7 @@ class TestSyncFix:
 
         with patch("ccgram.handlers.sync_command.safe_edit") as mock_edit:
             await handle_sync_fix(query)
-            assert "\u2705 Fixed 1 issue" in mock_edit.call_args[0][1]
+            assert "Fixed 1 issue" in mock_edit.call_args[0][1]
 
     async def test_fix_closes_ghost_topics(self, _patch_deps) -> None:
         mock_sm, _, _, mock_tr, _, _ = _patch_deps

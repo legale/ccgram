@@ -565,7 +565,11 @@ class TestRecoveryFreshCallback:
 
         mock_tr.unbind_thread.assert_called_once_with(100, 42)
         mock_tm.create_window.assert_called_once_with(
-            "/tmp/project", agent_args="", launch_command="claude"
+            "/tmp/project",
+            session_name=ANY,
+            window_name="project",
+            agent_args="",
+            launch_command="claude",
         )
         mock_tr.bind_thread.assert_called_once_with(
             100, 42, "@5", window_name="project"
@@ -705,7 +709,11 @@ class TestRecoveryContinueCallback:
             await handle_recovery_callback(query, 100, query.data, update, ctx)
 
         mock_tm.create_window.assert_called_once_with(
-            "/tmp/project", agent_args="--continue", launch_command="claude"
+            "/tmp/project",
+            session_name=ANY,
+            window_name="project",
+            agent_args="--continue",
+            launch_command="claude",
         )
         mock_tr.bind_thread.assert_called_once_with(
             100, 42, "@5", window_name="project"
@@ -904,6 +912,8 @@ class TestRecoveryResumePickCallback:
 
         mock_tm.create_window.assert_called_once_with(
             "/tmp/project",
+            session_name=ANY,
+            window_name="project",
             agent_args="--resume a1b2c3d4-0000-0000-0000-000000000001",
             launch_command="claude",
         )
@@ -957,6 +967,8 @@ class TestRecoveryResumePickCallback:
 
         mock_tm.create_window.assert_called_once_with(
             "/tmp/project",
+            session_name=ANY,
+            window_name="project",
             agent_args="--resume a1b2c3d4-0000-0000-0000-000000000002",
             launch_command="claude",
         )

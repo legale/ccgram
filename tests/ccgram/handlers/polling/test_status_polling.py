@@ -1234,9 +1234,7 @@ class TestMaybeDiscoverTranscript:
             mock_config.tmux_session_name = "ccgram"
             await discover_and_register_transcript("@7")
 
-        mock_sm.set_window_provider.assert_called_once_with(
-            "@7", "codex", cwd="/my/project"
-        )
+        mock_sm.set_window_provider.assert_not_called()
         mock_sms.register_hookless_session.assert_called_once()
 
     async def test_skips_when_provider_has_hooks(self) -> None:

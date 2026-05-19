@@ -77,10 +77,15 @@ async def handle_spawn_approval(
         return None
 
     launch_command = resolve_launch_command(req.provider)
+    view = window_query.view_window(req.requester_window)
+    topic_name = view.window_name if view else ""
+    if not topic_name:
+        topic_name = Path(req.cwd).name
 
     success, message, window_name, window_id = await tmux_manager.create_window(
         req.cwd,
-        session_name=tmux_manager.topic_session_name(Path(req.cwd).name),
+        session_name=tmux_manager.topic_session_name(topic_name),
+        window_name=topic_name,
         launch_command=launch_command,
     )
     if not success:
@@ -201,7 +206,7 @@ async def _create_topic_for_spawn(
     topic_info = resolve_topic(req.requester_window)
     if topic_info:
         _, thread_id, chat_id, _ = topic_info
-        text = f"✅ Spawned {window_name} ({window_id}) for: {req.prompt}"
+        text = f"Spawned {window_name} ({window_id}) for: {req.prompt}"
         await rate_limit_send_message(
             client,
             chat_id,
@@ -244,9 +249,9 @@ async def _handle_spawn_callback(
             logger.warning("Spawn approval failed for %s", request_id, exc_info=True)
             result = None
         if result:
-            text = f"✅ Spawned: {result.window_name} ({result.window_id})"
+            text = f"Spawned: {result.window_name} ({result.window_id})"
         else:
-            text = "❌ Spawn failed (request expired or window creation error)"
+            text = "Spawn failed (request expired or window creation error)"
         with _contextlib.suppress(TelegramError):
             await query.edit_message_text(text)
 
@@ -254,4 +259,4 @@ async def _handle_spawn_callback(
         request_id = data[len(CB_SPAWN_DENY) :]
         handle_spawn_denial(request_id)
         with _contextlib.suppress(TelegramError):
-            await query.edit_message_text("❌ Spawn request denied")
+            await query.edit_message_text("Spawn request denied")

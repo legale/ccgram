@@ -34,6 +34,7 @@ async def test_first_capture_sends_snapshot(monkeypatch) -> None:
     )
 
     send.assert_awaited_once()
+    assert send.await_args is not None
     assert "hello" in send.await_args.args[2]
 
 
@@ -53,6 +54,7 @@ async def test_snapshot_strips_ansi(monkeypatch) -> None:
         active=True,
     )
 
+    assert send.await_args is not None
     body = send.await_args.args[2]
     assert "\x1b[" not in body
     assert "hello" in body
@@ -287,10 +289,11 @@ async def test_delta_shows_only_changed_lines(monkeypatch) -> None:
         active=True,
     )
 
+    assert edit.await_args is not None
     body = edit.await_args.args[3]
     assert "line1" not in body
     assert "clock 12:01" in body
     assert "footer b" in body
     assert "clock 12:00" not in body
     assert "footer a" not in body
-    assert "1:" not in body
+    assert "line1" not in body

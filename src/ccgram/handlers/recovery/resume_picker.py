@@ -96,7 +96,7 @@ def _build_resume_picker_keyboard(
                 "⬅ Back",
                 callback_data=f"{CB_RECOVERY_BACK}{window_id}"[:64],
             ),
-            InlineKeyboardButton("✖ Cancel", callback_data=CB_RECOVERY_CANCEL),
+            InlineKeyboardButton("Cancel", callback_data=CB_RECOVERY_CANCEL),
         ]
     )
     return InlineKeyboardMarkup(rows)
@@ -124,7 +124,7 @@ def _build_empty_resume_keyboard(window_id: str) -> InlineKeyboardMarkup:
                     callback_data=f"{CB_RECOVERY_FRESH}{window_id}"[:64],
                 ),
             ],
-            [InlineKeyboardButton("✖ Cancel", callback_data=CB_RECOVERY_CANCEL)],
+            [InlineKeyboardButton("Cancel", callback_data=CB_RECOVERY_CANCEL)],
         ]
     )
 
@@ -296,7 +296,7 @@ async def _handle_resume_pick(
 
     view = window_query.view_window(old_wid)
     if view is None or not view.cwd or not Path(view.cwd).is_dir():
-        await safe_edit(query, "❌ Directory no longer exists.")
+        await safe_edit(query, "Directory no longer exists.")
         _clear_recovery_state(context.user_data)
         await query.answer("Project gone")
         return

@@ -373,7 +373,7 @@ async def handle_general_topic_message(
     """Handle messages in General topic: pin hint once, then react only.
 
     On first General-topic message per chat, sends a warning and pins it.
-    Subsequent messages get a silent 🤔 reaction instead.
+    Subsequent messages get a silent thinking reaction instead.
     """
     # Check cache first to avoid unnecessary API calls
     if not _general_topic_pin_cache.get(chat_id):
@@ -394,7 +394,7 @@ async def handle_general_topic_message(
         _general_topic_pin_cache[chat_id] = True
         try:
             hint = await message.reply_text(
-                "🤖 Please use a named topic. Create a new topic to start a session."
+                "Please use a named topic. Create a new topic to start a session."
             )
             await hint.pin(disable_notification=True)
         except TelegramError:

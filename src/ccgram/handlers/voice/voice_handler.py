@@ -38,11 +38,11 @@ def _build_voice_keyboard(message_id: int) -> InlineKeyboardMarkup:
         [
             [
                 InlineKeyboardButton(
-                    "✓ Send to agent",
+                    "Send to agent",
                     callback_data=f"vc:send:{message_id}",
                 ),
                 InlineKeyboardButton(
-                    "✗ Discard",
+                    "Discard",
                     callback_data=f"vc:drop:{message_id}",
                 ),
             ]
@@ -58,7 +58,7 @@ async def _download_voice(message: Message, file_id: str) -> bytes | None:
         return bytes(audio_bytearray)
     except TelegramError as e:
         logger.warning("Failed to download voice message: %s", e)
-        await safe_reply(message, "❌ Failed to download voice message.")
+        await safe_reply(message, "Failed to download voice message.")
         return None
 
 
@@ -67,13 +67,13 @@ async def _get_transcriber_or_reply(message: Message) -> WhisperTranscriber | No
     try:
         transcriber = get_transcriber()
     except (ValueError, RuntimeError) as e:
-        await safe_reply(message, f"❌ {e}")
+        await safe_reply(message, str(e))
         return None
 
     if transcriber is None:
         await safe_reply(
             message,
-            "⚠️ Voice transcription is not configured. Set CCGRAM_WHISPER_PROVIDER to enable it.\n\nSupported providers: openai, groq",
+            "Voice transcription is not configured. Set CCGRAM_WHISPER_PROVIDER to enable it.\n\nSupported providers: openai, groq",
         )
         return None
 
@@ -87,7 +87,7 @@ async def _transcribe_audio(
     try:
         return await transcriber.transcribe(audio_bytes, "voice.ogg")
     except (ValueError, RuntimeError) as e:
-        await safe_reply(message, f"❌ {e}")
+        await safe_reply(message, str(e))
         return None
 
 
@@ -101,7 +101,7 @@ async def _send_confirm_message(
     """
     keyboard = _build_voice_keyboard(message.message_id)
     confirm_msg = await safe_reply(
-        message, f"🎤 Transcribed:\n\n{text}", reply_markup=keyboard
+        message, f"Transcribed:\n\n{text}", reply_markup=keyboard
     )
     if confirm_msg is None:
         return
@@ -129,7 +129,7 @@ async def handle_voice_message(
     if not window_id:
         await safe_reply(
             message,
-            "⚠ Topic not bound — send a text message first to pick a "
+            "Topic not bound - send a text message first to pick a "
             "directory, then re-record.\n"
             "\U0001f4ac Voice messages aren't queued.",
         )
@@ -140,7 +140,7 @@ async def handle_voice_message(
         size_mb = voice.file_size / (1024 * 1024)
         await safe_reply(
             message,
-            f"❌ Voice message too large ({size_mb:.1f} MB). Maximum 25 MB.",
+            f"Voice message too large ({size_mb:.1f} MB). Maximum 25 MB.",
         )
         return
 
@@ -163,7 +163,7 @@ async def handle_voice_message(
         return
 
     if not result.text.strip():
-        await safe_reply(message, "⚠️ Could not transcribe audio (empty result).")
+        await safe_reply(message, "Could not transcribe audio (empty result).")
         return
 
     await _send_confirm_message(message, result.text, context)

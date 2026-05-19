@@ -138,12 +138,12 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 update.get_bot(), update.message, update.effective_chat.id
             )
         else:
-            await safe_reply(update.message, "❌ Use this command inside a topic.")
+            await safe_reply(update.message, "Use this command inside a topic.")
         return
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     if not window_id:
-        await safe_reply(update.message, "❌ This topic is not bound to any session.")
+        await safe_reply(update.message, "This topic is not bound to any session.")
         return
 
     display = thread_router.get_display_name(window_id)
@@ -160,6 +160,6 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     thread_router.unbind_thread(user.id, thread_id)
     await safe_reply(
         update.message,
-        f"✂ Unbound from window `{display}`. The session is still running.\n"
+        f"Unbound from window `{display}`. The session is still running.\n"
         "Send a message in this topic to rebind or create a new session.",
     )
