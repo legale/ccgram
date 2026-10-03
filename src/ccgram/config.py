@@ -147,7 +147,7 @@ class Config:
 
         # Provider selection
         self.provider_name: str = _env_with_fallback(
-            "CCGRAM_PROVIDER", "CCBOT_PROVIDER", "claude"
+            "CCGRAM_PROVIDER", "CCBOT_PROVIDER", "shell"
         )
 
         # Directory browser: show hidden (dot) directories

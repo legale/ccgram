@@ -13,9 +13,7 @@ from typing import TYPE_CHECKING
 import structlog
 from telegram import CallbackQuery, Message, Update
 from telegram.error import TelegramError
-from ...providers import get_provider_for_window
 from ...telegram_client import PTBTelegramClient
-from ...window_query import get_window_provider
 from ...tmux_manager import send_to_window
 from ...thread_router import thread_router
 from ..callback_data import CB_VOICE
@@ -97,26 +95,7 @@ async def _handle_send(
     # Persistent reaction ack on the original voice message.
     await react(client, msg.chat.id, message_id, REACT_SEEN)
 
-    # Shell provider: route through LLM for NL→command generation
-    provider = get_provider_for_window(
-        window_id, provider_name=get_window_provider(window_id)
-    )
-    if not provider.capabilities.supports_mailbox_delivery and thread_id is not None:
-        # Lazy: shell.shell_commands ↔ voice via approval callback wiring.
-        from ..shell.shell_commands import handle_shell_message
-
-        try:
-            await handle_shell_message(
-                client, user_id, thread_id, window_id, pending_text
-            )
-        except (OSError, TelegramError) as exc:
-            logger.warning("Shell message handling failed: %s", exc)
-            pending_store[(msg.chat.id, message_id)] = pending_text
-            await query.answer("Failed to send", show_alert=True)
-            return
-        await _ack_delivered(client, msg, query, message_id)
-        return
-
+    # Send directly to window
     success, err = await send_to_window(window_id, pending_text)
 
     if success:

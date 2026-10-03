@@ -28,7 +28,7 @@ class TestDiscoverExternalSessions:
     async def test_returns_windows_with_ai_processes(self, manager):
         sessions_proc = _make_proc("my-project\nccgram\n")
         windows_proc = _make_proc(
-            "@0\tproject\t/home/user/project\tclaude\n@1\tbash\t/home/user\tbash\n"
+            "@0\tproject\t/home/user/project\tbash\n@1\tvim\t/home/user\tvim\n"
         )
 
         with (
@@ -41,7 +41,7 @@ class TestDiscoverExternalSessions:
 
         assert len(result) == 1
         assert result[0].window_id == "my-project:@0"
-        assert result[0].pane_current_command == "claude"
+        assert result[0].pane_current_command == "bash"
 
     @pytest.mark.asyncio
     async def test_skips_own_session(self, manager):
@@ -61,7 +61,7 @@ class TestDiscoverExternalSessions:
     @pytest.mark.asyncio
     async def test_pattern_filtering(self, manager):
         sessions_proc = _make_proc("omc-abc\nrandom-session\n")
-        omc_windows = _make_proc("@0\tagent\t/tmp\tclaude\n")
+        omc_windows = _make_proc("@0\tagent\t/tmp\tbash\n")
 
         with (
             patch("ccgram.tmux_manager.asyncio.create_subprocess_exec") as mock_exec,
@@ -77,8 +77,8 @@ class TestDiscoverExternalSessions:
     @pytest.mark.asyncio
     async def test_multiple_patterns(self, manager):
         sessions_proc = _make_proc("omc-abc\nomx-xyz\nother\n")
-        omc_windows = _make_proc("@0\tagent\t/tmp\tclaude\n")
-        omx_windows = _make_proc("@0\tgemini\t/tmp\tgemini\n")
+        omc_windows = _make_proc("@0\tagent\t/tmp\tbash\n")
+        omx_windows = _make_proc("@0\tzsh\t/tmp\tzsh\n")
 
         with (
             patch("ccgram.tmux_manager.asyncio.create_subprocess_exec") as mock_exec,
@@ -95,8 +95,8 @@ class TestDiscoverExternalSessions:
     @pytest.mark.asyncio
     async def test_no_patterns_scans_all_sessions(self, manager):
         sessions_proc = _make_proc("sess-a\nsess-b\n")
-        win_a = _make_proc("@0\twin\t/tmp\tclaude\n")
-        win_b = _make_proc("@0\twin\t/tmp\tcodex\n")
+        win_a = _make_proc("@0\twin\t/tmp\tbash\n")
+        win_b = _make_proc("@0\twin\t/tmp\tzsh\n")
 
         with (
             patch("ccgram.tmux_manager.asyncio.create_subprocess_exec") as mock_exec,
@@ -111,7 +111,7 @@ class TestDiscoverExternalSessions:
     @pytest.mark.asyncio
     async def test_emdash_sessions_included(self, manager):
         sessions_proc = _make_proc("emdash-claude-main-abc123\n")
-        windows_proc = _make_proc("@0\temdash\t/home/user\tclaude\n")
+        windows_proc = _make_proc("@0\temdash\t/home/user\tbash\n")
 
         with (
             patch("ccgram.tmux_manager.asyncio.create_subprocess_exec") as mock_exec,
@@ -131,7 +131,7 @@ class TestDiscoverExternalSessions:
                 window_id="cached:@0",
                 window_name="cached",
                 cwd="/tmp",
-                pane_current_command="claude",
+                pane_current_command="bash",
             )
         ]
         manager._external_cache_expires = asyncio.get_event_loop().time() + 100
@@ -146,7 +146,7 @@ class TestDiscoverExternalSessions:
     @pytest.mark.asyncio
     async def test_cache_is_a_copy(self, manager):
         original = TmuxWindow(
-            window_id="x:@0", window_name="x", cwd="/tmp", pane_current_command="claude"
+            window_id="x:@0", window_name="x", cwd="/tmp", pane_current_command="bash"
         )
         manager._external_cache = [original]
         manager._external_cache_expires = asyncio.get_event_loop().time() + 100
@@ -157,7 +157,7 @@ class TestDiscoverExternalSessions:
                 window_id="extra:@0",
                 window_name="extra",
                 cwd="/tmp",
-                pane_current_command="claude",
+                pane_current_command="bash",
             )
         )
         assert len(manager._external_cache) == 1
@@ -224,9 +224,9 @@ class TestScanSessionWindows:
     @pytest.mark.asyncio
     async def test_filters_non_ai_windows(self, manager):
         proc = _make_proc(
-            "@0\tproject\t/home/user\tclaude\n"
-            "@1\tbash\t/home/user\tbash\n"
-            "@2\tvim\t/home/user\tvim\n"
+            "@0\tproject\t/home/user\tbash\n"
+            "@1\tvim\t/home/user\tvim\n"
+            "@2\thtop\t/home/user\thtop\n"
         )
 
         with patch(
@@ -240,9 +240,9 @@ class TestScanSessionWindows:
     @pytest.mark.asyncio
     async def test_multiple_ai_windows(self, manager):
         proc = _make_proc(
-            "@0\tproject-a\t/home/a\tclaude\n"
-            "@1\tproject-b\t/home/b\tcodex\n"
-            "@2\tproject-c\t/home/c\tgemini\n"
+            "@0\tproject-a\t/home/a\tbash\n"
+            "@1\tproject-b\t/home/b\tzsh\n"
+            "@2\tproject-c\t/home/c\tfish\n"
         )
 
         with patch(
@@ -251,7 +251,7 @@ class TestScanSessionWindows:
             result = await manager._scan_session_windows("ext")
 
         assert len(result) == 3
-        assert {w.pane_current_command for w in result} == {"claude", "codex", "gemini"}
+        assert {w.pane_current_command for w in result} == {"bash", "zsh", "fish"}
 
     @pytest.mark.asyncio
     async def test_timeout_returns_empty(self, manager):
@@ -283,7 +283,7 @@ class TestScanSessionWindows:
     @pytest.mark.asyncio
     async def test_malformed_lines_skipped(self, manager):
         proc = _make_proc(
-            "@0\tproject\t/home\tclaude\n\nincomplete\tdata\n@1\tok\t/tmp\tgemini\n"
+            "@0\tproject\t/home\tbash\n\nincomplete\tdata\n@1\tok\t/tmp\tzsh\n"
         )
 
         with patch(
@@ -297,7 +297,7 @@ class TestScanSessionWindows:
 
     @pytest.mark.asyncio
     async def test_emdash_fallback_name(self, manager):
-        proc = _make_proc("@0\t\t/home\tclaude\n")
+        proc = _make_proc("@0\t\t/home\tbash\n")
 
         with patch(
             "ccgram.tmux_manager.asyncio.create_subprocess_exec", return_value=proc

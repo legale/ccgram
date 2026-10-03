@@ -11,7 +11,6 @@ Key components:
 """
 
 import asyncio
-import os
 import subprocess
 from typing import TYPE_CHECKING, Any
 from pathlib import Path
@@ -70,10 +69,6 @@ async def _detect_and_apply_provider(
     if detected and detected != state.provider_name:
         old_provider = state.provider_name
         session_manager.set_window_provider(window_id, detected, cwd=w.cwd or None)
-        # Lazy: providers/__init__.py reaches back into transcript code
-        # via provider format modules.
-        from ...providers import get_provider_for_window
-
         new_caps = get_provider_for_window(window_id, detected)
         old_caps = (
             get_provider_for_window(window_id, old_provider) if old_provider else None
@@ -216,47 +211,11 @@ def _iter_proc_fds(pid: int) -> list[Path]:
 
 
 def _codex_event_from_fd(
-    fd_path: Path,
-    cwd: str,
-    window_key: str,
+    fd_path: Path,  # noqa: ARG001
+    cwd: str,  # noqa: ARG001
+    window_key: str,  # noqa: ARG001
 ) -> tuple[float, SessionStartEvent] | None:
-    try:
-        target = Path(os.readlink(fd_path))
-    except OSError:
-        return None
-    sessions_dir = Path.home() / ".codex" / "sessions"
-    if target.suffix != ".jsonl":
-        return None
-    try:
-        target.relative_to(sessions_dir)
-    except ValueError:
-        return None
-
-    # Lazy: reuse Codex provider's transcript metadata rules without importing
-    # provider-specific code on the recovery module cold path.
-    from ...providers.codex import _is_primary_codex_session, _read_codex_session_meta
-
-    meta = _read_codex_session_meta(target)
-    if not meta or not _is_primary_codex_session(meta):
-        return None
-    file_cwd = meta.get("cwd", "")
-    if not file_cwd:
-        return None
-    if cwd and str(Path(file_cwd).resolve()) != str(Path(cwd).resolve()):
-        return None
-    session_id = meta.get("id", "")
-    if not session_id:
-        return None
-    try:
-        mtime = target.stat().st_mtime
-    except OSError:
-        mtime = 0.0
-    return mtime, SessionStartEvent(
-        session_id=session_id,
-        cwd=file_cwd,
-        transcript_path=str(target),
-        window_key=window_key,
-    )
+    return None
 
 
 def _discover_codex_open_transcript(

@@ -1,5 +1,3 @@
-import json
-import shlex
 from unittest.mock import patch
 
 import pytest
@@ -64,20 +62,20 @@ class TestConfigProviderSettings:
             from ccgram.config import Config
 
             cfg = Config()
-            assert cfg.provider_name == "claude"
+            assert cfg.provider_name == "shell"
 
     def test_override_provider_via_env(self) -> None:
         env = {
             "TELEGRAM_BOT_TOKEN": "test-token",
             "ALLOWED_USERS": "123",
             "HOME": "/tmp",
-            "CCGRAM_PROVIDER": "codex",
+            "CCGRAM_PROVIDER": "custom",
         }
         with patch.dict("os.environ", env, clear=True):
             from ccgram.config import Config
 
             cfg = Config()
-            assert cfg.provider_name == "codex"
+            assert cfg.provider_name == "custom"
 
 
 class TestResolveLaunchCommand:
@@ -89,105 +87,36 @@ class TestResolveLaunchCommand:
         yield
         _reset_provider()
 
-    def test_default_returns_provider_command(self) -> None:
+    def test_default_returns_shell_command(self) -> None:
         from ccgram.providers import resolve_launch_command
 
-        assert resolve_launch_command("claude") == "claude"
-        assert resolve_launch_command("codex") == "codex"
-        gemini_cmd = resolve_launch_command("gemini")
-        assert "GEMINI_CLI_SYSTEM_SETTINGS_PATH=" in gemini_cmd
-        assert gemini_cmd.endswith(" gemini")
+        assert resolve_launch_command("shell") == ""
 
     def test_per_provider_env_override(self, monkeypatch) -> None:
         from ccgram.providers import resolve_launch_command
 
-        monkeypatch.setenv("CCGRAM_CLAUDE_COMMAND", "ce --current")
-        assert resolve_launch_command("claude") == "ce --current"
-        assert resolve_launch_command("codex") == "codex"
+        monkeypatch.setenv("CCGRAM_SHELL_COMMAND", "/bin/bash -l")
+        assert resolve_launch_command("shell") == "/bin/bash -l"
 
-    def test_override_does_not_affect_other_providers(self, monkeypatch) -> None:
+    def test_unknown_provider_falls_back_to_shell_default(self) -> None:
         from ccgram.providers import resolve_launch_command
 
-        monkeypatch.setenv("CCGRAM_CODEX_COMMAND", "my-codex")
-        assert resolve_launch_command("codex") == "my-codex"
-        assert resolve_launch_command("claude") == "claude"
-        gemini_cmd = resolve_launch_command("gemini")
-        assert "GEMINI_CLI_SYSTEM_SETTINGS_PATH=" in gemini_cmd
-        assert gemini_cmd.endswith(" gemini")
-
-    def test_unknown_provider_falls_back_to_claude_default(self) -> None:
-        from ccgram.providers import resolve_launch_command
-
-        assert resolve_launch_command("nonexistent") == "claude"
-
-    def test_all_three_providers_independently(self, monkeypatch) -> None:
-        from ccgram.providers import resolve_launch_command
-
-        monkeypatch.setenv("CCGRAM_CLAUDE_COMMAND", "ce --current")
-        monkeypatch.setenv("CCGRAM_CODEX_COMMAND", "my-codex --flag")
-        monkeypatch.setenv("CCGRAM_GEMINI_COMMAND", "/opt/gemini/run")
-        assert resolve_launch_command("claude") == "ce --current"
-        assert resolve_launch_command("codex") == "my-codex --flag"
-        assert resolve_launch_command("gemini") == "/opt/gemini/run"
-
-    def test_yolo_mode_appends_provider_specific_flags(self) -> None:
-        from ccgram.providers import resolve_launch_command
-
-        assert (
-            resolve_launch_command("claude", approval_mode="yolo")
-            == "claude --dangerously-skip-permissions"
-        )
-        assert (
-            resolve_launch_command("codex", approval_mode="yolo")
-            == "codex --dangerously-bypass-approvals-and-sandbox"
-        )
-        gemini_cmd = resolve_launch_command("gemini", approval_mode="yolo")
-        assert "GEMINI_CLI_SYSTEM_SETTINGS_PATH=" in gemini_cmd
-        assert gemini_cmd.endswith(" gemini --yolo")
-
-    def test_gemini_hardening_writes_system_settings_file(
-        self, tmp_path, monkeypatch
-    ) -> None:
-        from ccgram.providers import resolve_launch_command
-
-        monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        cmd = resolve_launch_command("gemini")
-
-        settings_path = tmp_path / "gemini-system-settings.json"
-        assert settings_path.exists()
-        assert json.loads(settings_path.read_text()) == {
-            "tools": {"shell": {"enableInteractiveShell": False}}
-        }
-        assert (
-            f"GEMINI_CLI_SYSTEM_SETTINGS_PATH={shlex.quote(str(settings_path))}" in cmd
-        )
-        assert cmd.endswith(" gemini")
-
-    def test_yolo_mode_does_not_duplicate_flag(self, monkeypatch) -> None:
-        from ccgram.providers import resolve_launch_command
-
-        monkeypatch.setenv(
-            "CCGRAM_CLAUDE_COMMAND", "claude --dangerously-skip-permissions"
-        )
-        assert (
-            resolve_launch_command("claude", approval_mode="yolo")
-            == "claude --dangerously-skip-permissions"
-        )
+        assert resolve_launch_command("nonexistent") == ""
 
 
 class TestModuleLevelRegistry:
-    def test_singleton_exists_with_claude(self, monkeypatch) -> None:
+    def test_singleton_exists_with_shell(self, monkeypatch) -> None:
         from ccgram.providers import _reset_provider, get_provider, registry
 
         _reset_provider()
         try:
             get_provider()
             assert isinstance(registry, ProviderRegistry)
-            assert "claude" in sorted(registry._providers)
+            assert "shell" in sorted(registry._providers)
         finally:
             _reset_provider()
 
-    def test_unknown_provider_falls_back_to_claude(self, monkeypatch) -> None:
+    def test_unknown_provider_falls_back_to_shell(self, monkeypatch) -> None:
         from ccgram.providers import _reset_provider, get_provider
 
         _reset_provider()
@@ -196,7 +125,7 @@ class TestModuleLevelRegistry:
         monkeypatch.setenv("ALLOWED_USERS", "123")
         try:
             provider = get_provider()
-            assert provider.capabilities.name == "claude"
+            assert provider.capabilities.name == "shell"
         finally:
             _reset_provider()
 
@@ -206,7 +135,7 @@ class TestModuleLevelRegistry:
         _reset_provider()
         try:
             caps = resolve_capabilities("nonexistent")
-            assert caps.name == "claude"
+            assert caps.name == "shell"
         finally:
             _reset_provider()
 
@@ -231,15 +160,11 @@ class TestEnsureRegistered:
         yield
         _reset_provider()
 
-    @pytest.mark.parametrize(
-        "name",
-        ["claude", "codex", "gemini", "pi", "shell"],
-    )
-    def test_all_providers_registered(self, name: str) -> None:
+    def test_shell_registered(self) -> None:
         from ccgram.providers import _ensure_registered, registry
 
         _ensure_registered()
-        assert registry.is_valid(name), f"Provider {name!r} not registered"
+        assert registry.is_valid("shell"), "Provider 'shell' not registered"
 
 
 class TestGetProviderForWindow:
@@ -254,39 +179,23 @@ class TestGetProviderForWindow:
     def test_returns_window_specific_provider(self, monkeypatch) -> None:
         from ccgram.providers import get_provider_for_window
 
-        provider = get_provider_for_window("@1", provider_name="codex")
-        assert provider.capabilities.name == "codex"
+        provider = get_provider_for_window("@1", provider_name="shell")
+        assert provider.capabilities.name == "shell"
 
     def test_falls_back_to_global_when_empty(self, monkeypatch) -> None:
         from ccgram.providers import get_provider_for_window
 
         provider = get_provider_for_window("@2", provider_name="")
-        assert provider.capabilities.name == "claude"
+        assert provider.capabilities.name == "shell"
 
     def test_falls_back_when_window_not_in_state(self, monkeypatch) -> None:
         from ccgram.providers import get_provider_for_window
 
         provider = get_provider_for_window("@999", provider_name=None)
-        assert provider.capabilities.name == "claude"
+        assert provider.capabilities.name == "shell"
 
     def test_falls_back_on_invalid_provider_name(self, monkeypatch) -> None:
         from ccgram.providers import get_provider_for_window
 
         provider = get_provider_for_window("@3", provider_name="nonexistent")
-        assert provider.capabilities.name == "claude"
-
-    def test_different_windows_resolve_different_providers(self, monkeypatch) -> None:
-        from ccgram.providers import get_provider_for_window
-
-        assert (
-            get_provider_for_window("@10", provider_name="claude").capabilities.name
-            == "claude"
-        )
-        assert (
-            get_provider_for_window("@11", provider_name="codex").capabilities.name
-            == "codex"
-        )
-        assert (
-            get_provider_for_window("@12", provider_name="gemini").capabilities.name
-            == "gemini"
-        )
+        assert provider.capabilities.name == "shell"

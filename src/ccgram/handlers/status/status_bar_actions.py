@@ -31,7 +31,6 @@ from telegram.error import TelegramError
 from ...config import config
 from ...miniapp.auth import sign_token
 from ...screenshot import text_to_image
-from ... import window_query
 from ...session import session_manager
 from ...telegram_client import PTBTelegramClient
 from ...thread_router import thread_router
@@ -174,27 +173,6 @@ async def _handle_status_recall(
         return
 
     command = history[idx]
-
-    # Lazy: providers/__init__ pulls in process_detection / shell_infra.
-    from ...providers import get_provider_for_window
-
-    provider = get_provider_for_window(
-        window_id, provider_name=window_query.get_window_provider(window_id)
-    )
-    if not provider.capabilities.supports_mailbox_delivery:
-        # Lazy: shell.shell_commands ↔ status via the approval callback
-        # wired in bootstrap.
-        from ..shell.shell_commands import handle_shell_message
-
-        await handle_shell_message(
-            PTBTelegramClient(query.get_bot()),
-            user_id,
-            thread_id,
-            window_id,
-            command,
-        )
-        await query.answer("\u21a9 Recalled")
-        return
 
     ok, err = await send_to_window(window_id, command)
     if not ok:

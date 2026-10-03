@@ -108,6 +108,14 @@ def _recovery_user_data(
 
 
 class TestBuildRecoveryKeyboard:
+    @pytest.fixture(autouse=True)
+    def _capable_provider(self):
+        with patch(f"{_RC}.get_provider_for_window") as mock_gpw:
+            caps = mock_gpw.return_value.capabilities
+            caps.supports_continue = True
+            caps.supports_resume = True
+            yield mock_gpw
+
     def test_has_three_action_buttons(self) -> None:
         kb = build_recovery_keyboard("@0")
         action_row = kb.inline_keyboard[0]
@@ -569,7 +577,7 @@ class TestRecoveryFreshCallback:
             session_name=ANY,
             window_name="project",
             agent_args="",
-            launch_command="claude",
+            launch_command="",
         )
         mock_tr.bind_thread.assert_called_once_with(
             100, 42, "@5", window_name="project"
@@ -703,8 +711,14 @@ class TestRecoveryContinueCallback:
         user_data = _recovery_user_data()
         ctx = _make_context(user_data)
         query = update.callback_query
-
-        with patch(f"{_RC}.Path") as mock_path:
+        mock_prov = MagicMock()
+        mock_prov.capabilities.name = "claude"
+        mock_prov.make_launch_args.return_value = "--continue"
+        with (
+            patch(f"{_RC}.Path") as mock_path,
+            patch(f"{_RC}.get_provider_for_window", return_value=mock_prov),
+            patch(f"{_RC}.resolve_launch_command", return_value="claude"),
+        ):
             mock_path.return_value.is_dir.return_value = True
             await handle_recovery_callback(query, 100, query.data, update, ctx)
 
@@ -902,9 +916,17 @@ class TestRecoveryResumePickCallback:
         ctx = _make_context(user_data)
         query = update.callback_query
 
+        mock_prov = MagicMock()
+        mock_prov.capabilities.name = "claude"
+        mock_prov.make_launch_args.return_value = (
+            "--resume a1b2c3d4-0000-0000-0000-000000000001"
+        )
         with (
             patch(f"{_RC}.Path") as mock_path,
             patch(f"{_RP}.Path") as mock_p_path,
+            patch(f"{_RP}.get_provider_for_window", return_value=mock_prov),
+            patch(f"{_RC}.get_provider_for_window", return_value=mock_prov),
+            patch(f"{_RC}.resolve_launch_command", return_value="claude"),
         ):
             mock_path.return_value.is_dir.return_value = True
             mock_p_path.return_value.is_dir.return_value = True
@@ -957,9 +979,17 @@ class TestRecoveryResumePickCallback:
         ctx = _make_context(user_data)
         query = update.callback_query
 
+        mock_prov = MagicMock()
+        mock_prov.capabilities.name = "claude"
+        mock_prov.make_launch_args.return_value = (
+            "--resume a1b2c3d4-0000-0000-0000-000000000002"
+        )
         with (
             patch(f"{_RC}.Path") as mock_path,
             patch(f"{_RP}.Path") as mock_p_path,
+            patch(f"{_RP}.get_provider_for_window", return_value=mock_prov),
+            patch(f"{_RC}.get_provider_for_window", return_value=mock_prov),
+            patch(f"{_RC}.resolve_launch_command", return_value="claude"),
         ):
             mock_path.return_value.is_dir.return_value = True
             mock_p_path.return_value.is_dir.return_value = True

@@ -7,11 +7,132 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from ccgram.monitor_state import TrackedSession
-from ccgram.providers.claude import ClaudeProvider
-from ccgram.providers.codex import CodexProvider
+from ccgram.providers.base import AgentMessage, ProviderCapabilities
 from ccgram.session_monitor import NewWindowEvent, SessionMonitor
 from ccgram.thread_router import ThreadRouter
 from ccgram.window_state_store import WindowState, WindowStateStore
+
+
+class ClaudeProvider:
+    capabilities = ProviderCapabilities(
+        name="claude",
+        launch_command="claude",
+        supports_hook=True,
+        supports_incremental_read=True,
+        transcript_format="jsonl",
+    )
+
+    def parse_transcript_line(self, line: str) -> dict | None:
+        if not line or not line.strip():
+            return None
+        try:
+            res = json.loads(line)
+            return res if isinstance(res, dict) else None
+        except json.JSONDecodeError, TypeError:
+            return None
+
+    def parse_transcript_entries(self, entries, pending_tools, cwd=None):
+        msgs = []
+        for e in entries:
+            t = e.get("type", "")
+            if t == "assistant":
+                content = e.get("message", {}).get("content", "")
+                text = (
+                    content
+                    if isinstance(content, str)
+                    else "".join(
+                        c.get("text", "") for c in content if isinstance(c, dict)
+                    )
+                )
+                msgs.append(
+                    AgentMessage(text=text, role="assistant", content_type="text")
+                )
+            elif t == "user":
+                content = e.get("message", {}).get("content", "")
+                text = (
+                    content
+                    if isinstance(content, str)
+                    else "".join(
+                        c.get("text", "") for c in content if isinstance(c, dict)
+                    )
+                )
+                msgs.append(AgentMessage(text=text, role="user", content_type="text"))
+        return msgs, pending_tools
+
+    def is_user_transcript_entry(self, entry):
+        return entry.get("type") == "user"
+
+
+class CodexProvider:
+    capabilities = ProviderCapabilities(
+        name="codex",
+        launch_command="codex",
+        supports_hook=False,
+        supports_incremental_read=True,
+        transcript_format="jsonl",
+    )
+
+    def parse_transcript_line(self, line: str) -> dict | None:
+        if not line or not line.strip():
+            return None
+        try:
+            res = json.loads(line)
+            return res if isinstance(res, dict) else None
+        except json.JSONDecodeError, TypeError:
+            return None
+
+    def parse_transcript_entries(self, entries, pending_tools, cwd=None):
+        msgs = []
+        for e in entries:
+            payload = e.get("payload", {})
+            if payload.get("role") == "assistant":
+                content = payload.get("content", [])
+                text = "".join(
+                    c.get("text", "") for c in content if isinstance(c, dict)
+                )
+                msgs.append(
+                    AgentMessage(text=text, role="assistant", content_type="text")
+                )
+        return msgs, pending_tools
+
+    def is_user_transcript_entry(self, entry):
+        return entry.get("payload", {}).get("role") == "user"
+
+
+@pytest.fixture(autouse=True)
+def _default_claude_provider_for_monitor():
+    provider_map = {
+        "claude": ClaudeProvider(),
+        "codex": CodexProvider(),
+    }
+
+    def _get_provider(window_id="", provider_name=None):
+        from ccgram.config import config
+
+        name = provider_name or getattr(config, "provider_name", "claude")
+        if name in provider_map:
+            return provider_map[name]
+        return ClaudeProvider()
+
+    with (
+        patch(
+            "ccgram.transcript_reader.get_provider_for_window",
+            side_effect=_get_provider,
+        ),
+        patch(
+            "ccgram.transcript_reader.detect_provider_from_transcript_path",
+            side_effect=lambda path: "codex" if ".codex" in str(path) else "claude",
+        ),
+        patch(
+            "ccgram.transcript_reader.registry.get",
+            side_effect=lambda name: provider_map.get(name, ClaudeProvider()),
+        ),
+        patch(
+            "ccgram.transcript_reader.registry.is_valid",
+            side_effect=lambda name: name in provider_map,
+        ),
+    ):
+        yield
 
 
 @pytest.fixture
@@ -961,6 +1082,38 @@ class TestGeminiTranscriptReading:
 
 
 def _make_gemini_provider():
-    from ccgram.providers.gemini import GeminiProvider
+    class _MockGemini:
+        capabilities = ProviderCapabilities(
+            name="gemini",
+            launch_command="gemini",
+            supports_hook=False,
+            supports_incremental_read=True,
+            transcript_format="jsonl",
+        )
 
-    return GeminiProvider()
+        def parse_transcript_line(self, line: str) -> dict | None:
+            if not line or not line.strip():
+                return None
+            try:
+                res = json.loads(line)
+                return res if isinstance(res, dict) else None
+            except json.JSONDecodeError, TypeError:
+                return None
+
+        def parse_transcript_entries(self, entries, pending_tools, cwd=None):
+            msgs = []
+            for e in entries:
+                content = e.get("content", [])
+                text = "".join(
+                    c.get("text", "") for c in content if isinstance(c, dict)
+                )
+                if text:
+                    msgs.append(
+                        AgentMessage(text=text, role="assistant", content_type="text")
+                    )
+            return msgs, pending_tools
+
+        def is_user_transcript_entry(self, entry):
+            return False
+
+    return _MockGemini()

@@ -317,6 +317,12 @@ class TestBindProviderDetection:
                 return_value="claude",
             ),
             patch(
+                "ccgram.providers.get_provider_for_window",
+                return_value=MagicMock(
+                    capabilities=MagicMock(chat_first_command_path=False)
+                ),
+            ),
+            patch(
                 "ccgram.handlers.shell.shell_prompt_orchestrator.ensure_setup",
                 new_callable=AsyncMock,
             ) as mock_ensure,

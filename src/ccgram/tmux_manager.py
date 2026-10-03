@@ -930,7 +930,7 @@ class TmuxManager:
             win_id, win_name, cwd, cmd = parts[:4]
             tty = parts[4] if len(parts) > 4 else ""  # noqa: PLR2004
             detected = detect_provider_from_command(cmd)
-            if not detected or detected == "shell":
+            if not detected:
                 continue
             qualified_id = f"{session_name}:{win_id}"
             results.append(

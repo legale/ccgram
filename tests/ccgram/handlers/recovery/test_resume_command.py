@@ -1,6 +1,8 @@
 import json
 from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
+import pytest
+
 from ccgram.handlers.callback_data import (
     CB_RESUME_CANCEL,
     CB_RESUME_PAGE,
@@ -18,6 +20,27 @@ from ccgram.handlers.recovery.resume_command import (
 from ccgram.handlers.user_state import RESUME_SESSIONS
 
 _RC = "ccgram.handlers.recovery.resume_command"
+
+
+@pytest.fixture(autouse=True)
+def _mock_default_resume_provider():
+    mock_prov = MagicMock()
+    mock_prov.capabilities.name = "claude"
+    mock_prov.capabilities.supports_resume = True
+    mock_prov.launch_command = "claude"
+    mock_prov.make_launch_args.side_effect = (
+        lambda resume_id=None, resume_session_id=None, **kw: (
+            f"--resume {resume_id or resume_session_id}"
+            if (resume_id or resume_session_id)
+            else ""
+        )
+    )
+    with (
+        patch(f"{_RC}.get_provider", return_value=mock_prov),
+        patch(f"{_RC}.get_provider_for_window", return_value=mock_prov),
+        patch(f"{_RC}.resolve_launch_command", return_value="claude"),
+    ):
+        yield mock_prov
 
 
 def _make_update(

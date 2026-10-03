@@ -64,12 +64,22 @@ class UserPreferences:
         Does NOT call ``_schedule_save`` — loading from disk must not
         trigger a write.
         """
+
+        def _parse_uid(uid: Any) -> int | None:
+            try:
+                return int(uid)
+            except ValueError, TypeError:
+                return None
+
         self.user_window_offsets = {
-            int(uid): offsets
+            parsed: offsets
             for uid, offsets in data.get("user_window_offsets", {}).items()
+            if (parsed := _parse_uid(uid)) is not None
         }
         self.user_dir_favorites = {
-            int(uid): favs for uid, favs in data.get("user_dir_favorites", {}).items()
+            parsed: favs
+            for uid, favs in data.get("user_dir_favorites", {}).items()
+            if (parsed := _parse_uid(uid)) is not None
         }
 
     # ------------------------------------------------------------------

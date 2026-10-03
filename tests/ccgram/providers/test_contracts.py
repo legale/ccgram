@@ -12,16 +12,10 @@ from ccgram.providers.base import (
     SessionStartEvent,
     StatusUpdate,
 )
-from ccgram.providers._jsonl import JsonlProvider
-from ccgram.providers.agy import AgyProvider
-from ccgram.providers.claude import ClaudeProvider
-from ccgram.providers.codex import CodexProvider
-from ccgram.providers.gemini import GeminiProvider
-from ccgram.providers.pi import PiProvider
 from ccgram.providers.shell import ShellProvider
 
 
-class StubProvider(JsonlProvider):
+class StubProvider:
     _CAPS = ProviderCapabilities(
         name="stub",
         launch_command="stub-cli",
@@ -34,6 +28,10 @@ class StubProvider(JsonlProvider):
     )
 
     _BUILTINS = {"help": "Show help", "clear": "Clear screen"}
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return self._CAPS
 
     def make_launch_args(
         self,
@@ -58,14 +56,99 @@ class StubProvider(JsonlProvider):
             window_key=payload.get("window_key", ""),
         )
 
+    def parse_transcript_line(self, line: str) -> dict[str, Any] | None:
+        if not line or not line.strip():
+            return None
+        try:
+            res = json.loads(line)
+            return res if isinstance(res, dict) else None
+        except json.JSONDecodeError:
+            return None
+
+    def read_transcript_file(
+        self, file_path: str, last_offset: int
+    ) -> tuple[list[dict[str, Any]], int]:
+        return [], 0
+
+    def parse_transcript_entries(
+        self,
+        entries: list[dict[str, Any]],
+        pending_tools: dict[str, Any],
+        cwd: str | None = None,
+    ) -> tuple[list[AgentMessage], dict[str, Any]]:
+        return [], pending_tools
+
+    def parse_terminal_status(
+        self, pane_text: str, *, pane_title: str = ""
+    ) -> StatusUpdate | None:
+        return None
+
+    def extract_bash_output(self, pane_text: str, command: str) -> str | None:
+        return None
+
+    def is_user_transcript_entry(self, entry: dict[str, Any]) -> bool:
+        return entry.get("type") == "user"
+
+    def parse_history_entry(self, entry: dict[str, Any]) -> AgentMessage | None:
+        return None
+
+    def discover_transcript(
+        self,
+        cwd: str,
+        window_key: str,
+        *,
+        max_age: float | None = None,
+    ) -> SessionStartEvent | None:
+        return None
+
+    def requires_pane_title_for_detection(self, pane_current_command: str) -> bool:
+        return False
+
+    def detect_from_pane_title(
+        self, pane_current_command: str, pane_title: str
+    ) -> bool:
+        return False
+
+    def discover_commands(self, base_dir: str) -> list[DiscoveredCommand]:
+        return [
+            DiscoveredCommand(name=name, description=desc, source="builtin")
+            for name, desc in self._BUILTINS.items()
+        ]
+
+    def build_status_snapshot(
+        self,
+        transcript_path: str,
+        *,
+        display_name: str = "",
+        session_id: str = "",
+        cwd: str = "",
+    ) -> str | None:
+        return None
+
+    def has_output_since(self, transcript_path: str, offset: int) -> bool:
+        return False
+
+    async def scrape_current_mode(self, window_id: str) -> str | None:
+        return None
+
+    async def seed_task_state(
+        self,
+        window_id: str,
+        session_id: str,
+        transcript_path: str,
+    ) -> None:
+        return None
+
+    def apply_task_entries(
+        self,
+        window_id: str,
+        session_id: str,
+        entries: list[dict],
+    ) -> None:
+        return None
+
 
 PROVIDER_FIXTURES: list[type] = [
-    StubProvider,
-    ClaudeProvider,
-    CodexProvider,
-    GeminiProvider,
-    PiProvider,
-    AgyProvider,
     ShellProvider,
 ]
 

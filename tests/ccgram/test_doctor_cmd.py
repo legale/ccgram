@@ -180,7 +180,7 @@ class TestDoctorMain:
 
     def test_shows_provider_name(self, tmp_path, monkeypatch, capsys) -> None:
         monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        monkeypatch.setenv("CCGRAM_PROVIDER", "claude")
+        monkeypatch.setenv("CCGRAM_PROVIDER", "shell")
         monkeypatch.setenv("TMUX_SESSION_NAME", "test")
         monkeypatch.setenv("ALLOWED_USERS", "123")
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "fake-token")
@@ -193,23 +193,19 @@ class TestDoctorMain:
             "ccgram.doctor_cmd._check_tmux_session",
             lambda: ("pass", "ok"),
         )
-        monkeypatch.setattr(
-            "ccgram.doctor_cmd._check_hooks",
-            lambda: ("pass", "all 5 hook events installed", _all_hooks_status()),
-        )
         monkeypatch.setattr("ccgram.doctor_cmd._find_orphaned_windows", lambda: [])
 
         with pytest.raises(SystemExit):
             doctor_main()
 
         captured = capsys.readouterr()
-        assert "Provider: claude" in captured.out
+        assert "Provider: shell" in captured.out
 
     def test_skips_hook_check_for_hookless_provider(
         self, tmp_path, monkeypatch, capsys
     ) -> None:
         monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        monkeypatch.setenv("CCGRAM_PROVIDER", "codex")
+        monkeypatch.setenv("CCGRAM_PROVIDER", "shell")
         monkeypatch.setenv("TMUX_SESSION_NAME", "test")
         monkeypatch.setenv("ALLOWED_USERS", "123")
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "fake-token")
@@ -228,7 +224,7 @@ class TestDoctorMain:
             doctor_main()
 
         captured = capsys.readouterr()
-        assert "Provider: codex" in captured.out
+        assert "Provider: shell" in captured.out
         assert "hook check skipped" in captured.out
 
 
@@ -236,31 +232,33 @@ class TestCheckProviderCommand:
     def test_found(self, monkeypatch) -> None:
         from ccgram.doctor_cmd import _check_provider_command
 
+        monkeypatch.setenv("CCGRAM_SHELL_COMMAND", "bash")
         monkeypatch.setattr(
-            "ccgram.doctor_cmd.shutil.which", lambda _cmd: "/usr/bin/codex"
+            "ccgram.doctor_cmd.shutil.which", lambda _cmd: "/usr/bin/bash"
         )
-        status, msg = _check_provider_command("codex")
+        status, msg = _check_provider_command("shell")
         assert status == "pass"
-        assert "codex" in msg
+        assert "bash" in msg
 
     def test_not_found(self, monkeypatch) -> None:
         from ccgram.doctor_cmd import _check_provider_command
 
+        monkeypatch.setenv("CCGRAM_SHELL_COMMAND", "missing-shell")
         monkeypatch.setattr("ccgram.doctor_cmd.shutil.which", lambda _cmd: None)
-        status, msg = _check_provider_command("codex")
+        status, msg = _check_provider_command("shell")
         assert status == "fail"
-        assert "codex" in msg
+        assert "missing-shell" in msg
 
     def test_per_provider_env_override(self, monkeypatch) -> None:
         from ccgram.doctor_cmd import _check_provider_command
 
-        monkeypatch.setenv("CCGRAM_CODEX_COMMAND", "my-codex-wrapper")
+        monkeypatch.setenv("CCGRAM_SHELL_COMMAND", "my-shell-wrapper")
         monkeypatch.setattr(
-            "ccgram.doctor_cmd.shutil.which", lambda _cmd: "/usr/bin/my-codex-wrapper"
+            "ccgram.doctor_cmd.shutil.which", lambda _cmd: "/usr/bin/my-shell-wrapper"
         )
-        status, msg = _check_provider_command("codex")
+        status, msg = _check_provider_command("shell")
         assert status == "pass"
-        assert "my-codex-wrapper" in msg
+        assert "my-shell-wrapper" in msg
 
 
 class TestCheckDraftStreaming:

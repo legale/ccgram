@@ -521,11 +521,15 @@ class TestScanPanes:
 class TestMaybeCheckPassiveShell:
     async def test_non_shell_noop(self):
         bot = AsyncMock(spec=Bot)
+        mock_prov = MagicMock()
+        mock_prov.capabilities.chat_first_command_path = False
         with (
-            patch("ccgram.handlers.polling.window_tick.apply.window_query") as mock_sm,
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.get_provider_for_window",
+                return_value=mock_prov,
+            ),
             patch("ccgram.handlers.polling.window_tick.apply.tmux_manager"),
         ):
-            mock_sm.get_window_state.return_value = MagicMock(provider_name="claude")
             await _maybe_check_passive_shell(bot, 1, "@0", 100)
 
     async def test_shell_provider_calls_passive_check(self):

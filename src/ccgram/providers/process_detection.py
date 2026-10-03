@@ -1,15 +1,13 @@
 """Foreground process detection for tmux panes via ``ps -t``.
 
-All supported CLIs (claude, codex, gemini) are Node.js scripts — tmux's
-``pane_current_command`` shows ``bun`` or ``node`` instead of the CLI name.
-This module inspects the actual foreground process group on the pane's TTY
-to reliably identify which provider is running.
+Inspects the actual foreground process group on the pane's TTY
+to identify whether a shell session is running.
 
 Detection flow:
 1. Run ``ps -t <tty> -o pid=,pgid=,stat=,args=``
 2. Filter for ``+`` in stat → foreground process group
 3. Find the group leader (pid == pgid) among foreground processes
-4. Match the leader's full args against provider patterns, skipping wrapper
+4. Match the leader's full args against known shells, skipping wrapper
    tokens (sudo, env, node, bun, …)
 5. Cache by ``(window_id, fg_pgid)`` to avoid repeated subprocess calls
 
@@ -31,52 +29,20 @@ from .shell import KNOWN_SHELLS as _KNOWN_SHELLS
 
 logger = structlog.get_logger()
 
-# Tokens that wrap the actual CLI binary — skip during classification.
+# Tokens that wrap the actual binary — skip during classification.
 _WRAPPER_TOKENS = frozenset(
     {"sudo", "env", "node", "bun", "npx", "bunx", "uv", "python", "python3"}
 )
 
-# Basename → provider name.  Checked via exact match and prefix (``claude-*``).
-_PROVIDER_BASENAMES: tuple[tuple[frozenset[str], str], ...] = (
-    (frozenset({"claude", "ce", "cc-mirror", "zai"}), "claude"),
-    (frozenset({"codex"}), "codex"),
-    (frozenset({"gemini"}), "gemini"),
-    (frozenset({"pi"}), "pi"),
-    (frozenset({"agy", "antigravity", "antigravity-cli"}), "agy"),
-)
-
-# Path substrings that identify a provider when basename alone is ambiguous
-# (e.g. ``cli.js`` launched by bun).
-_PROVIDER_PATH_MARKERS: tuple[tuple[tuple[str, ...], str], ...] = (
-    (("claude-code", "cc-team"), "claude"),
-    (("@openai/codex", "/codex/", "/codex-"), "codex"),
-    (("gemini-cli",), "gemini"),
-    (("@mariozechner/pi-coding-agent", "/pi-coding-agent/"), "pi"),
-    (("antigravity-cli", "/agy"), "agy"),
-)
-
-
-# JS runtimes that trigger ps-based detection in the caller.
+# JS runtimes that might host nested commands.
 JS_RUNTIMES = frozenset({"node", "bun", "npx", "bunx"})
 
 
 def _match_token(token: str) -> str:
-    """Match a single argv token against provider basenames and path markers."""
+    """Match a single argv token against known shells."""
     basename = os.path.basename(token).lower().lstrip("-")
-
-    # Direct basename match
-    for names, provider in _PROVIDER_BASENAMES:
-        if basename in names or basename.startswith(f"{provider}-"):
-            return provider
     if basename in _KNOWN_SHELLS:
         return "shell"
-
-    # Path-based match for ambiguous basenames (e.g. cli.js)
-    token_lower = token.lower()
-    for markers, provider in _PROVIDER_PATH_MARKERS:
-        if any(m in token_lower for m in markers):
-            return provider
-
     return ""
 
 
@@ -84,9 +50,8 @@ def classify_provider_from_args(args: str) -> str:
     """Classify provider from a process's full argv string.
 
     Skips wrapper tokens (``node``, ``bun``, ``sudo``, …) and matches the
-    first meaningful token against known provider names or path markers.
-    Returns provider name (``"claude"``, ``"codex"``, ``"gemini"``,
-    ``"shell"``) or empty string if unrecognised.
+    first meaningful token against known shells.
+    Returns "shell" or empty string if unrecognised.
     """
     if not args:
         return ""
@@ -133,7 +98,7 @@ async def get_foreground_args(tty_path: str) -> tuple[str, int]:
     """Get the full argv and PGID of the foreground process on a TTY.
 
     Runs ``ps -t <tty> -o pid=,pgid=,stat=,args=`` and filters for
-    processes with ``+`` in their stat field (foreground group).  Among
+    processes with ``+`` in their stat field (foreground group). Among
     those, returns the group leader's (pid == pgid) argv string.
 
     Returns:

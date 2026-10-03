@@ -7,8 +7,8 @@ and ``resolve_capabilities()`` for lightweight CLI commands that don't
 require Config (doctor, status).
 """
 
-import structlog
 import os
+import structlog
 
 from ccgram.expandable_quote import EXPANDABLE_QUOTE_END, EXPANDABLE_QUOTE_START
 from ccgram.providers.base import (
@@ -19,7 +19,6 @@ from ccgram.providers.base import (
     SessionStartEvent,
     StatusUpdate,
 )
-from ccgram.providers.process_detection import JS_RUNTIMES
 from ccgram.providers.registry import ProviderRegistry, UnknownProviderError, registry
 
 logger = structlog.get_logger()
@@ -27,12 +26,7 @@ logger = structlog.get_logger()
 # Launch-mode constants for per-session approval behavior.
 _APPROVAL_MODE_NORMAL = "normal"
 _APPROVAL_MODE_YOLO = "yolo"
-_YOLO_FLAGS: dict[str, str] = {
-    "claude": "--dangerously-skip-permissions",
-    "codex": "--dangerously-bypass-approvals-and-sandbox",
-    "gemini": "--yolo",
-    "agy": "--dangerously-skip-permissions",
-}
+_YOLO_FLAGS: dict[str, str] = {}
 
 
 def has_yolo_mode(provider_name: str) -> bool:
@@ -42,8 +36,6 @@ def has_yolo_mode(provider_name: str) -> bool:
 
 # Singleton cache
 _active: AgentProvider | None = None
-
-
 _registered = False
 
 
@@ -53,28 +45,8 @@ def _ensure_registered() -> None:
     if _registered:
         return
     # Lazy: provider classes register against the registry at import; defer until the registry factory runs
-    from ccgram.providers.claude import ClaudeProvider
-
-    # Lazy: provider classes register against the registry at import; defer until the registry factory runs
-    from ccgram.providers.codex import CodexProvider
-
-    # Lazy: provider classes register against the registry at import; defer until the registry factory runs
-    from ccgram.providers.gemini import GeminiProvider
-
-    # Lazy: provider classes register against the registry at import; defer until the registry factory runs
-    from ccgram.providers.pi import PiProvider
-
-    # Lazy: provider classes register against the registry at import; defer until the registry factory runs
-    from ccgram.providers.agy import AgyProvider
-
-    # Lazy: provider classes register against the registry at import; defer until the registry factory runs
     from ccgram.providers.shell import ShellProvider
 
-    registry.register("claude", ClaudeProvider)
-    registry.register("codex", CodexProvider)
-    registry.register("gemini", GeminiProvider)
-    registry.register("pi", PiProvider)
-    registry.register("agy", AgyProvider)
     registry.register("shell", ShellProvider)
     _registered = True
 
@@ -83,7 +55,7 @@ def get_provider() -> AgentProvider:
     """Return the active provider instance (lazy singleton).
 
     On first call, registers all providers into the global registry and
-    resolves the provider name from config. Falls back to ``"claude"`` if
+    resolves the provider name from config. Falls back to ``"shell"`` if
     the configured provider is unknown.
     """
     global _active
@@ -98,10 +70,10 @@ def get_provider() -> AgentProvider:
             _active = registry.get(config.provider_name)
         except UnknownProviderError:
             logger.warning(
-                "Unknown provider %r, falling back to 'claude'",
+                "Unknown provider %r, falling back to 'shell'",
                 config.provider_name,
             )
-            _active = registry.get("claude")
+            _active = registry.get("shell")
     return _active
 
 
@@ -132,25 +104,13 @@ def get_provider_for_window(
 def detect_provider_from_command(pane_current_command: str) -> str:
     """Detect provider name from a tmux pane's running process.
 
-    Matches the basename of the command against known provider names
-    to avoid false positives from paths containing provider names.
-    Returns empty string for unrecognized or empty commands so callers
-    can distinguish "no match" from a confident detection.
+    Returns "shell" for recognized shell binaries, or empty string.
     """
     cmd = pane_current_command.strip().lower()
     if not cmd:
         return ""
 
-    # Match basename only (first token) to avoid false positives
-    # from paths like /home/claude/bin/vim
     basename = os.path.basename(cmd.split()[0])
-    for name in ("claude", "codex", "gemini", "pi", "agy"):
-        if basename == name or basename.startswith(name + "-"):
-            return name
-
-    # Lazy: providers.shell pulls in shell_infra (prompt-marker machinery
-    # + readline lookups) at import; only load when we have to fall
-    # through to shell-process detection.
     # Lazy: shell provider is the only one that needs KNOWN_SHELLS
     from .shell import KNOWN_SHELLS
 
@@ -160,30 +120,15 @@ def detect_provider_from_command(pane_current_command: str) -> str:
     return ""
 
 
-def detect_provider_from_transcript_path(transcript_path: str) -> str:
+def detect_provider_from_transcript_path(transcript_path: str) -> str:  # noqa: ARG001
     """Infer provider name from a persisted transcript path when possible."""
-    normalized = transcript_path.strip().lower().replace("\\", "/")
-    if not normalized:
-        return ""
-    if "/.codex/sessions/" in normalized:
-        return "codex"
-    if "/.claude/projects/" in normalized:
-        return "claude"
-    if "/.gemini/antigravity-cli/" in normalized:
-        return "agy"
-    if "/.gemini/" in normalized and "/chats/" in normalized:
-        return "gemini"
-    if "/.pi/agent/sessions/" in normalized:
-        return "pi"
     return ""
 
 
-def should_probe_pane_title_for_provider_detection(pane_current_command: str) -> bool:
+def should_probe_pane_title_for_provider_detection(
+    pane_current_command: str,  # noqa: ARG001
+) -> bool:
     """Return True when any provider needs pane-title context to detect runtime."""
-    _ensure_registered()
-    for name in registry.provider_names():
-        if registry.get(name).requires_pane_title_for_detection(pane_current_command):
-            return True
     return False
 
 
@@ -207,11 +152,6 @@ def detect_provider_from_runtime(
         if registry.is_valid(stamped):
             return stamped
 
-    _ensure_registered()
-    for name in registry.provider_names():
-        provider = registry.get(name)
-        if provider.detect_from_pane_title(pane_current_command, pane_title):
-            return provider.capabilities.name
     return ""
 
 
@@ -221,43 +161,32 @@ async def detect_provider_from_pane(
     pane_tty: str = "",
     window_id: str = "",
 ) -> str:
-    """Detect provider using fast path + ps-based TTY detection.
-
-    1. Fast path: basename match via ``detect_provider_from_command()``
-    2. If command is a JS runtime (node/bun/npx) and tty is available,
-       fall back to ``ps -t`` foreground process inspection with PGID cache.
-    """
+    """Detect provider using command name and TTY process inspection."""
     detected = detect_provider_from_command(pane_current_command)
     if detected:
         return detected
 
     if pane_tty and pane_current_command:
-        cmd = pane_current_command.strip().lower()
-        if not cmd:
-            return ""
-        basename = os.path.basename(cmd.split()[0])
-        if basename in JS_RUNTIMES:
-            # Lazy: process_detection forks `ps` subprocesses; only worth
-            # loading when the pane command is a JS runtime wrapper.
-            from .process_detection import detect_provider_cached
+        # Lazy: process_detection forks `ps` subprocesses; only load when needed
+        from .process_detection import detect_provider_cached
 
-            detected = await detect_provider_cached(window_id or "", pane_tty)
-            if detected:
-                return detected
+        detected = await detect_provider_cached(window_id or "", pane_tty)
+        if detected:
+            return detected
 
     return ""
 
 
 def resolve_launch_command(
-    provider_name: str, *, approval_mode: str = _APPROVAL_MODE_NORMAL
+    provider_name: str,
+    *,
+    approval_mode: str = _APPROVAL_MODE_NORMAL,  # noqa: ARG001
 ) -> str:
-    """Resolve launch command for a provider, with optional approval mode.
+    """Resolve launch command for a provider.
 
-    Resolution: ``CCGRAM_<NAME>_COMMAND`` (e.g. ``CCGRAM_CLAUDE_COMMAND``) if set,
-    otherwise the provider's hardcoded default (``capabilities.launch_command``).
+    Resolution: ``CCGRAM_<NAME>_COMMAND`` if set, otherwise the provider's
+    hardcoded default (``capabilities.launch_command``).
     Falls back to legacy ``CCBOT_<NAME>_COMMAND`` env var.
-    When ``approval_mode`` is ``"yolo"``, appends the provider-specific
-    permissive-mode flag unless it is already present.
     """
     _ensure_registered()
     provider = provider_name.lower()
@@ -269,39 +198,19 @@ def resolve_launch_command(
         if override:
             logger.warning("%s is deprecated, use %s instead", old_env, new_env)
     if override:
-        command = override
-    else:
-        try:
-            command = registry.get(provider).capabilities.launch_command
-        except UnknownProviderError:
-            provider = "claude"
-            command = registry.get("claude").capabilities.launch_command
+        return override
 
-    # CCGRAM_GEMINI_COMMAND overrides stay fully user-controlled.
-    # For ccgram-managed Gemini launches, force stable shell mode defaults.
-    if provider == "gemini" and not override:
-        # Lazy: only the gemini launch path needs the hardener; importing at
-        # top would pull gemini provider code on every provider resolution.
-        from ccgram.providers.gemini import build_hardened_gemini_launch_command
-
-        command = build_hardened_gemini_launch_command(command)
-
-    if approval_mode.lower() != _APPROVAL_MODE_YOLO:
-        return command
-
-    yolo_flag = _YOLO_FLAGS.get(provider)
-    if not yolo_flag or yolo_flag in command:
-        return command
-    return f"{command} {yolo_flag}"
+    try:
+        return registry.get(provider).capabilities.launch_command
+    except UnknownProviderError:
+        return registry.get("shell").capabilities.launch_command
 
 
 def resolve_capabilities(provider_name: str | None = None) -> ProviderCapabilities:
     """Resolve provider capabilities without requiring full Config.
 
     Reads ``CCGRAM_PROVIDER`` (or legacy ``CCBOT_PROVIDER``) from env when
-    *provider_name* is not given.  Falls back to ``"claude"`` for unknown
-    providers.  Suitable for lightweight CLI commands (doctor, status) that
-    must not import Config (which requires TELEGRAM_BOT_TOKEN).
+    *provider_name* is not given. Falls back to ``"shell"`` for unknown providers.
     """
     _ensure_registered()
     name = (
@@ -309,13 +218,13 @@ def resolve_capabilities(provider_name: str | None = None) -> ProviderCapabiliti
         if provider_name is not None
         else (
             os.environ.get("CCGRAM_PROVIDER")
-            or os.environ.get("CCBOT_PROVIDER", "claude")
+            or os.environ.get("CCBOT_PROVIDER", "shell")
         )
     )
     try:
         return registry.get(name).capabilities
     except UnknownProviderError:
-        return registry.get("claude").capabilities
+        return registry.get("shell").capabilities
 
 
 __all__ = [
@@ -331,8 +240,8 @@ __all__ = [
     "UnknownProviderError",
     "detect_provider_from_command",
     "detect_provider_from_pane",
-    "detect_provider_from_transcript_path",
     "detect_provider_from_runtime",
+    "detect_provider_from_transcript_path",
     "get_provider",
     "get_provider_for_window",
     "has_yolo_mode",

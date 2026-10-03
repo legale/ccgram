@@ -62,6 +62,12 @@ def _check_provider_command(provider_name: str) -> tuple[str, str]:
     from ccgram.providers import resolve_launch_command
 
     cmd = resolve_launch_command(provider_name)
+    if not cmd:
+        shell = os.environ.get("SHELL", "/bin/sh")
+        path = shutil.which(shell)
+        if path:
+            return _PASS, f"default shell found at {path}"
+        return _FAIL, f"default shell '{shell}' not found"
     executable = cmd.split()[0]
     path = shutil.which(executable)
     if path:

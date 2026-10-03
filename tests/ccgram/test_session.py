@@ -425,11 +425,18 @@ class TestWindowStateApprovalMode:
 class TestGlobFallbackCwdUpdate:
     @pytest.fixture(autouse=True)
     def _mock_provider(self, monkeypatch):
-        from ccgram.providers.claude import ClaudeProvider
+        from ccgram.providers.base import ProviderCapabilities
+
+        class _MockClaude:
+            capabilities = ProviderCapabilities(
+                name="claude",
+                launch_command="claude",
+                transcript_format="jsonl",
+            )
 
         monkeypatch.setattr(
             "ccgram.session_resolver.get_provider_for_window",
-            lambda _wid, provider_name=None: ClaudeProvider(),
+            lambda _wid, provider_name=None: _MockClaude(),
         )
 
     async def test_glob_fallback_updates_cwd_when_dir_exists(

@@ -21,35 +21,25 @@ class TestDetectProviderFromCommand:
     @pytest.mark.parametrize(
         ("command", "expected"),
         [
-            pytest.param("claude", "claude", id="bare-claude"),
-            pytest.param("codex", "codex", id="bare-codex"),
-            pytest.param("gemini", "gemini", id="bare-gemini"),
-            pytest.param("pi", "pi", id="bare-pi"),
-            pytest.param("/usr/local/bin/claude", "claude", id="full-path-claude"),
-            pytest.param("/opt/bin/codex --resume", "codex", id="codex-with-args"),
-            pytest.param("gemini-cli", "gemini", id="gemini-cli-variant"),
-            pytest.param("Claude", "claude", id="case-insensitive-claude"),
-            pytest.param("CODEX", "codex", id="uppercase-codex"),
-            pytest.param("  claude  ", "claude", id="whitespace-padded"),
+            pytest.param("bash", "shell", id="bash"),
+            pytest.param("zsh", "shell", id="zsh"),
+            pytest.param("fish", "shell", id="fish"),
+            pytest.param("-bash", "shell", id="login-bash"),
+            pytest.param("-zsh", "shell", id="login-zsh"),
+            pytest.param("/bin/bash", "shell", id="full-path-bash"),
+            pytest.param("/usr/bin/zsh -l", "shell", id="path-with-args"),
         ],
     )
-    def test_known_commands(self, command: str, expected: str) -> None:
+    def test_known_shell_commands(self, command: str, expected: str) -> None:
         assert detect_provider_from_command(command) == expected
 
     def test_unknown_command_returns_empty(self) -> None:
         assert detect_provider_from_command("vim") == ""
-
-    def test_shell_command_detected(self) -> None:
-        assert detect_provider_from_command("bash") == "shell"
-        assert detect_provider_from_command("zsh") == "shell"
-        assert detect_provider_from_command("fish") == "shell"
-        assert detect_provider_from_command("-bash") == "shell"
+        assert detect_provider_from_command("claude") == ""
+        assert detect_provider_from_command("codex") == ""
 
     def test_empty_command_returns_empty(self) -> None:
         assert detect_provider_from_command("") == ""
-
-    def test_priority_order_first_match(self) -> None:
-        assert detect_provider_from_command("claude-codex") == "claude"
 
 
 class TestDetectProviderFromRuntime:
@@ -59,37 +49,17 @@ class TestDetectProviderFromRuntime:
         yield
         _reset_provider()
 
-    def test_probe_hint_for_gemini_wrappers(self) -> None:
-        assert should_probe_pane_title_for_provider_detection("bun") is True
-        assert should_probe_pane_title_for_provider_detection("node") is True
+    def test_probe_hint_returns_false(self) -> None:
         assert should_probe_pane_title_for_provider_detection("bash") is False
-
-    def test_detects_gemini_from_wrapper_and_title_marker(self) -> None:
-        assert (
-            detect_provider_from_runtime("bun", pane_title="◇ Ready (ccbot)")
-            == "gemini"
-        )
-
-    def test_does_not_detect_gemini_from_generic_title_text(self) -> None:
-        assert (
-            detect_provider_from_runtime("bun", pane_title="Working on build...") == ""
-        )
-
-    def test_prefers_command_detection_when_available(self) -> None:
-        assert detect_provider_from_runtime("codex", pane_title="◇ Ready") == "codex"
+        assert should_probe_pane_title_for_provider_detection("node") is False
 
     def test_detects_provider_from_ccgram_title_stamp(self) -> None:
-        assert detect_provider_from_runtime("bun", pane_title="ccgram:codex") == "codex"
         assert (
-            detect_provider_from_runtime("node", pane_title="ccgram:claude") == "claude"
+            detect_provider_from_runtime("bash", pane_title="ccgram:shell") == "shell"
         )
-        assert (
-            detect_provider_from_runtime("bun", pane_title="ccgram:gemini") == "gemini"
-        )
-        assert detect_provider_from_runtime("bun", pane_title="ccgram:shell") == "shell"
 
     def test_ignores_invalid_ccgram_stamp(self) -> None:
-        assert detect_provider_from_runtime("bun", pane_title="ccgram:unknown") == ""
+        assert detect_provider_from_runtime("vim", pane_title="ccgram:unknown") == ""
 
 
 class TestHandleNewWindowAutoDetection:
@@ -99,7 +69,7 @@ class TestHandleNewWindowAutoDetection:
     @patch(
         "ccgram.handlers.topics.topic_orchestration.detect_provider_from_pane",
         new_callable=AsyncMock,
-        return_value="codex",
+        return_value="shell",
     )
     async def test_sets_detected_provider(
         self,
@@ -118,7 +88,7 @@ class TestHandleNewWindowAutoDetection:
         mock_sm.view_window.return_value = MagicMock(provider_name="")
 
         mock_window = MagicMock()
-        mock_window.pane_current_command = "codex"
+        mock_window.pane_current_command = "bash"
         mock_tmux.find_window_by_id = AsyncMock(return_value=mock_window)
 
         event = NewWindowEvent(
@@ -129,7 +99,7 @@ class TestHandleNewWindowAutoDetection:
         await _handle_new_window(event, bot)
 
         mock_detect.assert_awaited_once()
-        mock_sm.set_window_provider.assert_called_once_with("@5", "codex")
+        mock_sm.set_window_provider.assert_called_once_with("@5", "shell")
 
     @patch("ccgram.handlers.topics.topic_orchestration.tmux_manager")
     @patch("ccgram.handlers.topics.topic_orchestration.session_manager")
@@ -201,124 +171,6 @@ class TestHandleNewWindowAutoDetection:
         mock_detect.assert_not_called()
         mock_sm.set_window_provider.assert_not_called()
 
-    @patch("ccgram.handlers.topics.topic_orchestration.tmux_manager")
-    @patch("ccgram.handlers.topics.topic_orchestration.session_manager")
-    @patch("ccgram.handlers.topics.topic_orchestration.config")
-    @patch(
-        "ccgram.handlers.topics.topic_orchestration.detect_provider_from_pane",
-        new_callable=AsyncMock,
-        return_value="",
-    )
-    async def test_detects_gemini_from_pane_title_when_command_is_bun(
-        self,
-        mock_detect: MagicMock,
-        mock_config: MagicMock,
-        mock_sm: MagicMock,
-        mock_tmux: MagicMock,
-    ) -> None:
-        from ccgram.handlers.topics.topic_orchestration import (
-            handle_new_window as _handle_new_window,
-        )
-        from ccgram.session_monitor import NewWindowEvent
-
-        mock_config.group_id = None
-        mock_sm.iter_thread_bindings.return_value = []
-        mock_sm.view_window.return_value = MagicMock(provider_name="")
-
-        mock_window = MagicMock()
-        mock_window.pane_current_command = "bun"
-        mock_tmux.find_window_by_id = AsyncMock(return_value=mock_window)
-        mock_tmux.get_pane_title = AsyncMock(return_value="◇  Ready (ccbot)")
-
-        event = NewWindowEvent(
-            window_id="@8", session_id="uuid-4", window_name="proj", cwd="/tmp"
-        )
-        bot = AsyncMock()
-
-        await _handle_new_window(event, bot)
-
-        mock_detect.assert_awaited_once()
-        mock_tmux.get_pane_title.assert_awaited_once_with("@8")
-        mock_sm.set_window_provider.assert_called_once_with("@8", "gemini")
-
-    @patch("ccgram.handlers.topics.topic_orchestration.tmux_manager")
-    @patch("ccgram.handlers.topics.topic_orchestration.session_manager")
-    @patch("ccgram.handlers.topics.topic_orchestration.config")
-    @patch(
-        "ccgram.handlers.topics.topic_orchestration.detect_provider_from_pane",
-        new_callable=AsyncMock,
-        return_value="",
-    )
-    async def test_does_not_detect_gemini_from_generic_working_text(
-        self,
-        mock_detect: MagicMock,
-        mock_config: MagicMock,
-        mock_sm: MagicMock,
-        mock_tmux: MagicMock,
-    ) -> None:
-        from ccgram.handlers.topics.topic_orchestration import (
-            handle_new_window as _handle_new_window,
-        )
-        from ccgram.session_monitor import NewWindowEvent
-
-        mock_config.group_id = None
-        mock_sm.iter_thread_bindings.return_value = []
-        mock_sm.view_window.return_value = MagicMock(provider_name="")
-
-        mock_window = MagicMock()
-        mock_window.pane_current_command = "bun"
-        mock_tmux.find_window_by_id = AsyncMock(return_value=mock_window)
-        mock_tmux.get_pane_title = AsyncMock(return_value="Working on build...")
-
-        event = NewWindowEvent(
-            window_id="@10", session_id="uuid-6", window_name="proj", cwd="/tmp"
-        )
-        bot = AsyncMock()
-
-        await _handle_new_window(event, bot)
-
-        mock_detect.assert_awaited_once()
-        mock_tmux.get_pane_title.assert_awaited_once_with("@10")
-        mock_sm.set_window_provider.assert_not_called()
-
-    @patch("ccgram.handlers.topics.topic_orchestration.tmux_manager")
-    @patch("ccgram.handlers.topics.topic_orchestration.session_manager")
-    @patch("ccgram.handlers.topics.topic_orchestration.config")
-    @patch(
-        "ccgram.handlers.topics.topic_orchestration.detect_provider_from_pane",
-        new_callable=AsyncMock,
-        return_value="",
-    )
-    async def test_skips_provider_set_for_unrecognized_command(
-        self,
-        mock_detect: MagicMock,
-        mock_config: MagicMock,
-        mock_sm: MagicMock,
-        mock_tmux: MagicMock,
-    ) -> None:
-        from ccgram.handlers.topics.topic_orchestration import (
-            handle_new_window as _handle_new_window,
-        )
-        from ccgram.session_monitor import NewWindowEvent
-
-        mock_config.group_id = None
-        mock_sm.iter_thread_bindings.return_value = []
-        mock_sm.view_window.return_value = MagicMock(provider_name="")
-
-        mock_window = MagicMock()
-        mock_window.pane_current_command = "bash"
-        mock_tmux.find_window_by_id = AsyncMock(return_value=mock_window)
-
-        event = NewWindowEvent(
-            window_id="@9", session_id="uuid-5", window_name="proj", cwd="/tmp"
-        )
-        bot = AsyncMock()
-
-        await _handle_new_window(event, bot)
-
-        mock_detect.assert_awaited_once()
-        mock_sm.set_window_provider.assert_not_called()
-
 
 class TestSessionMonitorProviderFromMap:
     async def test_sets_provider_from_session_map(self, tmp_path) -> None:
@@ -334,7 +186,7 @@ class TestSessionMonitorProviderFromMap:
                 "session_id": "uuid-1",
                 "cwd": "/tmp",
                 "window_name": "proj",
-                "provider_name": "codex",
+                "provider_name": "shell",
             }
         }
 
@@ -348,7 +200,7 @@ class TestSessionMonitorProviderFromMap:
             patch("ccgram.session.session_manager") as mock_sm,
         ):
             await monitor._detect_and_cleanup_changes()
-            mock_sm.set_window_provider.assert_called_once_with("@5", "codex")
+            mock_sm.set_window_provider.assert_called_once_with("@5", "shell")
 
     async def test_skips_provider_when_not_in_map(self, tmp_path) -> None:
         monitor = SessionMonitor(

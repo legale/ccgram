@@ -17,6 +17,33 @@ from ccgram.cc_commands import (
     parse_frontmatter,
     register_commands,
 )
+from ccgram.providers.base import DiscoveredCommand, ProviderCapabilities
+from ccgram.providers.shell import ShellProvider
+
+
+class DummyProvider(ShellProvider):
+    def __init__(
+        self,
+        name: str = "dummy",
+        builtins: dict[str, str] | None = None,
+        user_discovery: bool = False,
+    ):
+        self._caps = ProviderCapabilities(
+            name=name,
+            launch_command="dummy",
+            supports_user_command_discovery=user_discovery,
+        )
+        self._builtins = builtins or {}
+
+    @property
+    def capabilities(self) -> ProviderCapabilities:
+        return self._caps
+
+    def discover_commands(self, base_dir: str) -> list[DiscoveredCommand]:  # noqa: ARG002
+        return [
+            DiscoveredCommand(name=n, description=d, source="builtin")
+            for n, d in self._builtins.items()
+        ]
 
 
 @pytest.fixture(autouse=True)
@@ -264,20 +291,20 @@ class TestRegisterCommands:
     async def test_registers_commands_from_multiple_providers(
         self, tmp_path: Path
     ) -> None:
-        from ccgram.providers.claude import ClaudeProvider
-        from ccgram.providers.codex import CodexProvider
+        p1 = DummyProvider(name="p1", builtins={"/status": "Show status"})
+        p2 = DummyProvider(name="p2", builtins={"/compact": "Compact"})
 
         bot = AsyncMock()
         await register_commands(
             bot,
             claude_dir=tmp_path,
-            providers=[ClaudeProvider(), CodexProvider()],
+            providers=[p1, p2],
         )
 
         registered = bot.set_my_commands.call_args[0][0]
         names = [c.command for c in registered]
         assert "status" in names
-        assert get_cc_name("status") == "status"
+        assert get_cc_name("status") == "/status"
 
     async def test_description_truncation(self, tmp_path: Path) -> None:
         skill_dir = tmp_path / "skills" / "verbose"
@@ -367,43 +394,38 @@ class TestRegisterCommands:
 
 
 class TestProviderCommandHelpers:
-    def test_discovers_codex_builtin_commands(self, tmp_path: Path) -> None:
-        from ccgram.providers.codex import CodexProvider
-
-        commands = discover_provider_commands(CodexProvider(), claude_dir=tmp_path)
+    def test_discovers_builtin_commands(self, tmp_path: Path) -> None:
+        p = DummyProvider(builtins={"/status": "Status", "/mcp": "MCP"})
+        commands = discover_provider_commands(p, claude_dir=tmp_path)
         names = {c.name for c in commands}
         assert "/status" in names
         assert "/mcp" in names
         assert "/help" not in names
 
     def test_builds_provider_command_map(self, tmp_path: Path) -> None:
-        from ccgram.providers.codex import CodexProvider
-
-        mapping = get_provider_command_map(CodexProvider(), claude_dir=tmp_path)
+        p = DummyProvider(builtins={"/status": "Status", "/permissions": "Permissions"})
+        mapping = get_provider_command_map(p, claude_dir=tmp_path)
         assert mapping["status"] == "/status"
         assert mapping["permissions"] == "/permissions"
 
     def test_provider_supported_commands_include_slash_form(
         self, tmp_path: Path
     ) -> None:
-        from ccgram.providers.claude import ClaudeProvider
-
-        supported = get_provider_supported_commands(
-            ClaudeProvider(), claude_dir=tmp_path
-        )
+        p = DummyProvider(builtins={"/clear": "Clear", "/compact": "Compact"})
+        supported = get_provider_supported_commands(p, claude_dir=tmp_path)
         assert "/clear" in supported
         assert "/compact" in supported
 
-    def test_codex_provider_discovery_includes_user_commands(
-        self, tmp_path: Path
-    ) -> None:
-        from ccgram.providers.codex import CodexProvider
-
+    def test_provider_discovery_includes_user_commands(self, tmp_path: Path) -> None:
+        p = DummyProvider(
+            builtins={"/status": "Status"},
+            user_discovery=True,
+        )
         cmd_dir = tmp_path / "commands" / "spec"
         cmd_dir.mkdir(parents=True)
         (cmd_dir / "work.md").write_text("---\ndescription: work\n---\n")
 
-        discovered = discover_provider_commands(CodexProvider(), claude_dir=tmp_path)
+        discovered = discover_provider_commands(p, claude_dir=tmp_path)
         names = {cmd.name for cmd in discovered}
         assert "/status" in names
         assert "spec:work" in names

@@ -354,7 +354,7 @@ class TestScanWindowMultiPane:
     ) -> None:
         bot = AsyncMock(spec=Bot)
         on_blocked = AsyncMock()
-        window_provider = _idle_provider("claude")
+        window_provider = _idle_provider("fallback_provider")
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
             patch(
@@ -364,15 +364,15 @@ class TestScanWindowMultiPane:
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[
-                    _pane("%1", active=True, command="claude"),
-                    _pane("%2", active=False, index=1, command="codex"),
+                    _pane("%1", active=True, command="custom_app"),
+                    _pane("%2", active=False, index=1, command="zsh"),
                     _pane("%3", active=False, index=2, command="bash"),
                 ]
             )
             mock_tm.capture_pane_by_id = AsyncMock(return_value="output")
             await strategy.scan_window(bot, 1, "@0", 42, on_blocked=on_blocked)
-        assert _require_pane("@0", "%1").provider == "claude"
-        assert _require_pane("@0", "%2").provider == "codex"
+        assert _require_pane("@0", "%1").provider == "fallback_provider"
+        assert _require_pane("@0", "%2").provider == "shell"
         assert _require_pane("@0", "%3").provider == "shell"
 
     async def test_capture_failure_falls_back_to_idle(

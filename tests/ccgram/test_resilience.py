@@ -50,39 +50,6 @@ class TestScreenBufferResilience:
         assert buf.rows == 24
 
 
-class TestJsonlMalformedEntries:
-    def test_non_dict_message_field_skipped_in_parse(self):
-        from ccgram.providers._jsonl import parse_jsonl_entries
-
-        entries = [
-            {"type": "assistant", "message": "not a dict"},
-            {"type": "assistant", "message": {"content": "valid text"}},
-            {"type": "assistant", "message": None},
-            {"type": "assistant", "message": 42},
-        ]
-        messages, _ = parse_jsonl_entries(entries, {})
-        assert len(messages) == 1
-        assert messages[0].text == "valid text"
-
-    def test_non_dict_message_field_skipped_in_history(self):
-        from ccgram.providers._jsonl import parse_jsonl_history_entry
-
-        assert (
-            parse_jsonl_history_entry({"type": "assistant", "message": "string"})
-            is None
-        )
-        assert parse_jsonl_history_entry({"type": "assistant", "message": None}) is None
-        assert parse_jsonl_history_entry({"type": "assistant", "message": 42}) is None
-
-    def test_valid_entry_still_parsed(self):
-        from ccgram.providers._jsonl import parse_jsonl_history_entry
-
-        entry = {"type": "assistant", "message": {"content": "hello world"}}
-        result = parse_jsonl_history_entry(entry)
-        assert result is not None
-        assert result.text == "hello world"
-
-
 class TestSessionMapCorruptionGuard:
     def test_corrupted_json_backed_up(self, tmp_path: Path):
         from ccgram.hook import _update_session_map
