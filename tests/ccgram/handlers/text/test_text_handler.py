@@ -354,10 +354,10 @@ class TestHandleDeadWindow:
 
 
 class TestHandleSessionStartDirectoryInput:
-    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    @patch(f"{_TH}._create_shell_session_for_directory", new_callable=AsyncMock)
     async def test_switches_window_picker_to_provider_picker(
         self,
-        mock_reply: AsyncMock,
+        mock_create: AsyncMock,
         tmp_path,
     ) -> None:
         user_data = {
@@ -375,8 +375,7 @@ class TestHandleSessionStartDirectoryInput:
         )
 
         assert result is True
-        mock_reply.assert_called_once()
-        assert "created" in mock_reply.call_args.args[1]
+        mock_create.assert_awaited_once()
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.build_directory_browser")

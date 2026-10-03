@@ -183,12 +183,12 @@ class TestNewWindowCallback:
         )
 
     @patch(
-        "ccgram.handlers.text.text_handler.safe_reply",
+        "ccgram.handlers.text.text_handler._create_shell_session_for_directory",
         new_callable=AsyncMock,
     )
     async def test_new_then_directory_input_reaches_provider_picker(
         self,
-        mock_reply: AsyncMock,
+        mock_create: AsyncMock,
         tmp_path,
     ) -> None:
         from ccgram.handlers.text.text_handler import (
@@ -221,8 +221,7 @@ class TestNewWindowCallback:
         )
 
         assert result is True
-        mock_reply.assert_called_once()
-        assert "created" in mock_reply.call_args.args[1]
+        mock_create.assert_awaited_once()
 
 
 class TestCancelCallback:
