@@ -30,7 +30,6 @@ from ...topic_state_registry import topic_state
 from .polling_types import (
     MAX_PROBE_FAILURES,
     PANE_COUNT_TTL,
-    RC_DEBOUNCE_SECONDS,
     STARTUP_TIMEOUT,
     TYPING_INTERVAL,
     BlockedAlertCallback,
@@ -84,26 +83,6 @@ class TerminalScreenBuffer:
             ws.last_pane_hash = None
             ws.last_pyte_result = None
             ws.last_rendered_text = None
-            ws.rc_active = False
-            ws.rc_off_since = None
-
-    def is_rc_active(self, window_id: str) -> bool:
-        """Check whether Remote Control is currently active for a window."""
-        ws = self._poll_state.peek_state(window_id)
-        return ws.rc_active if ws else False
-
-    def update_rc_state(self, ws: WindowPollState, rc_detected: bool) -> None:
-        """Update Remote Control state with debounce on removal."""
-        if rc_detected:
-            ws.rc_active = True
-            ws.rc_off_since = None
-        elif ws.rc_active:
-            now = time.monotonic()
-            if ws.rc_off_since is None:
-                ws.rc_off_since = now
-            elif now - ws.rc_off_since >= RC_DEBOUNCE_SECONDS:
-                ws.rc_active = False
-                ws.rc_off_since = None
 
     def update_pane_count_cache(self, window_id: str, count: int) -> None:
         """Record freshly-fetched pane count with TTL expiry."""
@@ -163,7 +142,6 @@ class TerminalScreenBuffer:
         # heavyweight) — match the get_screen_buffer pattern.
         # Lazy: terminal_parser pulls pyte; defer until first parse
         from ...terminal_parser import (
-            detect_remote_control,
             format_status_display,
             parse_from_screen,
             parse_status_block_from_screen,
@@ -184,16 +162,11 @@ class TerminalScreenBuffer:
             and content_hash == ws.last_pane_hash
             and (ws.last_pyte_result is None or not ws.last_pyte_result.is_interactive)
         ):
-            self.update_rc_state(ws, ws.last_rc_detected)
             return ws.last_pyte_result
 
         buf = self.get_screen_buffer(window_id, columns, rows)
         buf.feed(pane_text)
         ws.last_rendered_text = buf.rendered_text
-
-        rc_detected = detect_remote_control(buf.display)
-        ws.last_rc_detected = rc_detected
-        self.update_rc_state(ws, rc_detected)
 
         interactive = parse_from_screen(buf)
         if interactive:

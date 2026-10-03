@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import contextlib
 import time
-from collections.abc import Callable
 
 import structlog
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -29,7 +28,6 @@ from ..callback_data import (
     CB_STATUS_ESC,
     CB_STATUS_NOTIFY,
     CB_STATUS_RECALL,
-    CB_STATUS_REMOTE,
     CB_STATUS_SCREENSHOT,
     NOTIFY_MODE_ICONS,
 )
@@ -42,44 +40,6 @@ from ..messaging_pipeline.message_task import (
 )
 
 logger = structlog.get_logger()
-
-
-# ---------------------------------------------------------------------------
-# RC-active provider (dependency injection — severs polling_state import)
-# ---------------------------------------------------------------------------
-
-
-def _rc_active_unwired(_window_id: str) -> bool:
-    raise RuntimeError(
-        "register_rc_active_provider not wired — call register_rc_active_provider() at startup"
-    )
-
-
-_rc_active_fn: Callable[[str], bool] = _rc_active_unwired
-_rc_active_fn_registered: bool = False
-
-
-def register_rc_active_provider(fn: Callable[[str], bool]) -> None:
-    """Wire the polling-layer RC-active lookup (called once from client.py setup).
-
-    Avoids a direct status_bubble → polling_state import by accepting
-    a callable rather than importing terminal_screen_buffer directly.
-
-    Raises RuntimeError if called more than once — wiring should happen exactly
-    once at startup; double registration is a programming error.
-    """
-    global _rc_active_fn, _rc_active_fn_registered
-    if _rc_active_fn_registered:
-        raise RuntimeError("register_rc_active_provider already registered")
-    _rc_active_fn = fn
-    _rc_active_fn_registered = True
-
-
-def _reset_rc_active_provider_for_testing() -> None:
-    """Restore the unwired default — only for tests."""
-    global _rc_active_fn, _rc_active_fn_registered
-    _rc_active_fn = _rc_active_unwired
-    _rc_active_fn_registered = False
 
 
 # ---------------------------------------------------------------------------
@@ -102,14 +62,13 @@ def build_status_keyboard(
     window_id: str,
     history: list[str] | None = None,
     *,
-    rc_active: bool = False,
     user_id: int | None = None,
 ) -> InlineKeyboardMarkup:
     """Build inline keyboard for status messages.
 
     Layout:
       Row 1 (optional): up to 2 history-recall buttons
-      Row 2: [Esc] [Screenshot] [Bell] [RC]
+      Row 2: [Esc] [Screenshot] [Bell]
       Row 3 (optional): [Dashboard] when Mini App is enabled and user_id is set
     """
     # Lazy: command_history → messaging_pipeline → status → status_bubble
@@ -136,7 +95,6 @@ def build_status_keyboard(
 
     mode = get_notification_mode(window_id)
     bell = NOTIFY_MODE_ICONS.get(mode, "\U0001f514")
-    rc_label = "RC on" if rc_active else "RC"
     rows.append(
         [
             InlineKeyboardButton(
@@ -150,10 +108,6 @@ def build_status_keyboard(
             InlineKeyboardButton(
                 bell,
                 callback_data=f"{CB_STATUS_NOTIFY}{window_id}"[:64],
-            ),
-            InlineKeyboardButton(
-                rc_label,
-                callback_data=f"{CB_STATUS_REMOTE}{window_id}"[:64],
             ),
         ]
     )
@@ -335,7 +289,6 @@ async def send_status_text(
     keyboard = build_status_keyboard(
         window_id,
         history=history,
-        rc_active=_rc_active_fn(window_id),
         user_id=user_id,
     )
 

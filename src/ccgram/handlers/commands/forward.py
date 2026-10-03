@@ -130,8 +130,6 @@ async def forward_command_handler(
     provider_map, current_supported = _build_provider_command_metadata(provider)
     resolved_name = provider_map.get(tg_cmd, tg_cmd)
     cc_name = resolved_name.lstrip("/")
-    if not args and cc_name in ("remote-control", "rc"):
-        args = display
     cc_slash = f"/{cc_name} {args}".rstrip() if args else f"/{cc_name}"
     command_token = _normalize_slash_token(cc_slash)
 

@@ -14,7 +14,6 @@ from ccgram.handlers.polling.polling_state import (
 )
 from ccgram.handlers.polling.polling_types import (
     MAX_PROBE_FAILURES,
-    RC_DEBOUNCE_SECONDS,
     TopicPollState,
     WindowPollState,
     is_shell_prompt,
@@ -46,44 +45,9 @@ class TestTerminalScreenBuffer:
 
     def test_reset_screen_buffer_state(self):
         ws = self.poll_state.get_state("@0")
-        ws.rc_active = True
         ws.last_pane_hash = 999
         self.strategy.reset_screen_buffer_state()
-        assert not ws.rc_active
         assert ws.last_pane_hash is None
-
-    def test_is_rc_active_default_false(self):
-        assert not self.strategy.is_rc_active("@0")
-
-    def test_is_rc_active_when_set(self):
-        ws = self.poll_state.get_state("@0")
-        ws.rc_active = True
-        assert self.strategy.is_rc_active("@0")
-
-    def test_update_rc_state_on(self):
-        ws = WindowPollState()
-        self.strategy.update_rc_state(ws, True)
-        assert ws.rc_active
-        assert ws.rc_off_since is None
-
-    def test_update_rc_state_debounce_start(self):
-        ws = WindowPollState(rc_active=True)
-        self.strategy.update_rc_state(ws, False)
-        assert ws.rc_active
-        assert ws.rc_off_since is not None
-
-    def test_update_rc_state_debounce_completes(self):
-        ws = WindowPollState(rc_active=True)
-        ws.rc_off_since = time.monotonic() - RC_DEBOUNCE_SECONDS - 1
-        self.strategy.update_rc_state(ws, False)
-        assert not ws.rc_active
-        assert ws.rc_off_since is None
-
-    def test_update_rc_state_debounce_reset_on_redetect(self):
-        ws = WindowPollState(rc_active=True, rc_off_since=time.monotonic())
-        self.strategy.update_rc_state(ws, True)
-        assert ws.rc_active
-        assert ws.rc_off_since is None
 
     def test_parse_with_pyte_content_hash_cache(self):
         ws = self.poll_state.get_state("@0")
@@ -99,9 +63,6 @@ class TestTerminalScreenBuffer:
             mock_buf.return_value.rendered_text = ""
             mock_buf.return_value.display = []
             with (
-                patch(
-                    "ccgram.terminal_parser.detect_remote_control", return_value=False
-                ),
                 patch("ccgram.terminal_parser.parse_from_screen", return_value=None),
                 patch(
                     "ccgram.terminal_parser.parse_status_from_screen", return_value=None

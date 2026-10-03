@@ -39,8 +39,6 @@ CC_BUILTINS: dict[str, str] = {
     "model": "↗ Select model and thinking effort",
     "permissions": "↗ Manage tool permissions",
     "plan": "↗ Switch to plan mode",
-    "rc": "↗ Start remote control (alias)",
-    "remote-control": "↗ Start remote control session",
     "status": "↗ Show session status",
     "tasks": "↗ Manage background tasks",
 }

@@ -1,10 +1,9 @@
-from unittest.mock import ANY, AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from ccgram.handlers.callback_data import (
     CB_KEYS_PREFIX,
     CB_STATUS_ESC,
     CB_STATUS_NOTIFY,
-    CB_STATUS_REMOTE,
 )
 from ccgram.handlers.status.status_bar_actions import _handle_status_bar_action
 
@@ -35,7 +34,7 @@ class TestNotifyToggle:
                 query, 1, f"{CB_STATUS_NOTIFY}@0", MagicMock(), MagicMock()
             )
         sm.cycle_notification_mode.assert_called_once_with("@0")
-        bsk.assert_called_once_with("@0", rc_active=ANY, user_id=1)
+        bsk.assert_called_once_with("@0", user_id=1)
         query.answer.assert_awaited_once()
 
     async def test_rejects_non_owner(self):
@@ -126,40 +125,6 @@ class TestStatusEsc:
                 query, 1, f"{CB_STATUS_ESC}@0", MagicMock(), MagicMock()
             )
         query.answer.assert_awaited_once_with("Window not found", show_alert=True)
-
-
-class TestRemoteControl:
-    async def test_activates_remote_control(self):
-        query = _q()
-        with (
-            patch(f"{MOD}.user_owns_window", return_value=True),
-            patch(
-                "ccgram.handlers.polling.polling_state.terminal_screen_buffer"
-            ) as tsb,
-            patch(f"{MOD}.thread_router") as tr,
-            patch(f"{MOD}.send_to_window", new_callable=AsyncMock) as mock_send,
-        ):
-            tsb.is_rc_active.return_value = False
-            tr.get_display_name.return_value = "my-project"
-            await _handle_status_bar_action(
-                query, 1, f"{CB_STATUS_REMOTE}@0", MagicMock(), MagicMock()
-            )
-        mock_send.assert_awaited_once_with("@0", "/remote-control my-project")
-        query.answer.assert_awaited_once_with("\U0001f4e1 Activating\u2026")
-
-    async def test_shows_already_active(self):
-        query = _q()
-        with (
-            patch(f"{MOD}.user_owns_window", return_value=True),
-            patch(
-                "ccgram.handlers.polling.polling_state.terminal_screen_buffer"
-            ) as tsb,
-        ):
-            tsb.is_rc_active.return_value = True
-            await _handle_status_bar_action(
-                query, 1, f"{CB_STATUS_REMOTE}@0", MagicMock(), MagicMock()
-            )
-        query.answer.assert_awaited_once_with("\U0001f4e1 Remote Control active")
 
 
 class TestKeys:

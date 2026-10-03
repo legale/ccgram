@@ -32,9 +32,6 @@ ACTIVITY_THRESHOLD = 10.0
 # Startup timeout before transitioning to idle (seconds).
 STARTUP_TIMEOUT = 30.0
 
-# RC debounce: require RC absent for this long before clearing badge.
-RC_DEBOUNCE_SECONDS = 3.0
-
 # Consecutive topic probe failure threshold.
 MAX_PROBE_FAILURES = 3
 
@@ -70,9 +67,6 @@ class WindowPollState:
     last_pane_hash: int | None = None
     last_pyte_result: StatusUpdate | None = field(default=None, repr=False)
     last_rendered_text: str | None = None
-    rc_active: bool = False
-    rc_off_since: float | None = None
-    last_rc_detected: bool = False
 
 
 @dataclass

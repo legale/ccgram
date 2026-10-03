@@ -108,9 +108,6 @@ CB_PANE_LIFECYCLE_TOGGLE = "pn:lc:"  # pn:lc:<window_id> — per-window toggle
 # Screenshot control keys
 CB_KEYS_PREFIX = "kb:"  # kb:<key_id>:<window>
 
-# Remote Control button (status keyboard + toolbar)
-CB_STATUS_REMOTE = "st:rmt:"  # st:rmt:<window_id>
-
 # Toolbar — single prefix; the suffix encodes "<window_id>:<action_name>".
 # The action_name is looked up in the loaded ToolbarConfig.actions pool to
 # determine dispatch (key send / text send / builtin handler).

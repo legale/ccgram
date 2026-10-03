@@ -1,10 +1,9 @@
-"""Status-bubble button callbacks (notify toggle, recall, remote control, esc, keys).
+"""Status-bubble button callbacks (notify toggle, recall, esc, keys).
 
 Handles inline keyboard callbacks originating from the status-bubble keyboard
 built by status_bubble.py:
   - CB_STATUS_NOTIFY: Cycle notification mode (all / mentions / off)
   - CB_STATUS_RECALL: Send one of the last shown commands directly
-  - CB_STATUS_REMOTE: Activate Remote Control or show status
   - CB_STATUS_ESC: Send Escape key from status message
   - CB_STATUS_KEY: Quick key dispatch (arrow keys, enter, esc, etc.)
 """
@@ -41,7 +40,6 @@ from ..callback_data import (
     CB_STATUS_ESC,
     CB_STATUS_NOTIFY,
     CB_STATUS_RECALL,
-    CB_STATUS_REMOTE,
     NOTIFY_MODE_LABELS,
     NOTIFY_MODE_REACT,
 )
@@ -107,15 +105,11 @@ async def _handle_notify_toggle(query: CallbackQuery, user_id: int, data: str) -
     label = NOTIFY_MODE_LABELS.get(new_mode, new_mode)
     # Lazy: polling_state → status_bar_actions via callback registry,
     # and status_bubble is a sibling — both kept lazy.
-    # Lazy: polling subpackage pulls strategies; defer per-call
-    from ..polling.polling_state import terminal_screen_buffer
-
     # Lazy: status_bar_actions ↔ status_bubble sibling cycle
     from .status_bubble import build_status_keyboard
 
     keyboard = build_status_keyboard(
         window_id,
-        rc_active=terminal_screen_buffer.is_rc_active(window_id),
         user_id=user_id,
     )
     with contextlib.suppress(TelegramError):
@@ -181,23 +175,6 @@ async def _handle_status_recall(
 
     record_command(user_id, thread_id, command)
     await query.answer("\u21a9 Sent")
-
-
-async def _handle_remote_control(query: CallbackQuery, user_id: int, data: str) -> None:
-    """Handle CB_STATUS_REMOTE: activate Remote Control or show status."""
-    # Lazy: polling_state cycle — same as _handle_notify_toggle.
-    from ..polling.polling_state import terminal_screen_buffer
-
-    window_id = data[len(CB_STATUS_REMOTE) :]
-    if not user_owns_window(user_id, window_id):
-        await query.answer("Not your session", show_alert=True)
-        return
-    if terminal_screen_buffer.is_rc_active(window_id):
-        await query.answer("\U0001f4e1 Remote Control active")
-    else:
-        display = thread_router.get_display_name(window_id)
-        await send_to_window(window_id, f"/remote-control {display}")
-        await query.answer("\U0001f4e1 Activating\u2026")
 
 
 async def _handle_status_esc(query: CallbackQuery, user_id: int, data: str) -> None:
@@ -334,7 +311,6 @@ async def _handle_status_bar_action(
     without_update = {
         CB_STATUS_ESC: _handle_status_esc,
         CB_STATUS_NOTIFY: _handle_notify_toggle,
-        CB_STATUS_REMOTE: _handle_remote_control,
     }
     for prefix, handler in without_update.items():
         if data.startswith(prefix):
@@ -346,7 +322,6 @@ async def _handle_status_bar_action(
     CB_STATUS_NOTIFY,
     CB_STATUS_RECALL,
     CB_STATUS_ESC,
-    CB_STATUS_REMOTE,
     CB_KEYS_PREFIX,
 )
 async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

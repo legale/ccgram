@@ -223,21 +223,13 @@ class TestBuildScreenshotKeyboard:
 
 class TestBuildToolbarKeyboard:
     def test_has_live_button(self):
-        with patch(
-            "ccgram.handlers.polling.polling_state.terminal_screen_buffer.is_rc_active",
-            return_value=False,
-        ):
-            kb = build_toolbar_keyboard("@0")
+        kb = build_toolbar_keyboard("@0")
         flat = [btn for row in kb.inline_keyboard for btn in row]
         labels = [btn.text for btn in flat]
         assert any("Live" in label for label in labels)
 
     def test_live_replaces_esc_in_row1(self):
-        with patch(
-            "ccgram.handlers.polling.polling_state.terminal_screen_buffer.is_rc_active",
-            return_value=False,
-        ):
-            kb = build_toolbar_keyboard("@0")
+        kb = build_toolbar_keyboard("@0")
         row1_labels = [btn.text for btn in kb.inline_keyboard[0]]
         assert any("Live" in label for label in row1_labels)
 
@@ -247,11 +239,7 @@ class TestBuildToolbarKeyboard:
         # dispatches internally to the screenshot handler with CB_LIVE_START.
         from ccgram.handlers.callback_data import CB_TOOLBAR
 
-        with patch(
-            "ccgram.handlers.polling.polling_state.terminal_screen_buffer.is_rc_active",
-            return_value=False,
-        ):
-            kb = build_toolbar_keyboard("@0")
+        kb = build_toolbar_keyboard("@0")
         flat = [btn for row in kb.inline_keyboard for btn in row]
         live_btn = [btn for btn in flat if "Live" in btn.text][0]
         assert isinstance(live_btn.callback_data, str)

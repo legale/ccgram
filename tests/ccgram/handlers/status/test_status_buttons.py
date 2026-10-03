@@ -8,7 +8,6 @@ from ccgram.handlers.callback_data import (
     CB_STATUS_ESC,
     CB_STATUS_NOTIFY,
     CB_STATUS_RECALL,
-    CB_STATUS_REMOTE,
     CB_STATUS_SCREENSHOT,
     NOTIFY_MODE_ICONS,
 )
@@ -28,7 +27,7 @@ def _all_callback_data(window_id: str) -> list[str]:
 class TestBuildStatusKeyboard:
     @pytest.mark.parametrize(
         "prefix",
-        [CB_STATUS_ESC, CB_STATUS_SCREENSHOT, CB_STATUS_NOTIFY, CB_STATUS_REMOTE],
+        [CB_STATUS_ESC, CB_STATUS_SCREENSHOT, CB_STATUS_NOTIFY],
     )
     def test_has_button_with_prefix(self, prefix: str) -> None:
         assert any(d.startswith(prefix) for d in _all_callback_data("@0"))
@@ -38,7 +37,6 @@ class TestBuildStatusKeyboard:
         assert f"{CB_STATUS_ESC}@42" in data
         assert f"{CB_STATUS_SCREENSHOT}@42" in data
         assert f"{CB_STATUS_NOTIFY}@42" in data
-        assert f"{CB_STATUS_REMOTE}@42" in data
 
     def test_callback_data_truncated_to_64_bytes(self) -> None:
         long_id = "@" + "x" * 60
@@ -47,7 +45,6 @@ class TestBuildStatusKeyboard:
             CB_STATUS_ESC,
             CB_STATUS_SCREENSHOT,
             CB_STATUS_NOTIFY,
-            CB_STATUS_REMOTE,
         )
         for row in kb.inline_keyboard:
             for btn in row:
@@ -102,32 +99,6 @@ class TestBuildStatusKeyboard:
         assert isinstance(cb, str)
         assert len(cb) == 64  # type: ignore[arg-type]
         assert cb.startswith(CB_STATUS_RECALL)  # type: ignore[union-attr]
-
-    def test_rc_button_always_present(self) -> None:
-        data = _all_callback_data("@0")
-        assert any(d.startswith(CB_STATUS_REMOTE) for d in data)
-
-    def test_rc_button_label_inactive(self) -> None:
-        kb = build_status_keyboard("@0")
-        rc_btn = [
-            btn
-            for row in kb.inline_keyboard
-            for btn in row
-            if isinstance(btn.callback_data, str)
-            and btn.callback_data.startswith(CB_STATUS_REMOTE)  # type: ignore[union-attr]
-        ][0]
-        assert rc_btn.text == "RC"
-
-    def test_rc_button_label_active(self) -> None:
-        kb = build_status_keyboard("@0", rc_active=True)
-        rc_btn = [
-            btn
-            for row in kb.inline_keyboard
-            for btn in row
-            if isinstance(btn.callback_data, str)
-            and btn.callback_data.startswith(CB_STATUS_REMOTE)  # type: ignore[union-attr]
-        ][0]
-        assert rc_btn.text == "RC on"
 
 
 class TestDashboardButtonRow:
