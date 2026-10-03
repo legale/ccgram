@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.error import TelegramError
 
-from ccgram.handlers.live.screenshot_callbacks import live_command
+from ccgram.handlers.live.screenshot_callbacks import live_command, screenshot_command
 
 _SC = "ccgram.handlers.live.screenshot_callbacks"
 _LV = "ccgram.handlers.live.live_view"
@@ -19,7 +19,9 @@ def _make_update(
     update.effective_user.id = user_id
     update.message = MagicMock()
     update.message.message_thread_id = thread_id
-    update.message.get_bot = MagicMock(return_value=MagicMock(send_photo=AsyncMock()))
+    update.message.get_bot = MagicMock(
+        return_value=MagicMock(send_photo=AsyncMock(), send_document=AsyncMock())
+    )
     update.message.reply_text = AsyncMock()
     return update
 
@@ -211,3 +213,177 @@ class TestLiveCommand:
         mock_reply.assert_awaited_once()
         assert "Failed to start" in mock_reply.call_args.args[1]
         assert (100, 42) not in active_views
+
+
+class TestScreenshotCommand:
+    @patch(f"{_SC}.text_to_image", new_callable=AsyncMock, return_value=b"png_data")
+    @patch(f"{_SC}.tmux_manager")
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_screenshot_success(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        mock_render: AsyncMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        mock_tr.get_window_for_thread.return_value = "@0"
+        mock_tr.resolve_chat_id.return_value = -100
+        mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
+        mock_tm.capture_pane = AsyncMock(return_value="term output")
+
+        update = _make_update()
+        with patch(f"{_SC}.get_thread_id", return_value=42):
+            await screenshot_command(update, MagicMock())
+
+        mock_tm.capture_pane.assert_awaited_once_with("@0", with_ansi=True)
+        mock_render.assert_awaited_once_with("term output", with_ansi=True)
+        bot = update.message.get_bot.return_value
+        bot.send_document.assert_awaited_once()
+        kwargs = bot.send_document.call_args.kwargs
+        assert kwargs["chat_id"] == -100
+        assert kwargs["filename"] == "screenshot.png"
+        assert kwargs["message_thread_id"] == 42
+        assert kwargs["reply_markup"] is not None
+        mock_reply.assert_not_awaited()
+
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_unauthorized_silent(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = False
+        await screenshot_command(_make_update(), MagicMock())
+        mock_reply.assert_not_awaited()
+
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_no_thread_replies_error(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        update = _make_update(thread_id=None)
+        update.effective_chat = None
+        with patch(f"{_SC}.get_thread_id", return_value=None):
+            await screenshot_command(update, MagicMock())
+        mock_reply.assert_awaited_once()
+        assert "topic" in mock_reply.call_args.args[1].lower()
+
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_unbound_topic_replies(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        mock_tr.get_window_for_thread.return_value = None
+
+        with patch(f"{_SC}.get_thread_id", return_value=42):
+            await screenshot_command(_make_update(), MagicMock())
+
+        mock_reply.assert_awaited_once()
+        assert "not bound" in mock_reply.call_args.args[1]
+
+    @patch(f"{_SC}.tmux_manager")
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_dead_window_replies(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        mock_tr.get_window_for_thread.return_value = "@0"
+        mock_tm.find_window_by_id = AsyncMock(return_value=None)
+
+        with patch(f"{_SC}.get_thread_id", return_value=42):
+            await screenshot_command(_make_update(), MagicMock())
+
+        mock_reply.assert_awaited_once()
+        assert "no longer exists" in mock_reply.call_args.args[1]
+
+    @patch(f"{_SC}.tmux_manager")
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_capture_pane_empty_replies_error(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        mock_tr.get_window_for_thread.return_value = "@0"
+        mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
+        mock_tm.capture_pane = AsyncMock(return_value="")
+
+        with patch(f"{_SC}.get_thread_id", return_value=42):
+            await screenshot_command(_make_update(), MagicMock())
+
+        mock_reply.assert_awaited_once()
+        assert "Failed to capture" in mock_reply.call_args.args[1]
+
+    @patch(f"{_SC}.text_to_image", new_callable=AsyncMock, return_value=b"png_data")
+    @patch(f"{_SC}.tmux_manager")
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_send_document_failure_replies(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        _mock_render: AsyncMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        mock_tr.get_window_for_thread.return_value = "@0"
+        mock_tr.resolve_chat_id.return_value = -100
+        mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
+        mock_tm.capture_pane = AsyncMock(return_value="term output")
+
+        update = _make_update()
+        update.message.get_bot.return_value.send_document = AsyncMock(
+            side_effect=TelegramError("send error")
+        )
+
+        with patch(f"{_SC}.get_thread_id", return_value=42):
+            await screenshot_command(update, MagicMock())
+
+        mock_reply.assert_awaited_once()
+        assert "Failed to send screenshot" in mock_reply.call_args.args[1]

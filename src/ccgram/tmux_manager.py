@@ -220,7 +220,11 @@ class TmuxManager:
                     continue
                 for window in session.windows:
                     name = window.window_name or ""
-                    window_id = f"{session_name}:{window.window_id or ''}"
+                    window_id = (
+                        f"{session_name}:{window.window_id or ''}"
+                        if session_name != self.session_name
+                        else (window.window_id or "")
+                    )
                     if name == config.tmux_main_window_name:
                         continue
                     if config.own_window_id and window_id == config.own_window_id:

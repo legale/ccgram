@@ -146,18 +146,28 @@ async def test_topic_edited_dispatches_rename_to_tmux(app) -> None:
         patch("ccgram.bot.is_user_allowed", return_value=True),
         patch(
             "ccgram.bot.thread_router.get_window_for_chat_thread",
-            return_value="@0",
+            return_value="cc_fish:@0",
         ),
         patch("ccgram.bot.thread_router.get_display_name", return_value="fish"),
+        patch(
+            "ccgram.handlers.topics.topic_lifecycle.tmux_manager.find_window_by_id",
+            new_callable=AsyncMock,
+            return_value=MagicMock(window_id="cc_fish:@0"),
+        ),
         patch(
             "ccgram.handlers.topics.topic_lifecycle.tmux_manager.rename_window",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_rename_window,
+        patch(
+            "ccgram.handlers.topics.topic_lifecycle.tmux_manager.rename_session",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
         patch("ccgram.bot.session_manager.set_display_name"),
     ):
         await app.process_update(update)
-        mock_rename_window.assert_awaited_once_with("@0", "bun")
+        mock_rename_window.assert_awaited_once_with("cc_fish:@0", "bun")
 
 
 async def test_topic_edited_ignores_bot_generated_name_update(app) -> None:
