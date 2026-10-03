@@ -287,6 +287,7 @@ async def apply_session_rename(
     thread_id: int | None,
     text: str,
     message: Message,
+    client: TelegramClient | None = None,
 ) -> bool:
     """Consume an in-flight session rename reply.
 
@@ -302,7 +303,7 @@ async def apply_session_rename(
 
     window_id = user_data.pop(SESSION_RENAME_WINDOW_ID, None)
     user_data.pop(SESSION_RENAME_THREAD_ID, None)
-    user_data.pop(SESSION_RENAME_CHAT_ID, None)
+    rename_chat_id = user_data.pop(SESSION_RENAME_CHAT_ID, None)
 
     if not window_id:
         return False
@@ -325,9 +326,10 @@ async def apply_session_rename(
     new_wid = await _execute_session_rename(window_id, name)
 
     chat = getattr(message, "chat", None)
-    chat_id = chat.id if chat else None
+    chat_id = chat.id if chat else rename_chat_id
     if chat_id and thread_id is not None:
         update_stored_topic_name(chat_id, thread_id, name)
+        await _rename_forum_topic(client, chat_id, thread_id, name)
 
     logger.info(
         "Session renamed: window %s -> %s (%r, thread=%s)",
@@ -338,6 +340,26 @@ async def apply_session_rename(
     )
     await safe_reply(message, f"Renamed session to `{name}`")
     return True
+
+
+async def _rename_forum_topic(
+    client: TelegramClient | None,
+    chat_id: int,
+    thread_id: int,
+    name: str,
+) -> None:
+    """Best-effort rename of the Telegram forum topic."""
+    if client is None:
+        return
+    try:
+        await client.edit_forum_topic(chat_id, thread_id, name=name)
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "edit_forum_topic failed: chat=%d thread=%d name=%r",
+            chat_id,
+            thread_id,
+            name,
+        )
 
 
 async def _execute_session_rename(window_id: str, name: str) -> str:

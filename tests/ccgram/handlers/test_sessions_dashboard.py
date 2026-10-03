@@ -390,13 +390,19 @@ class TestRenameButtons:
         message = AsyncMock()
         message.chat.id = -100123
         message.chat.type = "supergroup"
+        client = AsyncMock()
 
-        result = await apply_session_rename(user_data, 42, "new-project", message)
+        result = await apply_session_rename(
+            user_data, 42, "new-project", message, client
+        )
 
         assert result is True
         mock_tm.rename_window.assert_awaited_once_with("cc_old:@0", "new-project")
         mock_tm.rename_session.assert_awaited_once_with("cc_old", "ccgram_new-project")
         assert SESSION_RENAME_WINDOW_ID not in user_data
+        client.edit_forum_topic.assert_awaited_once_with(
+            -100123, 42, name="new-project"
+        )
 
     async def test_apply_session_rename_cancelled(self, _patch_deps: tuple) -> None:
         from ccgram.handlers.user_state import (

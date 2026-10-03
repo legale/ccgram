@@ -585,11 +585,12 @@ async def _handle_rename_captures(
     thread_id: int | None,
     text: str,
     message: Message,
+    client: TelegramClient | None = None,
 ) -> bool:
     """Consume an in-flight pane or session rename reply."""
     if await apply_pane_rename(user_data, thread_id, text, message):
         return True
-    return await apply_session_rename(user_data, thread_id, text, message)
+    return await apply_session_rename(user_data, thread_id, text, message, client)
 
 
 async def handle_text_message(
@@ -625,7 +626,9 @@ async def handle_text_message(
         return
 
     # Rename captures (pane or session)
-    if await _handle_rename_captures(context.user_data, thread_id, text, message):
+    if await _handle_rename_captures(
+        context.user_data, thread_id, text, message, PTBTelegramClient(context.bot)
+    ):
         return
 
     # Must be in a named topic
