@@ -29,7 +29,6 @@ from ..topics.directory_browser import (
     STATE_SELECTING_WINDOW,
     UNBOUND_WINDOWS_KEY,
     build_directory_browser,
-    build_provider_picker,
     build_window_picker,
     clear_browse_state,
     clear_window_picker_state,
@@ -51,6 +50,9 @@ from ..user_state import PENDING_TOPIC_NAME
 from ... import window_query
 from ...thread_router import thread_router
 from ...providers import get_provider_for_window
+from ...session import session_manager
+from ...user_preferences import user_preferences
+from ...window_state_store import CCGRAM_CREATED_WINDOW_ORIGIN
 from ...tmux_manager import send_to_window, tmux_manager
 from ...utils import handle_general_topic_message, is_general_topic, task_done_callback
 
@@ -112,25 +114,73 @@ def _resolve_directory_input(text: str, base_path: str | None = None) -> str:
     return str(resolved)
 
 
-async def _show_provider_picker_for_directory(
+async def _create_shell_session_for_directory(
     message: Message,
     user_data: dict | None,
+    user_id: int,
     thread_id: int,
     selected_path: str,
     topic_name: str = "",
+    pending_text: str = "",
+    bot: Bot | None = None,
 ) -> None:
-    """Store the selected directory and show the provider picker."""
-    text, keyboard = build_provider_picker(selected_path)
+    """Create a shell session directly in the selected directory and bind to topic."""
+    topic_session_name = topic_name or Path(selected_path).name
+    success, err_msg, created_wname, created_wid = await tmux_manager.create_window(
+        selected_path,
+        session_name=tmux_manager.topic_session_name(topic_session_name),
+        window_name=topic_session_name,
+        launch_command="",
+    )
+    if not success:
+        await safe_reply(message, f"❌ Failed to create session: {err_msg}")
+        if user_data is not None:
+            clear_browse_state(user_data)
+        return
+
     if user_data is not None:
+        clear_browse_state(user_data)
         clear_window_picker_state(user_data)
-        user_data[STATE_KEY] = STATE_BROWSING_DIRECTORY
-        user_data[BROWSE_PATH_KEY] = selected_path
-        user_data[BROWSE_PAGE_KEY] = 0
-        user_data[BROWSE_DIRS_KEY] = []
-        user_data[PENDING_THREAD_ID] = thread_id
-        if topic_name:
-            user_data[PENDING_TOPIC_NAME] = topic_name
-    await safe_reply(message, text, reply_markup=keyboard)
+
+    user_preferences.update_user_mru(user_id, selected_path)
+    session_manager.set_window_origin(created_wid, CCGRAM_CREATED_WINDOW_ORIGIN)
+    session_manager.set_window_cwd(created_wid, selected_path)
+    session_manager.set_window_provider(created_wid, "shell")
+    session_manager.set_window_approval_mode(created_wid, "normal")
+    await tmux_manager.stamp_pane_title(created_wid, "shell")
+
+    # Lazy: break text_handler <-> shell circular dependency at import time
+    from ..shell.shell_prompt_orchestrator import ensure_setup
+
+    # Lazy: break text_handler <-> directory_callbacks circular dependency at import time
+    from ..topics.directory_callbacks import _wait_for_shell_ready
+
+    await _wait_for_shell_ready(created_wid)
+    await ensure_setup(created_wid, "auto")
+
+    thread_router.bind_thread(
+        user_id, thread_id, created_wid, window_name=created_wname
+    )
+    chat = message.chat
+    if chat and chat.type in ("group", "supergroup"):
+        thread_router.set_group_chat_id(user_id, thread_id, chat.id)
+
+    await safe_reply(
+        message,
+        f"Session `{created_wname}` created at `{selected_path}`.\nBound to this topic. Send commands here.",
+    )
+    if pending_text and bot is not None:
+        # Lazy: break text_handler <-> shell_commands circular dependency
+        from ..shell.shell_commands import handle_shell_message
+
+        await handle_shell_message(
+            PTBTelegramClient(bot),
+            user_id,
+            thread_id,
+            created_wid,
+            pending_text,
+            message,
+        )
 
 
 async def _handle_session_start_directory_input(
@@ -176,12 +226,14 @@ async def _handle_session_start_directory_input(
         await safe_reply(message, f"Directory not found: `{raw_path}`")
         return True
 
-    await _show_provider_picker_for_directory(
+    await _create_shell_session_for_directory(
         message,
         user_data,
+        message.from_user.id if message.from_user else 0,
         thread_id,
         selected_path,
         user_data.get(PENDING_TOPIC_NAME, ""),
+        user_data.get(PENDING_THREAD_TEXT, "") if user_data else "",
     )
     return True
 
@@ -342,9 +394,10 @@ async def _handle_unbound_topic(
             user_id,
             thread_id,
         )
-        await _show_provider_picker_for_directory(
+        await _create_shell_session_for_directory(
             message,
             user_data,
+            user_id,
             thread_id,
             selected_path,
             topic_name,

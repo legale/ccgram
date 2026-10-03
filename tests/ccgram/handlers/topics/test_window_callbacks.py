@@ -221,10 +221,8 @@ class TestNewWindowCallback:
         )
 
         assert result is True
-        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
-        assert user_data[BROWSE_PATH_KEY] == str(tmp_path)
         mock_reply.assert_called_once()
-        assert "Select Provider" in mock_reply.call_args.args[1]
+        assert "created" in mock_reply.call_args.args[1]
 
 
 class TestCancelCallback:

@@ -118,19 +118,34 @@ class TestHandleUnboundTopic:
         assert user_data[STATE_KEY] == STATE_SELECTING_WINDOW
         assert user_data[PENDING_THREAD_TEXT] == "hello"
 
+    @patch(
+        "ccgram.handlers.topics.directory_callbacks._wait_for_shell_ready",
+        new_callable=AsyncMock,
+    )
+    @patch(
+        "ccgram.handlers.shell.shell_prompt_orchestrator.ensure_setup",
+        new_callable=AsyncMock,
+    )
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.tmux_manager")
     @patch(f"{_TH}.thread_router")
-    async def test_message_path_shows_provider_picker(
+    async def test_message_path_creates_shell_session(
         self,
         mock_tr: MagicMock,
         mock_tm: MagicMock,
         mock_reply: AsyncMock,
+        mock_setup: AsyncMock,
+        mock_wait: AsyncMock,
         tmp_path,
     ) -> None:
         mock_tr.get_window_for_thread.return_value = None
+        mock_tm.create_window = AsyncMock(return_value=(True, "", "topic", "@1"))
+        mock_tm.stamp_pane_title = AsyncMock()
+        mock_tm.topic_session_name.return_value = "topic"
         message = MagicMock()
         message.chat.title = "topic"
+        message.chat.type = "supergroup"
+        message.chat.id = -100123
         message.reply_to_message = None
         user_data: dict = {}
 
@@ -143,14 +158,9 @@ class TestHandleUnboundTopic:
         )
 
         assert result is True
-        mock_tm.list_windows.assert_not_called()
+        mock_tm.create_window.assert_called_once()
         mock_reply.assert_called_once()
-        assert "Select Provider" in mock_reply.call_args.args[1]
-        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
-        assert user_data[BROWSE_PATH_KEY] == str(tmp_path)
-        assert user_data[PENDING_THREAD_ID] == 42
-        assert PENDING_THREAD_TEXT not in user_data
-        assert user_data[PENDING_TOPIC_NAME] == "topic"
+        assert "created" in mock_reply.call_args.args[1]
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.build_directory_browser")
@@ -409,9 +419,7 @@ class TestHandleSessionStartDirectoryInput:
 
         assert result is True
         mock_reply.assert_called_once()
-        assert "Select Provider" in mock_reply.call_args.args[1]
-        assert user_data[STATE_KEY] == STATE_BROWSING_DIRECTORY
-        assert user_data[BROWSE_PATH_KEY] == str(tmp_path)
+        assert "created" in mock_reply.call_args.args[1]
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.build_directory_browser")

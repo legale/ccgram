@@ -55,7 +55,6 @@ from .directory_browser import (
     BROWSE_PATH_KEY,
     build_directory_browser,
     build_mode_picker,
-    build_provider_picker,
     clear_browse_state,
     get_favorites,
 )
@@ -386,9 +385,15 @@ async def _handle_confirm(
             )
             return
 
-    # Show provider selection keyboard (keep browse state for _handle_provider_select)
-    text, keyboard = build_provider_picker(selected_path)
-    await safe_edit(query, text, reply_markup=keyboard)
+    clear_browse_state(context.user_data)
+    await _create_window_and_bind(
+        query,
+        user_id,
+        selected_path,
+        "shell",
+        "normal",
+        context,
+    )
 
 
 async def _validate_provider_select(

@@ -128,40 +128,34 @@ def _make_update(thread_id: int = 42) -> MagicMock:
 
 class TestHandleConfirmShowsProviderPicker:
     @patch(
-        "ccgram.handlers.topics.directory_callbacks.safe_edit", new_callable=AsyncMock
+        "ccgram.handlers.topics.directory_callbacks._wait_for_shell_ready",
+        new_callable=AsyncMock,
     )
-    @patch("ccgram.handlers.topics.directory_callbacks.session_manager")
-    @patch("ccgram.handlers.topics.directory_callbacks.thread_router")
-    async def test_confirm_shows_provider_picker(
-        self, mock_tr: MagicMock, mock_sm: MagicMock, mock_edit: AsyncMock
-    ) -> None:
-        mock_tr.get_window_for_thread.return_value = None
-        user_data = {
-            "browse_path": "/tmp/test",
-            PENDING_THREAD_ID: 42,
-        }
-        query = _make_query()
-        update = _make_update(thread_id=42)
-        context = _make_context(user_data)
-
-        await _handle_confirm(query, 100, update, context)
-
-        mock_edit.assert_called_once()
-        call_args = mock_edit.call_args
-        text = call_args[0][1]
-        assert "Select Provider" in text
-        keyboard = call_args.kwargs.get("reply_markup") or call_args[0][2]
-        assert isinstance(keyboard, InlineKeyboardMarkup)
-
+    @patch(
+        "ccgram.handlers.shell.shell_prompt_orchestrator.ensure_setup",
+        new_callable=AsyncMock,
+    )
     @patch(
         "ccgram.handlers.topics.directory_callbacks.safe_edit", new_callable=AsyncMock
     )
+    @patch("ccgram.handlers.topics.directory_callbacks.tmux_manager")
     @patch("ccgram.handlers.topics.directory_callbacks.session_manager")
     @patch("ccgram.handlers.topics.directory_callbacks.thread_router")
-    async def test_confirm_clears_browse_state(
-        self, mock_tr: MagicMock, mock_sm: MagicMock, mock_edit: AsyncMock
+    async def test_confirm_creates_shell_session_and_clears_state(
+        self,
+        mock_tr: MagicMock,
+        mock_sm: MagicMock,
+        mock_tm: MagicMock,
+        mock_edit: AsyncMock,
+        mock_setup: AsyncMock,
+        mock_wait: AsyncMock,
     ) -> None:
         mock_tr.get_window_for_thread.return_value = None
+        mock_tm.create_window = AsyncMock(
+            return_value=(True, "Window created", "test", "@1")
+        )
+        mock_tm.stamp_pane_title = AsyncMock()
+        mock_tm.topic_session_name.return_value = "test"
         user_data = {
             "browse_path": "/tmp/test",
             "browse_page": 2,
@@ -175,8 +169,9 @@ class TestHandleConfirmShowsProviderPicker:
 
         await _handle_confirm(query, 100, update, context)
 
-        assert "browse_path" in user_data
-        assert "state" in user_data
+        mock_tm.create_window.assert_called_once()
+        assert "browse_path" not in user_data
+        assert "state" not in user_data
 
 
 class TestHandleProviderSelect:
