@@ -565,9 +565,7 @@ class TestHandleVoiceCallback:
 
         await voice_callbacks.handle_voice_callback(update, context)
 
-        update.callback_query.answer.assert_called_once_with(
-            error_msg, show_alert=True
-        )
+        update.callback_query.answer.assert_called_once_with(error_msg, show_alert=True)
         assert (999, 42) in context.user_data.get(VOICE_PENDING, {})
 
     async def test_invalid_payload(self) -> None:

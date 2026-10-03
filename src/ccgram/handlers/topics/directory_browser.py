@@ -208,7 +208,9 @@ def _build_favorites_buttons(
         star_icon = "*" if fav_path in starred_set else "-"
         rows.append(
             [
-                InlineKeyboardButton(f"Fav {label}", callback_data=f"{CB_DIR_FAV}{idx}"),
+                InlineKeyboardButton(
+                    f"Fav {label}", callback_data=f"{CB_DIR_FAV}{idx}"
+                ),
                 InlineKeyboardButton(star_icon, callback_data=f"{CB_DIR_STAR}{idx}"),
             ]
         )
@@ -304,6 +306,7 @@ _PROVIDER_META: dict[str, tuple[str, str]] = {
     "claude": ("Claude", "claude"),
     "codex": ("Codex", "codex"),
     "gemini": ("Gemini", "gemini"),
+    "agy": ("AGY", "agy"),
     "shell": ("Shell", "shell"),
 }
 

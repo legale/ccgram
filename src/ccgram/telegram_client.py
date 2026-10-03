@@ -399,9 +399,7 @@ class FakeTelegramClient:
     async def send_message(
         self, chat_id: int | str, text: str, **kwargs: Any
     ) -> Message:
-        msg = self._record(
-            "send_message", {"chat_id": chat_id, "text": text, **kwargs}
-        )
+        msg = self._record("send_message", {"chat_id": chat_id, "text": text, **kwargs})
         record_telegram_message(msg)
         return msg
 

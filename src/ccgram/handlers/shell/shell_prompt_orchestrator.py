@@ -189,9 +189,7 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 "shell_setup_tmux_error", window_id=window_id, error=str(exc)
             )
             with contextlib.suppress(TelegramError):
-                await query.edit_message_text(
-                    "Setup failed - window may have closed"
-                )
+                await query.edit_message_text("Setup failed - window may have closed")
     else:
         record_skip(window_id)
         with contextlib.suppress(TelegramError):

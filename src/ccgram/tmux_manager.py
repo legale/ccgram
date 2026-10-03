@@ -50,6 +50,7 @@ _VIM_PROBE_DELAY = 0.12
 
 _VIM_INSERT_RE = re.compile(r"^--\s*INSERT\s*--\s*$")
 
+
 def has_insert_indicator(pane_text: str) -> bool:
     """Check if vim's ``-- INSERT --`` appears in the last 3 lines of pane text.
 
@@ -199,7 +200,7 @@ class TmuxManager:
                     text=True,
                     timeout=5,
                 )
-            except (FileNotFoundError, subprocess.TimeoutExpired):
+            except FileNotFoundError, subprocess.TimeoutExpired:
                 return windows
             if result.returncode != 0:
                 return windows
@@ -660,7 +661,7 @@ class TmuxManager:
                     check=False,
                 )
             return True
-        except (subprocess.TimeoutExpired, OSError):
+        except subprocess.TimeoutExpired, OSError:
             logger.exception("Failed to send keys to foreign window %s", target)
             return False
 
@@ -983,10 +984,15 @@ class TmuxManager:
                     text=True,
                     timeout=5,
                 )
-            except (FileNotFoundError, subprocess.TimeoutExpired):
+            except FileNotFoundError, subprocess.TimeoutExpired:
                 return False
             if proc.returncode != 0:
-                logger.debug("Failed to rename session %s to %s: %s", session_name, new_name, proc.stderr.strip())
+                logger.debug(
+                    "Failed to rename session %s to %s: %s",
+                    session_name,
+                    new_name,
+                    proc.stderr.strip(),
+                )
                 return False
             return True
 

@@ -45,10 +45,19 @@ class TestBindCommand:
         ctx.user_data = {}
 
         with (
-            patch("ccgram.handlers.topics.bind_command.config.is_user_allowed", return_value=True),
-            patch("ccgram.handlers.topics.bind_command.get_bound_window") as mock_get_window,
-            patch("ccgram.handlers.topics.bind_command.get_window_display_name") as mock_get_name,
-            patch("ccgram.handlers.topics.bind_command.safe_reply", new_callable=AsyncMock) as mock_reply,
+            patch(
+                "ccgram.handlers.topics.bind_command.config.is_user_allowed",
+                return_value=True,
+            ),
+            patch(
+                "ccgram.handlers.topics.bind_command.get_bound_window"
+            ) as mock_get_window,
+            patch(
+                "ccgram.handlers.topics.bind_command.get_window_display_name"
+            ) as mock_get_name,
+            patch(
+                "ccgram.handlers.topics.bind_command.safe_reply", new_callable=AsyncMock
+            ) as mock_reply,
         ):
             mock_get_window.return_value = "@5"
             mock_get_name.return_value = "proj"
@@ -61,13 +70,16 @@ class TestBindCommand:
         ctx = MagicMock()
         ctx.user_data = {}
 
-        with patch(
-            "ccgram.handlers.topics.bind_command.config.is_user_allowed",
-            return_value=True,
-        ), patch(
-            "ccgram.handlers.topics.bind_command.safe_reply",
-            new_callable=AsyncMock,
-        ) as mock_reply:
+        with (
+            patch(
+                "ccgram.handlers.topics.bind_command.config.is_user_allowed",
+                return_value=True,
+            ),
+            patch(
+                "ccgram.handlers.topics.bind_command.safe_reply",
+                new_callable=AsyncMock,
+            ) as mock_reply,
+        ):
             await bind_command(update, ctx)
 
         mock_reply.assert_awaited_once_with(update.message, "Use /bind inside a topic.")

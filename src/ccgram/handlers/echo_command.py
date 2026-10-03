@@ -38,7 +38,9 @@ def _echo_payload(update: Update) -> dict[str, Any]:
 
 
 def _json_chunks(payload: dict[str, Any]) -> list[str]:
-    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, default=str)
+    text = json.dumps(
+        payload, ensure_ascii=False, indent=2, sort_keys=True, default=str
+    )
     chunk_size = TELEGRAM_MAX_MESSAGE_LENGTH - len(_PREFIX) - _CHUNK_MARGIN
     return [text[i : i + chunk_size] for i in range(0, len(text), chunk_size)] or [""]
 

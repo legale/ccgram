@@ -116,6 +116,7 @@ async def _detect_and_setup_provider(
         if provider and provider.capabilities.chat_first_command_path:
             # Lazy: shell ↔ topics cycle via prompt-marker callbacks.
             from ..shell.shell_prompt_orchestrator import ensure_setup
+
             await ensure_setup(
                 window_id,
                 "auto",
@@ -228,9 +229,7 @@ async def _handle_bind(
     )
 
     chat = _get_topic_chat(update, query)
-    topic_name = (
-        get_stored_topic_name(chat.id, thread_id) if chat is not None else None
-    )
+    topic_name = get_stored_topic_name(chat.id, thread_id) if chat is not None else None
     if not topic_name:
         topic_name = display
     await rename_bound_topic(

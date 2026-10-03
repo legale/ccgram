@@ -573,7 +573,9 @@ class TranscriptParser:
 
         if is_interrupted:
             entry_text = tool_summary or ""
-            entry_text = f"{entry_text}\n⏹ Interrupted" if entry_text else "⏹ Interrupted"
+            entry_text = (
+                f"{entry_text}\n⏹ Interrupted" if entry_text else "⏹ Interrupted"
+            )
         elif is_error:
             entry_text = cls._format_tool_error(tool_summary, result_text)
         elif tool_summary:
@@ -635,7 +637,9 @@ class TranscriptParser:
                         if line.startswith("-") and not line.startswith("---")
                     )
                     stats = f"  ⎿  +{added} −{removed}"
-                    entry_text += "\n" + stats + "\n" + format_expandable_quote(diff_text)
+                    entry_text += (
+                        "\n" + stats + "\n" + format_expandable_quote(diff_text)
+                    )
         elif result_text and EXPANDABLE_QUOTE_START not in tool_summary:
             entry_text += "\n" + cls._format_tool_result_text(result_text, tool_name)
         return entry_text
@@ -667,7 +671,9 @@ class TranscriptParser:
         if not user_text_parts:
             return
         combined = "\n".join(user_text_parts)
-        if cls._RE_LOCAL_STDOUT.search(combined) or cls._RE_COMMAND_NAME.search(combined):
+        if cls._RE_LOCAL_STDOUT.search(combined) or cls._RE_COMMAND_NAME.search(
+            combined
+        ):
             return
         result.append(
             ParsedEntry(

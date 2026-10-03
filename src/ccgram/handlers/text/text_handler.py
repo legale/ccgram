@@ -55,6 +55,7 @@ from ...tmux_manager import send_to_window, tmux_manager
 from ...utils import handle_general_topic_message, is_general_topic, task_done_callback
 
 if TYPE_CHECKING:
+    from telegram import Bot, Chat
     from telegram.ext import ContextTypes
 
 logger = structlog.get_logger()
@@ -324,7 +325,11 @@ async def _handle_unbound_topic(
         if message.reply_to_message and message.reply_to_message.forum_topic_created
         else ""
     )
-    if not topic_name and message.reply_to_message and message.reply_to_message.forum_topic_edited:
+    if (
+        not topic_name
+        and message.reply_to_message
+        and message.reply_to_message.forum_topic_edited
+    ):
         topic_name = message.reply_to_message.forum_topic_edited.name or ""
     if not topic_name:
         topic_name = message.chat.title or message.chat.username or "topic"
@@ -541,6 +546,13 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await handle_text_message(update, context)
 
 
+async def _handle_unnamed_topic(bot: Bot, chat: Chat | None, message: Message) -> None:
+    if chat and is_general_topic(message):
+        await handle_general_topic_message(bot, message, chat.id)
+    else:
+        await safe_reply(message, "Use a named topic.")
+
+
 async def handle_text_message(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -579,12 +591,7 @@ async def handle_text_message(
 
     # Must be in a named topic
     if thread_id is None:
-        if message and update.effective_chat and is_general_topic(message):
-            await handle_general_topic_message(
-                context.bot, message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(message, "Use a named topic.")
+        await _handle_unnamed_topic(context.bot, update.effective_chat, message)
         return
 
     # Unbound topic — show picker or browser
@@ -610,7 +617,9 @@ async def handle_text_message(
         # Lazy: shell.shell_commands ↔ text_handler via approval callback.
         from ..shell.shell_commands import handle_shell_message
 
-        if window_query.get_window_provider(window_id) == "shell" and not text.startswith("!"):
+        if window_query.get_window_provider(
+            window_id
+        ) == "shell" and not text.startswith("!"):
             text = f"!{text}"
 
         await handle_shell_message(

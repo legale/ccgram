@@ -26,19 +26,13 @@ class TestRenameBoundTopic:
         )
 
         mock_tmux.rename_window.assert_awaited_once_with("cc_old:@7", "backend-api")
-        mock_tmux.rename_session.assert_awaited_once_with(
-            "cc_old", "cc_backend-api"
-        )
+        mock_tmux.rename_session.assert_awaited_once_with("cc_old", "cc_backend-api")
 
     @patch("ccgram.handlers.topics.topic_binding.tmux_manager")
-    async def test_skips_default_session_window(
-        self, mock_tmux: MagicMock
-    ) -> None:
+    async def test_skips_default_session_window(self, mock_tmux: MagicMock) -> None:
         from ccgram.handlers.topics.topic_binding import rename_bound_topic
 
-        mock_tmux.find_window_by_id = AsyncMock(
-            return_value=MagicMock(window_id="@7")
-        )
+        mock_tmux.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@7"))
         mock_tmux.rename_window = AsyncMock()
         mock_tmux.rename_session = AsyncMock()
 

@@ -13,6 +13,7 @@ from ccgram.providers.base import (
     StatusUpdate,
 )
 from ccgram.providers._jsonl import JsonlProvider
+from ccgram.providers.agy import AgyProvider
 from ccgram.providers.claude import ClaudeProvider
 from ccgram.providers.codex import CodexProvider
 from ccgram.providers.gemini import GeminiProvider
@@ -64,6 +65,7 @@ PROVIDER_FIXTURES: list[type] = [
     CodexProvider,
     GeminiProvider,
     PiProvider,
+    AgyProvider,
     ShellProvider,
 ]
 
@@ -174,6 +176,12 @@ def _make_assistant_entry(
         }
     if name == "gemini":
         return {"type": "gemini", "content": text}
+    if name == "agy":
+        return {
+            "type": "PLANNER_RESPONSE",
+            "source": "MODEL",
+            "content": text,
+        }
     return {
         "type": "assistant",
         "message": {"content": [{"type": "text", "text": text}]},
@@ -212,6 +220,18 @@ def _make_tool_use_entry(provider: AgentProvider) -> dict[str, Any]:
                 ]
             },
         }
+    if name == "agy":
+        return {
+            "type": "PLANNER_RESPONSE",
+            "source": "MODEL",
+            "tool_calls": [
+                {
+                    "id": "t1",
+                    "name": "view_file",
+                    "args": {"AbsolutePath": "foo.py"},
+                }
+            ],
+        }
     return {
         "type": "assistant",
         "message": {
@@ -243,6 +263,14 @@ def _make_tool_result_entry(provider: AgentProvider) -> dict[str, Any]:
                 "content": [{"type": "text", "text": "ok"}],
                 "isError": False,
             },
+        }
+    if name == "agy":
+        return {
+            "type": "GENERIC",
+            "source": "MODEL",
+            "status": "DONE",
+            "tool_use_id": "t1",
+            "content": "ok",
         }
     return {
         "type": "user",
@@ -342,6 +370,8 @@ class TestIsUserTranscriptEntry:
             entry = {"type": "input_item", "payload": {"role": "user"}}
         elif name == "gemini":
             entry = {"type": "user"}
+        elif name == "agy":
+            entry = {"type": "USER_INPUT"}
         else:
             entry = {"type": "user"}
         assert provider.is_user_transcript_entry(entry) is True
@@ -352,6 +382,8 @@ class TestIsUserTranscriptEntry:
             entry = {"type": "response_item", "payload": {"role": "assistant"}}
         elif name == "gemini":
             entry = {"type": "gemini"}
+        elif name == "agy":
+            entry = {"type": "PLANNER_RESPONSE"}
         else:
             entry = {"type": "assistant"}
         assert provider.is_user_transcript_entry(entry) is False
@@ -385,6 +417,8 @@ class TestParseHistoryEntry:
             }
         elif name == "gemini":
             entry = {"type": "user", "content": "my question"}
+        elif name == "agy":
+            entry = {"type": "USER_INPUT", "content": "my question"}
         else:
             entry = {
                 "type": "user",
@@ -405,6 +439,8 @@ class TestParseHistoryEntry:
             }
         elif name == "gemini":
             entry = {"type": "gemini", "content": ""}
+        elif name == "agy":
+            entry = {"type": "PLANNER_RESPONSE", "content": ""}
         else:
             entry = {"type": "assistant", "message": {"content": []}}
         assert provider.parse_history_entry(entry) is None

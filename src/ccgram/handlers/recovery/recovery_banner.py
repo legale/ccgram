@@ -214,8 +214,8 @@ def build_recovery_keyboard(window_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             options,
-        [InlineKeyboardButton("Cancel", callback_data=CB_RECOVERY_CANCEL)],
-    ]
+            [InlineKeyboardButton("Cancel", callback_data=CB_RECOVERY_CANCEL)],
+        ]
     )
 
 

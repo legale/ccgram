@@ -147,7 +147,9 @@ def _format_report(
     dead_topic_count = sum(1 for i in audit.issues if i.category == "dead_topic")
     if dead_topic_count > 0:
         topic_word = "topic" if dead_topic_count == 1 else "topics"
-        lines.append(f"warning: {dead_topic_count} dead {topic_word} (deleted in Telegram)")
+        lines.append(
+            f"warning: {dead_topic_count} dead {topic_word} (deleted in Telegram)"
+        )
 
     lines.extend(_issue_summary_lines(audit))
 

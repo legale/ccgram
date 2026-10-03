@@ -241,9 +241,7 @@ class TestSessionsNew:
     async def test_creates_session_for_topic(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
         mock_tm.topic_session_name.side_effect = lambda name: f"cc_{name}"
-        mock_tm.create_window = AsyncMock(
-            return_value=(True, "ok", "codex", "@5")
-        )
+        mock_tm.create_window = AsyncMock(return_value=(True, "ok", "codex", "@5"))
 
         query = AsyncMock()
         query.message = MagicMock()
@@ -259,7 +257,6 @@ class TestSessionsNew:
 
         mock_tm.create_window.assert_awaited_once()
         mock_tr.bind_thread.assert_called_once_with(100, 42, "@5", window_name="codex")
-
 
     async def test_no_message(self) -> None:
         update = MagicMock()

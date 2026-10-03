@@ -217,6 +217,14 @@ DEFAULT_LAYOUTS: dict[str, ToolbarLayout] = {
             ("send", "close"),
         ),
     ),
+    "agy": ToolbarLayout(
+        style="text",
+        buttons=(
+            ("screen", "ctrlc", "live"),
+            ("esc", "enter", "tab"),
+            ("send", "mode", "close"),
+        ),
+    ),
     "shell": ToolbarLayout(
         style="text",
         buttons=(

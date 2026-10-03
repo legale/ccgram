@@ -13,7 +13,10 @@ from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
 from ...topic_state_registry import topic_state
 from ...topic_tail import is_last
-from ..messaging_pipeline.message_sender import edit_with_fallback, rate_limit_send_message
+from ..messaging_pipeline.message_sender import (
+    edit_with_fallback,
+    rate_limit_send_message,
+)
 
 _BODY_LIMIT = TELEGRAM_MAX_MESSAGE_LENGTH - 256
 _SNAPSHOT_LINES = 30

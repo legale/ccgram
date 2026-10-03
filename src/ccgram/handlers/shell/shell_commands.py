@@ -274,8 +274,7 @@ async def handle_shell_message(
         await safe_send(
             client,
             chat_id,
-            "LLM request failed - command not sent.\n"
-            "Use `!` prefix for raw commands.",
+            "LLM request failed - command not sent.\nUse `!` prefix for raw commands.",
             message_thread_id=thread_id,
         )
         return

@@ -150,9 +150,10 @@ class SessionMonitor:
         try:
             # Lazy: stores are wired after SessionMonitor construction.
             from .thread_router import thread_router
+
             # Lazy: stores are wired after SessionMonitor construction.
             from .window_state_store import window_store
-        except (ImportError, RuntimeError):
+        except ImportError, RuntimeError:
             return current_map
 
         merged = dict(current_map)

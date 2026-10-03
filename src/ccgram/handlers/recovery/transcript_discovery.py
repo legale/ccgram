@@ -164,7 +164,7 @@ def _read_tmux_pane_pid(window_id: str) -> int | None:
             text=True,
             timeout=_TMUX_TIMEOUT_SEC,
         )
-    except (OSError, subprocess.SubprocessError, ValueError):
+    except OSError, subprocess.SubprocessError, ValueError:
         return None
     raw = proc.stdout.strip()
     return int(raw) if raw.isdigit() else None
@@ -174,7 +174,7 @@ def _read_proc_ppid(stat_path: Path) -> tuple[int, int] | None:
     try:
         pid = int(stat_path.parent.name)
         data = stat_path.read_text()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
     if ")" not in data:
         return None

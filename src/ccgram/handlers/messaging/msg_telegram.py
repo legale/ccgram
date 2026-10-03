@@ -324,9 +324,7 @@ async def notify_loop_detected(
         del _loop_alert_pairs[oldest_key]
     _loop_alert_pairs[pair_hash] = (window_a, window_b)
 
-    text = (
-        f"Messaging loop detected between {wid_a} ({name_a}) and {wid_b} ({name_b})"
-    )
+    text = f"Messaging loop detected between {wid_a} ({name_a}) and {wid_b} ({name_b})"
 
     keyboard = InlineKeyboardMarkup(
         [

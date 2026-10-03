@@ -8,9 +8,7 @@ def test_ruff_per_file_ignore_paths_exist():
     ignores = pyproject["tool"]["ruff"]["lint"]["per-file-ignores"]
 
     missing = [
-        path
-        for path in ignores
-        if "*" not in path and not (root / path).exists()
+        path for path in ignores if "*" not in path and not (root / path).exists()
     ]
 
     assert missing == []
