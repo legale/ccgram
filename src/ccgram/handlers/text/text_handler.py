@@ -36,6 +36,7 @@ from ..topics.directory_browser import (
 from ..interactive import get_interactive_window, handle_interactive_ui
 from ..messaging_pipeline.message_queue import enqueue_status_update
 from ..live.pane_callbacks import apply_pane_rename
+from ..sessions_dashboard import apply_session_rename
 from ..messaging_pipeline.message_sender import (
     ack_reaction,
     edit_with_fallback,
@@ -579,6 +580,18 @@ async def _handle_unnamed_topic(bot: Bot, chat: Chat | None, message: Message) -
         await safe_reply(message, "Use a named topic.")
 
 
+async def _handle_rename_captures(
+    user_data: dict | None,
+    thread_id: int | None,
+    text: str,
+    message: Message,
+) -> bool:
+    """Consume an in-flight pane or session rename reply."""
+    if await apply_pane_rename(user_data, thread_id, text, message):
+        return True
+    return await apply_session_rename(user_data, thread_id, text, message)
+
+
 async def handle_text_message(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -611,8 +624,8 @@ async def handle_text_message(
     if await _check_ui_guards(context.user_data, thread_id, message):
         return
 
-    # Pane rename capture (consumes the next text in the same thread)
-    if await apply_pane_rename(context.user_data, thread_id, text, message):
+    # Rename captures (pane or session)
+    if await _handle_rename_captures(context.user_data, thread_id, text, message):
         return
 
     # Must be in a named topic

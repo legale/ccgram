@@ -7,13 +7,16 @@ import pytest
 from ccgram.handlers.callback_data import (
     CB_SESSIONS_NEW,
     CB_SESSIONS_REFRESH,
+    CB_SESSIONS_RENAME,
     CB_STATUS_ESC,
     CB_STATUS_SCREENSHOT,
 )
 from ccgram.handlers.sessions_dashboard import (
     _build_dashboard,
     _create_session_for_topic,
+    apply_session_rename,
     handle_sessions_refresh,
+    handle_sessions_rename,
     sessions_command,
 )
 from ccgram.session import WindowState
@@ -319,3 +322,97 @@ class TestKillButtons:
             if isinstance(btn.callback_data, str)
         ]
         assert not any(d.startswith("sess:kill:") for d in data)
+
+
+class TestRenameButtons:
+    async def test_alive_session_has_rename_button(self, _patch_deps) -> None:
+        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
+        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
+        mock_tr.get_display_name.side_effect = lambda wid: "myproject"
+        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
+
+        _text, keyboard = await _build_dashboard(100)
+        data = [
+            btn.callback_data
+            for row in keyboard.inline_keyboard
+            for btn in row
+            if isinstance(btn.callback_data, str)
+        ]
+        assert any(d.startswith(CB_SESSIONS_RENAME) for d in data)
+
+    @patch("ccgram.handlers.sessions_dashboard.user_owns_window", return_value=True)
+    async def test_handle_sessions_rename_prompts_user(
+        self, _mock_owns: MagicMock, _patch_deps: tuple
+    ) -> None:
+        _mock_sm, mock_tr, _, _ = _patch_deps
+        mock_tr.get_display_name.return_value = "myproject"
+
+        query = AsyncMock()
+        query.message.message_thread_id = 42
+        query.message.chat.id = -100123
+        context = MagicMock()
+        context.user_data = {}
+
+        client = AsyncMock()
+        await handle_sessions_rename(query, 100, "@0", context, client)
+
+        from ccgram.handlers.user_state import (
+            SESSION_RENAME_CHAT_ID,
+            SESSION_RENAME_THREAD_ID,
+            SESSION_RENAME_WINDOW_ID,
+        )
+
+        assert context.user_data[SESSION_RENAME_WINDOW_ID] == "@0"
+        assert context.user_data[SESSION_RENAME_THREAD_ID] == 42
+        assert context.user_data[SESSION_RENAME_CHAT_ID] == -100123
+        client.send_message.assert_awaited_once()
+        query.answer.assert_awaited_once_with("Rename session")
+
+    async def test_apply_session_rename(self, _patch_deps: tuple) -> None:
+        _mock_sm, mock_tr, mock_tm, mock_cfg = _patch_deps
+        mock_cfg.tmux_session_prefix = "ccgram_"
+        mock_window = MagicMock(window_id="cc_old:@0")
+        mock_tm.find_window_by_id = AsyncMock(return_value=mock_window)
+        mock_tm.rename_window = AsyncMock(return_value=True)
+        mock_tm.rename_session = AsyncMock(return_value=True)
+
+        from ccgram.handlers.user_state import (
+            SESSION_RENAME_CHAT_ID,
+            SESSION_RENAME_THREAD_ID,
+            SESSION_RENAME_WINDOW_ID,
+        )
+
+        user_data = {
+            SESSION_RENAME_WINDOW_ID: "cc_old:@0",
+            SESSION_RENAME_THREAD_ID: 42,
+            SESSION_RENAME_CHAT_ID: -100123,
+        }
+        message = AsyncMock()
+        message.chat.id = -100123
+        message.chat.type = "supergroup"
+
+        result = await apply_session_rename(user_data, 42, "new-project", message)
+
+        assert result is True
+        mock_tm.rename_window.assert_awaited_once_with("cc_old:@0", "new-project")
+        mock_tm.rename_session.assert_awaited_once_with("cc_old", "ccgram_new-project")
+        assert SESSION_RENAME_WINDOW_ID not in user_data
+
+    async def test_apply_session_rename_cancelled(self, _patch_deps: tuple) -> None:
+        from ccgram.handlers.user_state import (
+            SESSION_RENAME_CHAT_ID,
+            SESSION_RENAME_THREAD_ID,
+            SESSION_RENAME_WINDOW_ID,
+        )
+
+        user_data = {
+            SESSION_RENAME_WINDOW_ID: "@0",
+            SESSION_RENAME_THREAD_ID: 42,
+            SESSION_RENAME_CHAT_ID: -100123,
+        }
+        message = AsyncMock()
+
+        result = await apply_session_rename(user_data, 42, "/cancel", message)
+
+        assert result is True
+        assert SESSION_RENAME_WINDOW_ID not in user_data

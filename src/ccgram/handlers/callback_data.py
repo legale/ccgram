@@ -53,6 +53,7 @@ CB_SESSIONS_REFRESH = "sess:ref"
 CB_SESSIONS_NEW = "sess:new"
 CB_SESSIONS_KILL = "sess:kill:"  # sess:kill:<window_id>
 CB_SESSIONS_KILL_CONFIRM = "sess:killok:"  # sess:killok:<window_id>
+CB_SESSIONS_RENAME = "sess:rn:"  # sess:rn:<window_id>
 
 # Status message action buttons
 CB_STATUS_ESC = "st:esc:"  # st:esc:<window_id>

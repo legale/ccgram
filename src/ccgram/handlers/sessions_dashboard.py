@@ -18,18 +18,27 @@ from typing import TYPE_CHECKING
 from pathlib import Path
 import structlog
 
-from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    CallbackQuery,
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    Update,
+)
 from ..config import config
+from ..session import session_manager
 from ..telegram_client import PTBTelegramClient, TelegramClient
 from ..thread_router import thread_router
 from ..tmux_manager import tmux_manager
 from ..window_query import view_window
-from .status.topic_emoji import get_stored_topic_name
+from .status.topic_emoji import get_stored_topic_name, update_stored_topic_name
 from .callback_data import (
     CB_SESSIONS_KILL,
     CB_SESSIONS_KILL_CONFIRM,
     CB_SESSIONS_NEW,
     CB_SESSIONS_REFRESH,
+    CB_SESSIONS_RENAME,
     CB_STATUS_ESC,
     CB_STATUS_SCREENSHOT,
 )
@@ -38,6 +47,11 @@ from .callback_registry import register
 from .cleanup import clear_topic_state
 from .messaging_pipeline.message_sender import safe_edit, safe_reply
 from .topics.topic_binding import bind_topic_to_window
+from .user_state import (
+    SESSION_RENAME_CHAT_ID,
+    SESSION_RENAME_THREAD_ID,
+    SESSION_RENAME_WINDOW_ID,
+)
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -96,6 +110,12 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
             ]
             # External windows (emdash) are never killed — only unbind
             if not is_external:
+                row.append(
+                    InlineKeyboardButton(
+                        "✏️ Rename",
+                        callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
+                    ),
+                )
                 row.append(
                     InlineKeyboardButton(
                         f"\U0001f5d1 Kill {display_name}",
@@ -220,11 +240,158 @@ async def handle_sessions_kill_confirm(
     )
 
 
+async def handle_sessions_rename(
+    query: CallbackQuery,
+    user_id: int,
+    window_id: str,
+    context: ContextTypes.DEFAULT_TYPE,
+    client: TelegramClient,
+) -> None:
+    """Prompt user to provide a new name for the session."""
+    if not user_owns_window(user_id, window_id):
+        await query.answer("Not your session", show_alert=True)
+        return
+
+    display = thread_router.get_display_name(window_id)
+    thread_id = getattr(query.message, "message_thread_id", None)
+    chat = query.message.chat if query.message else None
+    chat_id = chat.id if chat else None
+
+    if context.user_data is not None:
+        context.user_data[SESSION_RENAME_WINDOW_ID] = window_id
+        context.user_data[SESSION_RENAME_THREAD_ID] = thread_id
+        context.user_data[SESSION_RENAME_CHAT_ID] = chat_id
+
+    prompt_text = f"✏️ Enter new name for session `{display}`:"
+    try:
+        if chat_id is not None:
+            await client.send_message(
+                chat_id=chat_id,
+                text=prompt_text,
+                message_thread_id=thread_id,
+                reply_markup=ForceReply(selective=True),
+            )
+        else:
+            await safe_edit(query, prompt_text)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("session rename prompt failed: %s", exc)
+        await query.answer("Failed to open rename prompt", show_alert=True)
+        return
+
+    await query.answer("Rename session")
+
+
+async def apply_session_rename(
+    user_data: dict | None,
+    thread_id: int | None,
+    text: str,
+    message: Message,
+) -> bool:
+    """Consume an in-flight session rename reply.
+
+    Returns True when the message was handled (rename pending);
+    caller must early-return. Returns False otherwise.
+    """
+    if not user_data or SESSION_RENAME_WINDOW_ID not in user_data:
+        return False
+
+    pending_thread = user_data.get(SESSION_RENAME_THREAD_ID)
+    if pending_thread is not None and pending_thread != thread_id:
+        return False
+
+    window_id = user_data.pop(SESSION_RENAME_WINDOW_ID, None)
+    user_data.pop(SESSION_RENAME_THREAD_ID, None)
+    user_data.pop(SESSION_RENAME_CHAT_ID, None)
+
+    if not window_id:
+        return False
+
+    name = text.strip()
+    if name in ("-", "/cancel", "cancel"):
+        await safe_reply(message, "Rename cancelled.")
+        return True
+    if not name or len(name) > 50 or "\n" in name:  # noqa: PLR2004
+        await safe_reply(
+            message,
+            "❌ Invalid session name. Must be 1-50 characters without newlines.",
+        )
+        return True
+
+    new_wid = await _execute_session_rename(window_id, name)
+
+    chat = getattr(message, "chat", None)
+    chat_id = chat.id if chat else None
+    if chat_id and thread_id is not None:
+        update_stored_topic_name(chat_id, thread_id, name)
+
+    logger.info(
+        "Session renamed: window %s -> %s (%r, thread=%s)",
+        window_id,
+        new_wid,
+        name,
+        thread_id,
+    )
+    await safe_reply(message, f"Renamed session to `{name}`")
+    return True
+
+
+async def _execute_session_rename(window_id: str, name: str) -> str:
+    new_wid = window_id
+    w = await tmux_manager.find_window_by_id(window_id)
+    if w:
+        await tmux_manager.rename_window(w.window_id, name)
+        if ":" in w.window_id:
+            session_name, bare_id = w.window_id.rsplit(":", 1)
+            new_session_name = f"{config.tmux_session_prefix}{name}"
+            if await tmux_manager.rename_session(session_name, new_session_name):
+                new_wid = f"{new_session_name}:{bare_id}"
+
+    if new_wid != window_id:
+        for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
+            if bound_wid == window_id:
+                thread_router.bind_thread(uid, tid, new_wid, window_name=name)
+        session_manager.set_display_name(new_wid, name)
+    else:
+        thread_router.set_display_name(window_id, name)
+        session_manager.set_display_name(window_id, name)
+    return new_wid
+
+
+async def _dispatch_window_action(
+    data: str,
+    query: CallbackQuery,
+    user_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    client = PTBTelegramClient(context.bot)
+    if data.startswith(CB_SESSIONS_KILL_CONFIRM):
+        window_id = data[len(CB_SESSIONS_KILL_CONFIRM) :]
+        if not user_owns_window(user_id, window_id):
+            await query.answer("Not your session", show_alert=True)
+            return
+        await handle_sessions_kill_confirm(query, user_id, window_id, client)
+        await query.answer("Killed")
+    elif data.startswith(CB_SESSIONS_KILL):
+        window_id = data[len(CB_SESSIONS_KILL) :]
+        if not user_owns_window(user_id, window_id):
+            await query.answer("Not your session", show_alert=True)
+            return
+        await handle_sessions_kill(query, user_id, window_id)
+        await query.answer()
+    elif data.startswith(CB_SESSIONS_RENAME):
+        window_id = data[len(CB_SESSIONS_RENAME) :]
+        if not user_owns_window(user_id, window_id):
+            await query.answer("Not your session", show_alert=True)
+            return
+        await handle_sessions_rename(query, user_id, window_id, context, client)
+
+
 @register(
     CB_SESSIONS_REFRESH,
     CB_SESSIONS_NEW,
     CB_SESSIONS_KILL_CONFIRM,
     CB_SESSIONS_KILL,
+    CB_SESSIONS_RENAME,
 )
 async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -248,19 +415,5 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             query, user.id, thread_id, PTBTelegramClient(context.bot)
         )
         await query.answer("Created")
-    elif data.startswith(CB_SESSIONS_KILL_CONFIRM):
-        window_id = data[len(CB_SESSIONS_KILL_CONFIRM) :]
-        if not user_owns_window(user.id, window_id):
-            await query.answer("Not your session", show_alert=True)
-            return
-        await handle_sessions_kill_confirm(
-            query, user.id, window_id, PTBTelegramClient(context.bot)
-        )
-        await query.answer("Killed")
-    elif data.startswith(CB_SESSIONS_KILL):
-        window_id = data[len(CB_SESSIONS_KILL) :]
-        if not user_owns_window(user.id, window_id):
-            await query.answer("Not your session", show_alert=True)
-            return
-        await handle_sessions_kill(query, user.id, window_id)
-        await query.answer()
+    else:
+        await _dispatch_window_action(data, query, user.id, context)

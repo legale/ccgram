@@ -23,3 +23,7 @@ SEND_CWD_KEY = "send_cwd"
 PANE_RENAME_WINDOW_ID = "_pane_rename_window_id"
 PANE_RENAME_PANE_ID = "_pane_rename_pane_id"
 PANE_RENAME_THREAD_ID = "_pane_rename_thread_id"
+
+SESSION_RENAME_WINDOW_ID = "_session_rename_window_id"
+SESSION_RENAME_THREAD_ID = "_session_rename_thread_id"
+SESSION_RENAME_CHAT_ID = "_session_rename_chat_id"

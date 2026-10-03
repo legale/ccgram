@@ -88,7 +88,7 @@ def register_all(
     command_specs: list[CommandSpec] = [
         CommandSpec("history", history_command),
         CommandSpec(("commands", "help"), commands_command),
-        CommandSpec("sessions", sessions_command),
+        CommandSpec(("sessions", "ses"), sessions_command),
         CommandSpec("unbind", unbind_command),
         CommandSpec("upgrade", upgrade_command),
         CommandSpec("recall", recall_command),
@@ -168,6 +168,7 @@ COMMAND_NAMES: tuple[str, ...] = (
     "commands",
     "help",
     "sessions",
+    "ses",
     "unbind",
     "upgrade",
     "recall",
