@@ -73,7 +73,7 @@ _bash_capture_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 _DIR_INPUT_PREFIXES = ("cd ", "dir ", "path ")
 
 
-def _extract_directory_input(text: str) -> str:
+def _extract_directory_input(text: str, allow_bare: bool = False) -> str:
     """Return explicit directory input from a Telegram message, or empty string."""
     raw = text.strip()
     if not raw:
@@ -84,16 +84,30 @@ def _extract_directory_input(text: str) -> str:
         if lower.startswith(prefix):
             return raw[len(prefix) :].strip()
 
-    if raw.startswith(("~", "/", "./", "../")):
+    if raw.startswith(("~", "/", "./", "../")) or raw == ".":
         return raw
+
+    if allow_bare:
+        return raw
+
     return ""
 
 
-def _resolve_directory_input(text: str, base_path: str | None = None) -> str:
+def _resolve_directory_input(
+    text: str, base_path: str | None = None, allow_bare: bool = False
+) -> str:
     """Resolve explicit directory input to an existing absolute directory path."""
-    raw_path = _extract_directory_input(text)
+    raw_path = _extract_directory_input(text, allow_bare=allow_bare)
     if not raw_path:
         return ""
+
+    if raw_path == ".":
+        path = (
+            Path(base_path).expanduser().resolve()
+            if base_path
+            else Path.cwd().resolve()
+        )
+        return str(path) if path.is_dir() else ""
 
     path = Path(raw_path).expanduser()
     if not path.is_absolute():
@@ -202,10 +216,11 @@ async def _handle_session_start_directory_input(
         return False
 
     base_path = ""
-    if state == STATE_BROWSING_DIRECTORY:
+    is_browsing = state == STATE_BROWSING_DIRECTORY
+    if is_browsing:
         base_path = user_data.get(BROWSE_PATH_KEY, "")
 
-    raw_path = _extract_directory_input(text)
+    raw_path = _extract_directory_input(text, allow_bare=is_browsing)
     if not raw_path:
         if state != STATE_SELECTING_WINDOW:
             return False
@@ -221,7 +236,7 @@ async def _handle_session_start_directory_input(
         await safe_reply(message, msg_text, reply_markup=keyboard)
         return True
 
-    selected_path = _resolve_directory_input(text, base_path)
+    selected_path = _resolve_directory_input(text, base_path, allow_bare=is_browsing)
     if not selected_path:
         await safe_reply(message, f"Directory not found: `{raw_path}`")
         return True

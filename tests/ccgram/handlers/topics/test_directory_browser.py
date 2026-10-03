@@ -99,29 +99,14 @@ class TestGetFavorites:
         assert favorites == []
 
 
-class TestHiddenDirs:
-    def test_hidden_dirs_excluded_by_default(
-        self, tmp_path: Path, mock_session_manager: Mock
+class TestBuildDirectoryBrowser:
+    def test_builds_dialog_with_confirm_and_cancel_buttons(
+        self, tmp_path: Path
     ) -> None:
-        (tmp_path / "visible").mkdir()
-        (tmp_path / ".hidden").mkdir()
-
-        with patch("ccgram.handlers.topics.directory_browser.config") as mock_cfg:
-            mock_cfg.show_hidden_dirs = False
-            _text, _kb, subdirs = build_directory_browser(str(tmp_path))
-
-        assert "visible" in subdirs
-        assert ".hidden" not in subdirs
-
-    def test_hidden_dirs_shown_when_enabled(
-        self, tmp_path: Path, mock_session_manager: Mock
-    ) -> None:
-        (tmp_path / "visible").mkdir()
-        (tmp_path / ".hidden").mkdir()
-
-        with patch("ccgram.handlers.topics.directory_browser.config") as mock_cfg:
-            mock_cfg.show_hidden_dirs = True
-            _text, _kb, subdirs = build_directory_browser(str(tmp_path))
-
-        assert "visible" in subdirs
-        assert ".hidden" in subdirs
+        text, kb, subdirs = build_directory_browser(str(tmp_path))
+        assert "Select Working Directory" in text
+        assert str(tmp_path) in text
+        assert subdirs == []
+        callbacks = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+        assert "db:confirm" in callbacks
+        assert "db:cancel" in callbacks

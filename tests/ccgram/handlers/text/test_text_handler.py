@@ -432,6 +432,58 @@ class TestHandleSessionStartDirectoryInput:
         mock_reply.assert_called_once()
         assert "Directory not found" in mock_reply.call_args.args[1]
 
+    @patch(f"{_TH}._create_shell_session_for_directory", new_callable=AsyncMock)
+    async def test_accepts_bare_directory_path_when_browsing(
+        self,
+        mock_create: AsyncMock,
+        tmp_path,
+    ) -> None:
+        sub = tmp_path / "mysubdir"
+        sub.mkdir()
+        user_data = {
+            STATE_KEY: STATE_BROWSING_DIRECTORY,
+            PENDING_THREAD_ID: 42,
+            BROWSE_PATH_KEY: str(tmp_path),
+            PENDING_TOPIC_NAME: "my-topic",
+        }
+        message = AsyncMock()
+
+        result = await _handle_session_start_directory_input(
+            42,
+            "mysubdir",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        mock_create.assert_awaited_once()
+        assert mock_create.call_args[0][4] == str(sub.resolve())
+
+    @patch(f"{_TH}._create_shell_session_for_directory", new_callable=AsyncMock)
+    async def test_accepts_dot_directory_path_when_browsing(
+        self,
+        mock_create: AsyncMock,
+        tmp_path,
+    ) -> None:
+        user_data = {
+            STATE_KEY: STATE_BROWSING_DIRECTORY,
+            PENDING_THREAD_ID: 42,
+            BROWSE_PATH_KEY: str(tmp_path),
+            PENDING_TOPIC_NAME: "my-topic",
+        }
+        message = AsyncMock()
+
+        result = await _handle_session_start_directory_input(
+            42,
+            ".",
+            user_data,
+            message,
+        )
+
+        assert result is True
+        mock_create.assert_awaited_once()
+        assert mock_create.call_args[0][4] == str(tmp_path.resolve())
+
 
 class TestShellProviderRouting:
     @patch(f"{_TH}.get_provider_for_window")
