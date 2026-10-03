@@ -13,7 +13,6 @@ from ccgram.doctor_cmd import (
     _find_orphaned_windows,
     doctor_main,
 )
-from ccgram.hook import _HOOK_EVENT_TYPES
 from ccgram.telegram_draft import mark_draft_unavailable, reset_draft_state
 
 
@@ -92,58 +91,15 @@ class TestFindOrphanedWindows:
 
 
 def _all_hooks_status() -> dict[str, bool]:
-    """Return event status dict with all events installed."""
-    return {event: True for event in _HOOK_EVENT_TYPES}
+    """Return event status dict."""
+    return {}
 
 
 class TestCheckHooks:
-    def test_all_installed(self, tmp_path, monkeypatch) -> None:
-        settings_file = tmp_path / "settings.json"
-        hooks: dict = {}
-        for event_type in _HOOK_EVENT_TYPES:
-            hooks[event_type] = [
-                {"hooks": [{"type": "command", "command": "ccgram hook"}]}
-            ]
-        settings_file.write_text(json.dumps({"hooks": hooks}))
-        monkeypatch.setattr("ccgram.hook._claude_settings_file", lambda: settings_file)
-
+    def test_check_hooks_skipped(self) -> None:
         status, msg, event_status = _check_hooks()
         assert status == "pass"
-        assert all(event_status.values())
-
-    def test_partial(self, tmp_path, monkeypatch) -> None:
-        settings_file = tmp_path / "settings.json"
-        settings = {
-            "hooks": {
-                "SessionStart": [
-                    {"hooks": [{"type": "command", "command": "ccgram hook"}]}
-                ]
-            }
-        }
-        settings_file.write_text(json.dumps(settings))
-        monkeypatch.setattr("ccgram.hook._claude_settings_file", lambda: settings_file)
-
-        status, msg, event_status = _check_hooks()
-        assert status == "warn"
-        assert event_status["SessionStart"] is True
-        assert event_status["Notification"] is False
-
-    def test_none_installed(self, tmp_path, monkeypatch) -> None:
-        settings_file = tmp_path / "settings.json"
-        settings_file.write_text(json.dumps({"hooks": {}}))
-        monkeypatch.setattr("ccgram.hook._claude_settings_file", lambda: settings_file)
-
-        status, msg, event_status = _check_hooks()
-        assert status == "fail"
-        assert not any(event_status.values())
-
-    def test_missing_settings_file(self, tmp_path, monkeypatch) -> None:
-        settings_file = tmp_path / "nonexistent.json"
-        monkeypatch.setattr("ccgram.hook._claude_settings_file", lambda: settings_file)
-
-        status, msg, event_status = _check_hooks()
-        assert status == "fail"
-        assert event_status == {}
+        assert "skipped" in msg
 
 
 class TestDoctorMain:

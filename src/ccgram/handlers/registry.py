@@ -36,7 +36,6 @@ from .file_handler import handle_document_message, handle_photo_message
 from .inline import inline_query_handler, unsupported_content_handler
 from .live import live_command, panes_command, screenshot_command
 from .messaging_pipeline import toolcalls_command, verbose_command
-from .recovery import restore_command, resume_command
 from .recovery.history import history_command
 from .send import send_command
 from .sessions_dashboard import sessions_command
@@ -90,7 +89,6 @@ def register_all(
         CommandSpec("history", history_command),
         CommandSpec(("commands", "help"), commands_command),
         CommandSpec("sessions", sessions_command),
-        CommandSpec("resume", resume_command),
         CommandSpec("unbind", unbind_command),
         CommandSpec("upgrade", upgrade_command),
         CommandSpec("recall", recall_command),
@@ -102,7 +100,6 @@ def register_all(
         CommandSpec("send", send_command),
         CommandSpec("verbose", verbose_command),
         CommandSpec("toolcalls", toolcalls_command),
-        CommandSpec("restore", restore_command),
         CommandSpec("bind", bind_command),
         CommandSpec("echo", echo_command),
     ]
@@ -171,7 +168,6 @@ COMMAND_NAMES: tuple[str, ...] = (
     "commands",
     "help",
     "sessions",
-    "resume",
     "unbind",
     "upgrade",
     "recall",
@@ -184,7 +180,6 @@ COMMAND_NAMES: tuple[str, ...] = (
     "send",
     "verbose",
     "toolcalls",
-    "restore",
     "bind",
     "echo",
 )

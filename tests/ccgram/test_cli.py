@@ -38,7 +38,6 @@ class TestCliCommands:
         assert result.exit_code == 0
         assert "Commands:" in result.output
         assert "run" in result.output
-        assert "hook" in result.output
         assert "status" in result.output
         assert "doctor" in result.output
 
@@ -47,13 +46,6 @@ class TestCliCommands:
         assert result.exit_code == 0
         assert "--verbose" in result.output
         assert "--config-dir" in result.output
-
-    def test_hook_help(self, runner):
-        result = runner.invoke(cli, ["hook", "--help"])
-        assert result.exit_code == 0
-        assert "--install" in result.output
-        assert "--uninstall" in result.output
-        assert "--status" in result.output
 
     def test_doctor_help(self, runner):
         result = runner.invoke(cli, ["doctor", "--help"])

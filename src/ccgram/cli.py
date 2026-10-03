@@ -216,25 +216,6 @@ def run_cmd(**kwargs: object) -> None:
     run_bot()
 
 
-# --- hook command ----------------------------------------------------------
-
-
-@cli.command("hook")
-@click.option(
-    "--install", is_flag=True, help="Install hook into ~/.claude/settings.json."
-)
-@click.option(
-    "--uninstall", is_flag=True, help="Remove hook from ~/.claude/settings.json."
-)
-@click.option("--status", is_flag=True, help="Check if hook is installed.")
-def hook_cmd(install: bool, uninstall: bool, status: bool) -> None:
-    """Claude Code session tracking hook."""
-    # Lazy: defer subcommand import until that command is invoked, keeping `ccgram --help` fast
-    from .hook import hook_main
-
-    hook_main(install=install, uninstall=uninstall, status=status)
-
-
 # --- status command --------------------------------------------------------
 
 

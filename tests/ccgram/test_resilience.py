@@ -8,8 +8,6 @@ lifecycle.
 
 import asyncio
 import contextlib
-import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.error import TelegramError
@@ -48,56 +46,6 @@ class TestScreenBufferResilience:
         buf.resize(80, 24)
         assert buf.columns == 80
         assert buf.rows == 24
-
-
-class TestSessionMapCorruptionGuard:
-    def test_corrupted_json_backed_up(self, tmp_path: Path):
-        from ccgram.hook import _update_session_map
-
-        map_file = tmp_path / "session_map.json"
-        map_file.write_text("{invalid json")
-        with (
-            patch("ccgram.utils.ccgram_dir", return_value=tmp_path),
-            patch("ccgram.utils.atomic_write_json") as mock_write,
-        ):
-            _update_session_map(
-                session_window_key="ccgram:@0",
-                session_id="test-sid",
-                cwd="/tmp",
-                window_name="test",
-                transcript_path="/tmp/t.jsonl",
-                tmux_session_name="ccgram",
-            )
-
-        backup = tmp_path / "session_map.json.corrupt"
-        assert backup.exists()
-        assert backup.read_text() == "{invalid json"
-        written_data = mock_write.call_args[0][1]
-        assert "ccgram:@0" in written_data
-
-    def test_valid_json_preserved_on_update(self, tmp_path: Path):
-        from ccgram.hook import _update_session_map
-
-        map_file = tmp_path / "session_map.json"
-        existing = {"ccgram:@5": {"session_id": "old", "cwd": "/old"}}
-        map_file.write_text(json.dumps(existing))
-
-        with (
-            patch("ccgram.utils.ccgram_dir", return_value=tmp_path),
-            patch("ccgram.utils.atomic_write_json") as mock_write,
-        ):
-            _update_session_map(
-                session_window_key="ccgram:@0",
-                session_id="new-sid",
-                cwd="/new",
-                window_name="new",
-                transcript_path="/tmp/t.jsonl",
-                tmux_session_name="ccgram",
-            )
-
-        written_data = mock_write.call_args[0][1]
-        assert "ccgram:@5" in written_data
-        assert "ccgram:@0" in written_data
 
 
 class TestDeadWorkerRespawn:

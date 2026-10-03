@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 from typing import TYPE_CHECKING
 
 import structlog
@@ -95,42 +94,6 @@ async def register_provider_commands(application: Application) -> None:
     except TelegramError:
         logger.warning("Failed to register bot commands at startup, will retry later")
     setup_menu_refresh_job(application)
-
-
-def verify_hooks_installed() -> None:
-    """Warn if Claude Code hooks are missing for the default provider."""
-    provider = get_provider()
-    if not provider.capabilities.supports_hook:
-        return
-
-    # Lazy: hook module is the Claude-Code subprocess entry point;
-    # importing it eagerly drags `utils`/IO costs into bootstrap even
-    # when the active provider has no hooks.
-    # Lazy: hook helpers used only during the hook-verify step
-    from .hook import _claude_settings_file, get_installed_events
-
-    settings_file = _claude_settings_file()
-    if not settings_file.exists():
-        logger.warning(
-            "Claude Code hooks not installed (%s missing). Run: ccgram hook --install",
-            settings_file,
-        )
-        return
-
-    try:
-        settings = json.loads(settings_file.read_text())
-    except json.JSONDecodeError, OSError:
-        logger.warning("Claude Code hooks not installed. Run: ccgram hook --install")
-        return
-
-    events = get_installed_events(settings)
-    missing = [e for e, ok in events.items() if not ok]
-    if missing:
-        logger.warning(
-            "Claude Code hooks incomplete — %d missing: %s. Run: ccgram hook --install",
-            len(missing),
-            ", ".join(missing),
-        )
 
 
 def wire_runtime_callbacks() -> None:
@@ -212,7 +175,6 @@ async def bootstrap_application(application: Application) -> None:
     await register_provider_commands(application)
     await session_manager.resolve_stale_ids()
     await _adopt_unbound_windows(PTBTelegramClient(application.bot))
-    verify_hooks_installed()
     wire_runtime_callbacks()
     await start_session_monitor(application)
     start_status_polling(application)

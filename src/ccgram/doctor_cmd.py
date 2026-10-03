@@ -93,44 +93,13 @@ def _check_tmux_session() -> tuple[str, str]:
 
 
 def _check_hooks() -> tuple[str, str, dict[str, bool]]:
-    """Check hook installation for all event types.
-
-    Returns (status, message, event_status_dict).
-    """
-    # Lazy: hook helpers reach back into bot wiring; defer until doctor runs
-    from .hook import _claude_settings_file, get_installed_events
-
-    settings_file = _claude_settings_file()
-    if not settings_file.exists():
-        return _FAIL, f"hooks not installed ({settings_file} missing)", {}
-    try:
-        settings = json.loads(settings_file.read_text())
-    except (json.JSONDecodeError, OSError):  # fmt: skip
-        return _FAIL, "hooks not installed (settings.json unreadable)", {}
-
-    event_status = get_installed_events(settings)
-    installed = [e for e, v in event_status.items() if v]
-    missing = [e for e, v in event_status.items() if not v]
-
-    if not missing:
-        return _PASS, f"all {len(installed)} hook events installed", event_status
-    if not installed:
-        return _FAIL, "no hook events installed", event_status
-    return (
-        _WARN,
-        f"{len(installed)} installed, {len(missing)} missing: {', '.join(missing)}",
-        event_status,
-    )
+    """Check hook installation (no-op in tmux-only shell mode)."""
+    return _PASS, "hook check skipped", {}
 
 
 def _check_hook() -> tuple[str, str, bool]:
-    """Check hook installation (backward compat wrapper).
-
-    Returns (status, message, is_installed).
-    """
-    status, message, event_status = _check_hooks()
-    any_installed = any(event_status.values()) if event_status else False
-    return status, message, any_installed
+    """Check hook installation (backward compat wrapper)."""
+    return _PASS, "hook check skipped", False
 
 
 def _check_config_dir() -> tuple[str, str]:
@@ -277,20 +246,8 @@ def _run_check(check_fn: Callable[[], tuple[str, str]]) -> tuple[str, str, bool]
 
 
 def _fix_hooks(event_status: dict[str, bool], fix: bool) -> None:
-    """Attempt to install missing hooks if --fix is set."""
-    if not fix:
-        return
-    missing = [e for e, v in event_status.items() if not v]
-    if not missing:
-        return
-    # Lazy: hook helpers reach back into bot wiring; defer until doctor runs
-    from .hook import _install_hook
-
-    result = _install_hook()
-    if result == 0:
-        _print_check(_PASS, "hooks installed (fixed)")
-    else:
-        _print_check(_FAIL, "failed to install hooks")
+    """Attempt to install missing hooks if --fix is set (no-op)."""
+    pass
 
 
 def _fix_hook(hook_installed: bool, fix: bool) -> None:

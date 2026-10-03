@@ -25,7 +25,6 @@ from typing import Any
 from telegram.error import TelegramError
 
 from .config import config
-from .event_reader import read_new_events
 from .idle_tracker import IdleTracker
 from .monitor_state import MonitorState
 from .providers import get_provider_for_window, registry  # noqa: F401 (used by test patches)
@@ -33,7 +32,6 @@ from .session_map import parse_session_map
 from .session_lifecycle import session_lifecycle
 from .tmux_manager import tmux_manager
 from .monitor_events import NewMessage, NewWindowEvent, SessionInfo
-from .transcript_reader import TranscriptReader
 from .utils import task_done_callback
 
 import aiofiles
@@ -99,7 +97,6 @@ class SessionMonitor:
         self._hook_event_callback: Callable[[HookEvent], Awaitable[None]] | None = None
 
         self._idle_tracker = IdleTracker()
-        self._transcript_reader = TranscriptReader(self.state, self._idle_tracker)
 
     # Delegation properties for backward-compatible test access
     @property
@@ -116,11 +113,11 @@ class SessionMonitor:
 
     @property
     def _file_mtimes(self) -> dict:
-        return self._transcript_reader._file_mtimes
+        return {}
 
     @property
     def _pending_tools(self) -> dict:
-        return self._transcript_reader._pending_tools
+        return {}
 
     def get_last_activity(self, session_id: str) -> float | None:
         """Get monotonic timestamp of last transcript activity for a session."""
@@ -175,106 +172,42 @@ class SessionMonitor:
 
         return merged
 
-    async def check_for_updates(self, current_map: dict) -> list[NewMessage]:
-        """Check all sessions for new assistant messages.
-
-        Routes sessions to _process_session_file (allowing test spying) and
-        delegates the actual I/O to TranscriptReader. Uses _get_active_cwds()
-        for fallback session discovery so tests can stub tmux calls.
-        """
-        current_map = self._add_bound_state_sessions(current_map)
-        new_messages: list[NewMessage] = []
-        sid_to_wid = {v["session_id"]: wid for wid, v in current_map.items()}
-
-        direct_sessions: list[tuple[str, Path]] = []
-        fallback_session_ids: set[str] = set()
-
-        for details in current_map.values():
-            session_id = details["session_id"]
-            transcript_path = details.get("transcript_path", "")
-            if transcript_path:
-                path = Path(transcript_path)
-                if path.exists():
-                    direct_sessions.append((session_id, path))
-                    continue
-            fallback_session_ids.add(session_id)
-
-        for session_id, file_path in direct_sessions:
-            try:
-                await self._process_session_file(
-                    session_id,
-                    file_path,
-                    new_messages,
-                    window_id=sid_to_wid.get(session_id, ""),
-                )
-            except Exception:
-                logger.exception("Error processing session %s", session_id)
-
-        if fallback_session_ids:
-            active_cwds = await self._get_active_cwds()
-            sessions = self._scan_projects_sync(active_cwds) if active_cwds else []
-            for session_info in sessions:
-                if session_info.session_id not in fallback_session_ids:
-                    continue
-                try:
-                    await self._process_session_file(
-                        session_info.session_id,
-                        session_info.file_path,
-                        new_messages,
-                        window_id=sid_to_wid.get(session_info.session_id, ""),
-                    )
-                except Exception:
-                    logger.exception(
-                        "Error processing session %s", session_info.session_id
-                    )
-
-        self.state.save_if_dirty()
-        return new_messages
+    async def check_for_updates(
+        self,
+        current_map: dict,  # noqa: ARG002
+    ) -> list[NewMessage]:
+        """Check all sessions for updates (no-op in tmux-only shell mode)."""
+        return []
 
     async def _process_session_file(
-        self, session_id: str, file_path: Path, new_messages: list, window_id: str = ""
+        self,
+        session_id: str,  # noqa: ARG002
+        file_path: Path,  # noqa: ARG002
+        new_messages: list,  # noqa: ARG002
+        window_id: str = "",  # noqa: ARG002
     ) -> None:
-        """Process a single session file (delegates to TranscriptReader)."""
-        await self._transcript_reader._process_session_file(
-            session_id, file_path, new_messages, window_id=window_id
-        )
+        pass
 
-    def _scan_projects_sync(self, active_cwds: set) -> list:
-        """Scan projects synchronously (delegates to TranscriptReader)."""
-        return self._transcript_reader._scan_projects_sync(
-            self.projects_path, active_cwds
-        )
+    def _scan_projects_sync(
+        self,
+        active_cwds: set,  # noqa: ARG002
+    ) -> list:
+        return []
 
     async def _get_active_cwds(self) -> set[str]:
-        """Get normalized cwds of all active tmux windows (delegates to TranscriptReader)."""
-        return await self._transcript_reader._get_active_cwds()
+        return set()
 
     async def _read_new_lines(
-        self, session: Any, file_path: Path, window_id: str = ""
+        self,
+        session: Any,  # noqa: ARG002
+        file_path: Path,  # noqa: ARG002
+        window_id: str = "",  # noqa: ARG002
     ) -> list:
-        """Read new lines from session file (delegates to TranscriptReader)."""
-        return await self._transcript_reader._read_new_lines(
-            session, file_path, window_id
-        )
+        return []
 
     async def _read_hook_events(self) -> None:
-        """Read new lines from events.jsonl and dispatch via callback."""
-        if not self._hook_event_callback:
-            return
-
-        offset_before = self.state.events_offset
-        events, new_offset = await read_new_events(
-            config.events_file, self.state.events_offset
-        )
-        self.state.events_offset = new_offset
-        if new_offset != offset_before:
-            self.state._dirty = True
-
-        for event in events:
-            try:
-                await self._hook_event_callback(event)
-            except _CallbackError:
-                logger.exception("Hook event callback error for %s", event.event_type)
+        """Read hook events (no-op in tmux-only shell mode)."""
+        pass
 
     async def _load_current_session_map(self) -> dict[str, dict[str, str]]:
         """Load current session_map and return window_key -> details mapping."""
@@ -302,7 +235,7 @@ class SessionMonitor:
                 "[Startup cleanup] Removing %d stale sessions", len(stale_sessions)
             )
             for session_id in stale_sessions:
-                self._transcript_reader.clear_session(session_id)
+                self.state.remove_session(session_id)
                 self._idle_tracker.clear_session(session_id)
             self.state.save_if_dirty()
 
@@ -312,7 +245,7 @@ class SessionMonitor:
         result = session_lifecycle.reconcile(current_map, self._idle_tracker)
 
         for session_id in result.sessions_to_remove:
-            self._transcript_reader.clear_session(session_id)
+            self.state.remove_session(session_id)
         if result.sessions_to_remove:
             self.state.save_if_dirty()
 

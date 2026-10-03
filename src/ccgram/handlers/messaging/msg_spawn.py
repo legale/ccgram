@@ -110,12 +110,6 @@ async def handle_spawn_approval(
             exc_info=True,
         )
 
-    if req.provider == "claude":
-        # Lazy: msg_skill is only needed for Claude spawns.
-        from ...msg_skill import ensure_skill_installed
-
-        ensure_skill_installed(req.cwd)
-
     if req.prompt:
         prompt_text = req.prompt
         if req.context_file:

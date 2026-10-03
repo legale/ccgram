@@ -18,9 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ....telegram_client import PTBTelegramClient
 from ...messaging_pipeline.message_queue import get_message_queue
-from ...recovery.transcript_discovery import discover_and_register_transcript
 from ..polling_state import (
     lifecycle_strategy,
     pane_status_strategy,
@@ -74,14 +72,6 @@ async def tick_window(
     if window is None:
         await _handle_dead_window_notification(bot, user_id, thread_id, window_id)
         return
-
-    await discover_and_register_transcript(
-        window_id,
-        _window=window,
-        client=PTBTelegramClient(bot),
-        user_id=user_id,
-        thread_id=thread_id,
-    )
 
     queue = get_message_queue(user_id)
     if queue and not queue.empty():

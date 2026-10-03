@@ -88,10 +88,6 @@ class TestBootstrapApplication:
                 new=AsyncMock(side_effect=lambda _bot: order.append("adopt")),
             ),
             patch(
-                "ccgram.bootstrap.verify_hooks_installed",
-                side_effect=lambda: order.append("hooks"),
-            ),
-            patch(
                 "ccgram.bootstrap.wire_runtime_callbacks",
                 side_effect=lambda: order.append("wire"),
             ),
@@ -118,7 +114,6 @@ class TestBootstrapApplication:
             "commands",
             "stale_ids",
             "adopt",
-            "hooks",
             "wire",
             "monitor",
             "polling",
@@ -230,27 +225,3 @@ class TestResetForTesting:
 
         bootstrap.wire_runtime_callbacks()
         assert hook_events._stop_callback_registered is True
-
-
-class TestVerifyHooksInstalled:
-    def test_skips_when_provider_does_not_support_hooks(self):
-        provider = MagicMock()
-        provider.capabilities.supports_hook = False
-
-        with patch("ccgram.bootstrap.get_provider", return_value=provider):
-            bootstrap.verify_hooks_installed()
-
-    def test_warns_when_settings_file_missing(self, tmp_path):
-        provider = MagicMock()
-        provider.capabilities.supports_hook = True
-
-        missing = tmp_path / "missing.json"
-
-        with (
-            patch("ccgram.bootstrap.get_provider", return_value=provider),
-            patch("ccgram.bootstrap.logger") as logger,
-            patch("ccgram.hook._claude_settings_file", return_value=missing),
-        ):
-            bootstrap.verify_hooks_installed()
-
-        logger.warning.assert_called_once()

@@ -240,7 +240,6 @@ class TestLoadHandlers:
             "vc:",
             "sh:",
             "hp:",
-            "rec:",
             "sess:",
             "sync:",
         ):
@@ -260,8 +259,6 @@ class TestLoadHandlers:
             "ccgram.handlers.recovery.history_callbacks",
             "ccgram.handlers.live.screenshot_callbacks",
             "ccgram.handlers.interactive.interactive_callbacks",
-            "ccgram.handlers.recovery.recovery_callbacks",
-            "ccgram.handlers.recovery.resume_command",
             "ccgram.handlers.voice.voice_callbacks",
             "ccgram.handlers.shell.shell_commands",
             "ccgram.handlers.sessions_dashboard",

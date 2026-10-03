@@ -9,10 +9,8 @@ notifications, multi-pane scans, passive shell relay.
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
@@ -45,7 +43,6 @@ from ...messaging_pipeline.message_queue import (
     enqueue_status_update,
 )
 from ...messaging_pipeline.message_sender import rate_limit_send_message, safe_send
-from ...recovery.recovery_banner import RecoveryBanner, render_banner
 from ...status.topic_emoji import update_topic_emoji
 from ...status.topic_status_diff import update_topic_status_diff
 from ..polling_state import (
@@ -305,32 +302,12 @@ async def _handle_dead_window_notification(
         user_id, thread_id, "dead", time.monotonic()
     )
 
-    view = window_query.view_window(wid)
-    cwd = view.cwd if view else ""
-    try:
-        dir_exists = bool(cwd) and await asyncio.to_thread(Path(cwd).is_dir)
-    except OSError:
-        dir_exists = False
-    if dir_exists:
-        banner = RecoveryBanner(
-            chat_id=chat_id,
-            thread_id=thread_id,
-            window_id=wid,
-            mode="dead",
-            provider=window_query.get_window_provider(wid),
-            display=display,
-            cwd=cwd,
-        )
-        text, keyboard = render_banner(banner)
-    else:
-        text = f"Session `{display}` ended."
-        keyboard = None
+    text = f"Session `{display}` ended."
     sent = await rate_limit_send_message(
         client,
         chat_id,
         text,
         message_thread_id=thread_id,
-        reply_markup=keyboard,
     )
     if sent is None:
         try:

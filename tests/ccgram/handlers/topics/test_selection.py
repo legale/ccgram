@@ -463,28 +463,8 @@ class TestHandleModeSelect:
 
 
 class TestTryInstallMessagingSkill:
-    @patch("ccgram.msg_skill.ensure_skill_installed")
-    def test_calls_ensure_for_claude(self, mock_ensure: MagicMock) -> None:
-        _try_install_messaging_skill("claude", "/tmp/proj")
-        mock_ensure.assert_called_once_with("/tmp/proj")
-
-    @patch("ccgram.msg_skill.ensure_skill_installed")
-    def test_skips_for_non_claude(self, mock_ensure: MagicMock) -> None:
-        for provider in ("codex", "gemini", "shell"):
-            _try_install_messaging_skill(provider, "/tmp/proj")
-        mock_ensure.assert_not_called()
-
-    @patch("ccgram.msg_skill.ensure_skill_installed")
-    def test_swallows_oserror(self, mock_ensure: MagicMock) -> None:
-        mock_ensure.side_effect = OSError("disk full")
-        _try_install_messaging_skill("claude", "/tmp/proj")
-        mock_ensure.assert_called_once()
-
-    @patch("ccgram.msg_skill.ensure_skill_installed")
-    def test_swallows_unexpected_error(self, mock_ensure: MagicMock) -> None:
-        mock_ensure.side_effect = RuntimeError("unexpected")
-        _try_install_messaging_skill("claude", "/tmp/proj")
-        mock_ensure.assert_called_once()
+    def test_noop(self) -> None:
+        _try_install_messaging_skill("shell", "/tmp/proj")
 
 
 class TestAcceptYoloConfirmation:

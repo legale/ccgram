@@ -22,7 +22,6 @@ from ccgram.handlers.user_state import (
     PENDING_THREAD_ID,
     PENDING_THREAD_TEXT,
     PENDING_TOPIC_NAME,
-    RECOVERY_WINDOW_ID,
 )
 
 _TH = "ccgram.handlers.text.text_handler"
@@ -282,16 +281,16 @@ class TestHandleDeadWindow:
         assert result is False
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
-    @patch(f"{_TH}.render_banner")
+    @patch(f"{_TH}.build_directory_browser")
     @patch(f"{_TH}.tmux_manager")
     @patch(f"{_TH}.window_query")
     @patch(f"{_TH}.thread_router")
-    async def test_shows_recovery_ui(
+    async def test_shows_directory_browser_on_dead_window(
         self,
         mock_tr: MagicMock,
         mock_sm: MagicMock,
         mock_tm: MagicMock,
-        mock_render: MagicMock,
+        mock_browser: MagicMock,
         mock_reply: AsyncMock,
     ) -> None:
         mock_tm.find_window_by_id = AsyncMock(return_value=None)
@@ -299,10 +298,7 @@ class TestHandleDeadWindow:
         ws = MagicMock()
         ws.cwd = "/tmp/project"
         mock_sm.view_window.return_value = ws
-        mock_render.return_value = (
-            "⚠ Session `project` ended.\n📂 `/tmp/project`",
-            MagicMock(),
-        )
+        mock_browser.return_value = ("Pick a directory", MagicMock(), [])
 
         user_data: dict = {}
         message = AsyncMock()
@@ -315,47 +311,8 @@ class TestHandleDeadWindow:
 
         assert result is True
         mock_reply.assert_called_once()
-        banner = mock_render.call_args.args[0]
-        assert banner.window_id == "@0"
-        assert banner.mode == "dead"
-        assert banner.cwd == "/tmp/project"
-        assert banner.display == "project"
-        assert user_data[RECOVERY_WINDOW_ID] == "@0"
-
-    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
-    @patch(f"{_TH}.tmux_manager")
-    @patch(f"{_TH}.window_query")
-    @patch(f"{_TH}.thread_router")
-    async def test_recovery_banner_includes_help_text(
-        self,
-        mock_tr: MagicMock,
-        mock_sm: MagicMock,
-        mock_tm: MagicMock,
-        mock_reply: AsyncMock,
-    ) -> None:
-        mock_tm.find_window_by_id = AsyncMock(return_value=None)
-        mock_tr.get_display_name.return_value = "project"
-        ws = MagicMock()
-        ws.cwd = "/tmp/project"
-        mock_sm.view_window.return_value = ws
-
-        user_data: dict = {}
-        message = AsyncMock()
-
-        with patch(
-            "ccgram.handlers.recovery.recovery_banner.get_provider_for_window"
-        ) as mock_gpw:
-            caps = mock_gpw.return_value.capabilities
-            caps.supports_continue = True
-            caps.supports_resume = True
-            with patch(f"{_TH}.Path") as mock_path:
-                mock_path.return_value.is_dir.return_value = True
-                await _handle_dead_window("@0", 100, 42, "hello", user_data, message)
-
-        body = mock_reply.call_args.args[1]
-        assert "Start fresh" in body
-        assert "Continue last session" in body
-        assert "Resume from list" in body
+        assert "Session `project` ended" in mock_reply.call_args.args[1]
+        mock_tr.unbind_thread.assert_called_once_with(100, 42)
 
     @pytest.mark.parametrize("cwd", ["", "/nonexistent"])
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)

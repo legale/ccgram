@@ -42,10 +42,9 @@ from ..messaging_pipeline.message_sender import (
     rate_limit_send_message,
     safe_reply,
 )
-from ..recovery.recovery_banner import RecoveryBanner, render_banner
 from ..polling.polling_state import lifecycle_strategy
 from ...topic_state_registry import topic_state
-from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT, RECOVERY_WINDOW_ID
+from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
 from ..user_state import PENDING_TOPIC_NAME
 from ... import window_query
 from ...thread_router import thread_router
@@ -478,57 +477,30 @@ async def _handle_dead_window(
     display = thread_router.get_display_name(window_id)
     view = window_query.view_window(window_id)
     cwd = view.cwd if view else ""
-
-    if not cwd or not Path(cwd).is_dir():
-        # No valid cwd — unbind and fall back to directory browser
-        logger.info(
-            "Dead window %s (no valid cwd), falling back to directory browser"
-            " (user=%d, thread=%d)",
-            window_id,
-            user_id,
-            thread_id,
-        )
-        thread_router.unbind_thread(user_id, thread_id)
-        lifecycle_strategy.clear_dead_notification(user_id, thread_id)
-        start_path = str(Path.cwd())
-        msg_text, keyboard, subdirs = build_directory_browser(
-            start_path, user_id=user_id
-        )
-        if user_data is not None:
-            user_data[STATE_KEY] = STATE_BROWSING_DIRECTORY
-            user_data[BROWSE_PATH_KEY] = start_path
-            user_data[BROWSE_PAGE_KEY] = 0
-            user_data[BROWSE_DIRS_KEY] = subdirs
-            user_data[PENDING_THREAD_ID] = thread_id
-            user_data[PENDING_THREAD_TEXT] = text
-        await safe_reply(message, msg_text, reply_markup=keyboard)
-        return True
-
-    # Show recovery UI
+    start_path = cwd if (cwd and Path(cwd).is_dir()) else str(Path.cwd())
     logger.info(
-        "Dead window %s (%s), showing recovery UI (user=%d, thread=%d)",
+        "Dead window %s (%s), falling back to directory browser at %s (user=%d, thread=%d)",
         window_id,
         display,
+        start_path,
         user_id,
         thread_id,
     )
+    thread_router.unbind_thread(user_id, thread_id)
+    lifecycle_strategy.clear_dead_notification(user_id, thread_id)
+    msg_text, keyboard, subdirs = build_directory_browser(start_path, user_id=user_id)
     if user_data is not None:
+        user_data[STATE_KEY] = STATE_BROWSING_DIRECTORY
+        user_data[BROWSE_PATH_KEY] = start_path
+        user_data[BROWSE_PAGE_KEY] = 0
+        user_data[BROWSE_DIRS_KEY] = subdirs
         user_data[PENDING_THREAD_ID] = thread_id
         user_data[PENDING_THREAD_TEXT] = text
-        user_data[RECOVERY_WINDOW_ID] = window_id
-    chat = getattr(message, "chat", None)
-    chat_id = chat.id if chat is not None else 0
-    banner = RecoveryBanner(
-        chat_id=chat_id,
-        thread_id=thread_id,
-        window_id=window_id,
-        mode="dead",
-        provider=window_query.get_window_provider(window_id),
-        display=display or window_id,
-        cwd=cwd,
+    await safe_reply(
+        message,
+        f"Session `{display or window_id}` ended.\n\n{msg_text}",
+        reply_markup=keyboard,
     )
-    banner_text, keyboard = render_banner(banner)
-    await safe_reply(message, banner_text, reply_markup=keyboard)
     return True
 
 

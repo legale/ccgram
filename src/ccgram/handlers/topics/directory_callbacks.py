@@ -523,16 +523,7 @@ async def _accept_yolo_confirmation(window_id: str, *, timeout: float = 8.0) -> 
 
 
 def _try_install_messaging_skill(provider_name: str, cwd: str) -> None:
-    """Install the messaging skill for Claude windows (no-op for other providers)."""
-    if provider_name != "claude":
-        return
-    # Lazy: msg_skill is only needed for Claude topics.
-    from ...msg_skill import ensure_skill_installed
-
-    try:
-        ensure_skill_installed(cwd)
-    except Exception:
-        logger.exception("Failed to install messaging skill at %s", cwd)
+    pass
 
 
 async def _create_window_and_bind(

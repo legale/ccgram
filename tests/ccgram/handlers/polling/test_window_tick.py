@@ -103,9 +103,6 @@ class TestTickWindowPendingQueue:
         mock_queue.empty.return_value = False
 
         with (
-            patch.object(
-                window_tick, "discover_and_register_transcript", new_callable=AsyncMock
-            ),
             patch.object(window_tick, "get_message_queue", return_value=mock_queue),
             patch.object(
                 window_tick, "_check_interactive_only", new_callable=AsyncMock
@@ -135,9 +132,6 @@ class TestTickWindowEmptyQueue:
         mock_queue.empty.return_value = True
 
         with (
-            patch.object(
-                window_tick, "discover_and_register_transcript", new_callable=AsyncMock
-            ),
             patch.object(window_tick, "get_message_queue", return_value=mock_queue),
             patch.object(
                 window_tick, "_update_status", new_callable=AsyncMock
@@ -159,9 +153,6 @@ class TestTickWindowEmptyQueue:
         w = _make_window()
 
         with (
-            patch.object(
-                window_tick, "discover_and_register_transcript", new_callable=AsyncMock
-            ),
             patch.object(window_tick, "get_message_queue", return_value=None),
             patch.object(
                 window_tick, "_update_status", new_callable=AsyncMock
