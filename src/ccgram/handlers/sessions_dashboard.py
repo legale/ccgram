@@ -59,36 +59,36 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
-_REFRESH_BTN = InlineKeyboardButton(
-    "\U0001f504 Refresh", callback_data=CB_SESSIONS_REFRESH
-)
-_NEW_BTN = InlineKeyboardButton("\u2795 New Session", callback_data=CB_SESSIONS_NEW)
+_REFRESH_BTN = InlineKeyboardButton("Refresh", callback_data=CB_SESSIONS_REFRESH)
+_NEW_BTN = InlineKeyboardButton("New Session", callback_data=CB_SESSIONS_NEW)
 
 
 async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     """Build dashboard text and keyboard for a user's sessions."""
     bindings = thread_router.get_all_thread_windows(user_id)
+    all_windows = await tmux_manager.list_windows()
+    external_windows = await tmux_manager.discover_external_sessions()
+    all_windows.extend(external_windows)
+    live_ids = {w.window_id for w in all_windows}
 
-    if not bindings:
+    if not bindings and not all_windows:
         keyboard = InlineKeyboardMarkup([[_REFRESH_BTN, _NEW_BTN]])
         return (
             "No active sessions.\n\nCreate a new topic to start a session.",
             keyboard,
         )
 
-    all_windows = await tmux_manager.list_windows()
-    external_windows = await tmux_manager.discover_external_sessions()
-    all_windows.extend(external_windows)
-    live_ids = {w.window_id for w in all_windows}
-
     lines: list[str] = []
     action_rows: list[list[InlineKeyboardButton]] = []
+    bound_ids: set[str] = set()
+
     for _thread_id, window_id in sorted(bindings.items()):
+        bound_ids.add(window_id)
         display_name = thread_router.get_display_name(window_id)
         view = view_window(window_id)
         alive = window_id in live_ids
         is_external = view.external if view else False
-        status = "\U0001f7e2" if alive else "\u26ab"
+        status = "[alive]" if alive else "[dead]"
 
         # Session line with provider + mode tags and cwd detail
         provider_tag = f" [{view.provider_name}]" if view and view.provider_name else ""
@@ -101,11 +101,11 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         if alive:
             row: list[InlineKeyboardButton] = [
                 InlineKeyboardButton(
-                    "\u238b Esc",
+                    "Esc",
                     callback_data=f"{CB_STATUS_ESC}{window_id}"[:64],
                 ),
                 InlineKeyboardButton(
-                    "\U0001f4f8",
+                    "Screenshot",
                     callback_data=f"{CB_STATUS_SCREENSHOT}{window_id}"[:64],
                 ),
             ]
@@ -113,17 +113,28 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
             if not is_external:
                 row.append(
                     InlineKeyboardButton(
-                        "✏️ Rename",
+                        "Rename",
                         callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
                     ),
                 )
                 row.append(
                     InlineKeyboardButton(
-                        f"\U0001f5d1 Kill {display_name}",
+                        f"Kill {display_name}",
                         callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
                     ),
                 )
             action_rows.append(row)
+
+    # Show unbound live tmux windows
+    seen_unbound: set[str] = set()
+    for w in all_windows:
+        if w.window_id in bound_ids or w.window_id in seen_unbound:
+            continue
+        seen_unbound.add(w.window_id)
+        line = f"[unbound] {w.window_name}"
+        if w.cwd:
+            line += f"\n    {w.cwd}"
+        lines.append(line)
 
     content = "\n".join(lines)
     text = f"Sessions\n\n```\n{content}\n```"
@@ -197,7 +208,7 @@ async def handle_sessions_kill(
         [
             [
                 InlineKeyboardButton(
-                    f"\u26a0 Confirm kill {display}",
+                    f"Confirm kill {display}",
                     callback_data=f"{CB_SESSIONS_KILL_CONFIRM}{window_id}"[:64],
                 ),
             ],
@@ -237,9 +248,7 @@ async def handle_sessions_kill_confirm(
 
     # Re-render dashboard
     text, keyboard = await _build_dashboard(user_id)
-    await safe_edit(
-        query, f"\U0001f5d1 Killed '{display}'\n\n{text}", reply_markup=keyboard
-    )
+    await safe_edit(query, f"Killed '{display}'\n\n{text}", reply_markup=keyboard)
 
 
 async def handle_sessions_rename(
@@ -264,7 +273,7 @@ async def handle_sessions_rename(
         context.user_data[SESSION_RENAME_THREAD_ID] = thread_id
         context.user_data[SESSION_RENAME_CHAT_ID] = chat_id
 
-    prompt_text = f"✏️ Enter new name for session `{display}`:"
+    prompt_text = f"Enter new name for session `{display}`:"
     try:
         if chat_id is not None:
             await client.send_message(
@@ -316,7 +325,7 @@ async def apply_session_rename(
     if not name or len(name) > 50 or "\n" in name:  # noqa: PLR2004
         await safe_reply(
             message,
-            "❌ Invalid session name. Must be 1-50 characters without newlines.",
+            "Invalid session name. Must be 1-50 characters without newlines.",
         )
         return True
 

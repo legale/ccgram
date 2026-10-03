@@ -60,7 +60,7 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert "\U0001f7e2 myproject" in text
+        assert "[alive] myproject" in text
 
     async def test_alive_session_shows_cwd(self, _patch_deps) -> None:
         mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -89,7 +89,7 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[])
 
         text, _kb = await _build_dashboard(100)
-        assert "\u26ab oldproject" in text
+        assert "[dead] oldproject" in text
 
     async def test_multiple_sessions(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -101,8 +101,24 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert "\U0001f7e2 alive" in text
-        assert "\u26ab dead" in text
+        assert "[alive] alive" in text
+        assert "[dead] dead" in text
+
+    async def test_unbound_windows_displayed(self, _patch_deps) -> None:
+        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
+        mock_tr.get_all_thread_windows.return_value = {10: "@0"}
+        mock_tr.get_display_name.side_effect = lambda wid: "bound-session"
+        unbound_win = MagicMock(
+            window_id="@99", window_name="other-session", cwd="/home/user"
+        )
+        mock_tm.list_windows = AsyncMock(
+            return_value=[MagicMock(window_id="@0"), unbound_win]
+        )
+
+        text, _kb = await _build_dashboard(100)
+        assert "[alive] bound-session" in text
+        assert "[unbound] other-session" in text
+        assert "/home/user" in text
 
     async def test_refresh_and_new_buttons(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -172,7 +188,7 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert "[" not in text
+        assert text.startswith("Sessions\n\n```\n[alive] myproject\n")
 
     async def test_yolo_mode_shows_tag(self, _patch_deps) -> None:
         mock_sm, mock_tr, mock_tm, _ = _patch_deps

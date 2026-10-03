@@ -26,6 +26,7 @@ def _patch_deps():
         mock_view.side_effect = lambda wid: WindowState()
         mock_tr.get_all_thread_windows.return_value = {}
         mock_tm.list_windows = AsyncMock(return_value=[])
+        mock_tm.discover_external_sessions = AsyncMock(return_value=[])
         yield mock_view, mock_tr, mock_tm, mock_clear
 
 
