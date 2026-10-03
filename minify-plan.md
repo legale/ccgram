@@ -5,10 +5,10 @@
 - [x] Шаг 2.2: Очистка registry, providers/__init__.py и process_detection.py, сохранение только shell-провайдера
 - [x] Шаг 2.3: Удаление устаревших тестов сторонних провайдеров и обновление тестов registry
 - [x] Шаг 2.4: Верификация шага 2 (make check, make test), установка в venv, перезапуск ccgram.service
-- [ ] Шаг 3.1: Удаление подсистемы транскриптов и хуков (transcript_parser, transcript_reader, event_reader, hook, msg_skill)
-- [ ] Шаг 3.2: Удаление подсистемы recovery (handlers/recovery/: resume_picker, transcript_discovery, recovery_callbacks, restore_command, recovery_banner)
-- [ ] Шаг 3.3: Очистка вызовов и зависимостей в session_monitor.py, bootstrap.py, main.py и их тестов
-- [ ] Шаг 3.4: Верификация шага 3 (make check, make test), установка в venv, перезапуск ccgram.service
+- [x] Шаг 3.1: Удаление подсистемы транскриптов и хуков (transcript_parser, transcript_reader, event_reader, hook, msg_skill) (034ceb0)
+- [x] Шаг 3.2: Удаление подсистемы recovery (handlers/recovery/: resume_picker, transcript_discovery, recovery_callbacks, restore_command, recovery_banner) (034ceb0)
+- [x] Шаг 3.3: Очистка вызовов и зависимостей в session_monitor.py, bootstrap.py, main.py и их тестов (034ceb0)
+- [x] Шаг 3.4: Верификация шага 3 (make check, make test), установка в venv, перезапуск ccgram.service (034ceb0)
 - [ ] Шаг 4.1: Проверка и полировка вычисления дельты экрана tmux при отправке команд (topic_status_diff.py, shell_capture.py)
 - [ ] Шаг 4.2: Проверка и полировка сервиса скриншотов (/screen, кнопки, рендеринг ANSI в PNG)
 - [ ] Шаг 4.3: Верификация шага 4 (make check, make test), установка в venv, перезапуск ccgram.service
