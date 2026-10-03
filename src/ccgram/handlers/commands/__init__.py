@@ -30,9 +30,7 @@ from typing import TYPE_CHECKING
 import structlog
 from telegram import Update
 
-from ...cc_commands import discover_provider_commands
 from ...config import config
-from ...providers import get_provider_for_window
 from ... import window_query
 from ...thread_router import thread_router
 from ...utils import handle_general_topic_message, is_general_topic
@@ -55,7 +53,7 @@ logger = structlog.get_logger()
 
 
 async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    """``/commands`` — list provider-specific slash commands for the topic."""
+    """``//commands`` — list bot commands."""
 
     user = update.effective_user
     if not user or not config.is_user_allowed(user.id):
@@ -63,30 +61,26 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
     if not update.message:
         return
 
-    thread_id = _get_thread_id(update)
-    window_id = thread_router.resolve_window_for_thread(user.id, thread_id)
-    if not window_id:
-        await safe_reply(update.message, "No session bound to this topic.")
-        return
-
-    provider = get_provider_for_window(
-        window_id, provider_name=window_query.get_window_provider(window_id)
-    )
-    await sync_scoped_provider_menu(update.message, user.id, provider)
-    commands = discover_provider_commands(provider)
-    if not commands:
-        await safe_reply(
-            update.message,
-            f"Provider: `{provider.capabilities.name}`\nNo discoverable commands.",
-        )
-        return
-
-    lines = [f"Provider: `{provider.capabilities.name}`", "Supported commands:"]
-    for cmd in sorted(commands, key=lambda c: c.telegram_name):
-        if not cmd.telegram_name:
-            continue
-        original = cmd.name if cmd.name.startswith("/") else f"/{cmd.name}"
-        lines.append(f"- `/{cmd.telegram_name}` → `{original}`")
+    lines = [
+        "*Команды бота (префикс `//`)*:",
+        "",
+        "• `//commands` (или `//help`) — список команд",
+        "• `//screenshot` (или `//screen`) — скриншот терминала",
+        "• `//live` — автообновляемый просмотр терминала",
+        "• `//panes` — управление панелями окна",
+        "• `//toolbar` — показать панель кнопок",
+        "• `//sessions` — дашборд сессий",
+        "• `//sync` — синхронизация и аудит состояния",
+        "• `//bind` — привязать окно к топику",
+        "• `//unbind` — отвязать топик",
+        "• `//history` — история сообщений",
+        "• `//recall` — повтор недавних команд",
+        "• `//verbose` — переключить детальность сообщений",
+        "• `//upgrade` — обновление ccgram и перезапуск",
+        "• `//echo` — эхо-тест",
+        "",
+        "_Команды и пути, начинающиеся с `/` (например `/bin/ls`), отправляются напрямую в tmux._",
+    ]
     await safe_reply(update.message, "\n".join(lines))
 
 

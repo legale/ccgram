@@ -15,9 +15,9 @@ from typing import TypeAlias
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
-    CommandHandler,
     InlineQueryHandler,
     MessageHandler,
+    PrefixHandler,
     filters,
 )
 from telegram.ext._utils.types import HandlerCallback
@@ -29,7 +29,6 @@ from .cleanup import unbind_command
 from .command_history import recall_command
 from .commands import (
     commands_command,
-    forward_command_handler,
     toolbar_command,
 )
 from .echo_command import echo_command
@@ -48,14 +47,18 @@ from .topics.topic_lifecycle import topic_closed_handler, topic_edited_handler
 from .upgrade import upgrade_command
 from .voice import handle_voice_message
 
+from .messaging_pipeline.message_sender import safe_reply
+
+COMMAND_PREFIX: str = "//"
+
 HandlerFn: TypeAlias = HandlerCallback
 
 
 @dataclass(frozen=True)
 class CommandSpec:
-    """Specification for a single PTB CommandHandler registration."""
+    """Specification for a bot command registration."""
 
-    name: str
+    name: str | tuple[str, ...]
     handler: HandlerFn
 
 
@@ -64,25 +67,34 @@ async def _record_topic_tail(update, _context) -> None:
     record_telegram_message(message)
 
 
+async def _unknown_double_slash_handler(update, _context) -> None:
+    message = getattr(update, "effective_message", None)
+    if message and getattr(message, "text", None):
+        cmd = message.text.split()[0]
+        await safe_reply(
+            message,
+            f"Unknown command `{cmd}`. Use `{COMMAND_PREFIX}commands` for the list of commands.",
+        )
+
+
 def register_all(
     application: Application,
     group_filter: filters.BaseFilter,
 ) -> None:
     """Register every command, callback, message and inline-query handler.
 
-    Order is significant: PTB dispatches the first matching handler, so
-    explicit CommandHandlers must precede the COMMAND-fallback
-    MessageHandler, which must precede the TEXT MessageHandler.
+    Bot commands use the // prefix so shell paths and unix commands starting
+    with / can pass through directly to tmux without being intercepted.
     """
     command_specs: list[CommandSpec] = [
         CommandSpec("history", history_command),
-        CommandSpec("commands", commands_command),
+        CommandSpec(("commands", "help"), commands_command),
         CommandSpec("sessions", sessions_command),
         CommandSpec("resume", resume_command),
         CommandSpec("unbind", unbind_command),
         CommandSpec("upgrade", upgrade_command),
         CommandSpec("recall", recall_command),
-        CommandSpec("screenshot", screenshot_command),
+        CommandSpec(("screenshot", "screen"), screenshot_command),
         CommandSpec("live", live_command),
         CommandSpec("panes", panes_command),
         CommandSpec("sync", sync_command),
@@ -96,9 +108,18 @@ def register_all(
     ]
 
     for spec in command_specs:
-        application.add_handler(
-            CommandHandler(spec.name, spec.handler, filters=group_filter)
+        names = (spec.name,) if isinstance(spec.name, str) else spec.name
+        for name in names:
+            application.add_handler(
+                PrefixHandler(COMMAND_PREFIX, name, spec.handler, filters=group_filter)
+            )
+
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.Regex(r"^//") & group_filter,
+            _unknown_double_slash_handler,
         )
+    )
 
     application.add_handler(
         MessageHandler(group_filter, _record_topic_tail),
@@ -120,12 +141,7 @@ def register_all(
             topic_edited_handler,
         )
     )
-    application.add_handler(
-        MessageHandler(filters.COMMAND & group_filter, forward_command_handler)
-    )
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND & group_filter, text_handler)
-    )
+    application.add_handler(MessageHandler(filters.TEXT & group_filter, text_handler))
     application.add_handler(
         MessageHandler(filters.PHOTO & group_filter, handle_photo_message)
     )
@@ -137,8 +153,7 @@ def register_all(
     )
     application.add_handler(
         MessageHandler(
-            ~filters.COMMAND
-            & ~filters.TEXT
+            ~filters.TEXT
             & ~filters.PHOTO
             & ~filters.Document.ALL
             & ~filters.VOICE
@@ -154,13 +169,14 @@ def register_all(
 COMMAND_NAMES: tuple[str, ...] = (
     "history",
     "commands",
+    "help",
     "sessions",
     "resume",
     "unbind",
-    "bind",
     "upgrade",
     "recall",
     "screenshot",
+    "screen",
     "live",
     "panes",
     "sync",
@@ -169,6 +185,7 @@ COMMAND_NAMES: tuple[str, ...] = (
     "verbose",
     "toolcalls",
     "restore",
+    "bind",
     "echo",
 )
 """Sentinel for tests: the exact command names register_all installs, in order."""
