@@ -101,8 +101,6 @@ max-statements = 60
 "src/ccgram/bot.py" = ["C901", "PLR0912"]
 # CC commands: filesystem scan with validation branches
 "src/ccgram/cc_commands.py" = ["C901", "PLR0912"]
-# History: paginated message formatting with many edge cases
-"src/ccgram/handlers/recovery/history.py" = ["C901", "PLR0912", "PLR0915"]
 # Response builder: message formatting with content-type dispatch
 "src/ccgram/handlers/response_builder.py" = ["C901", "PLR0912"]
 # Directory callbacks: confirm handler with state cleanup branches

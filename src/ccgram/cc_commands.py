@@ -47,7 +47,6 @@ CC_BUILTINS: dict[str, str] = {
 _BOT_COMMANDS: list[tuple[str, str]] = [
     ("new", "Create new Claude session"),
     ("commands", "List commands for this topic provider"),
-    ("history", "Message history for this topic"),
     ("sessions", "Sessions dashboard"),
     ("resume", "Browse and resume past sessions"),
     ("screenshot", "Capture terminal screenshot"),

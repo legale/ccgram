@@ -73,7 +73,6 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//sync` — синхронизация и аудит состояния",
         "• `//bind` — привязать окно к топику",
         "• `//unbind` — отвязать топик",
-        "• `//history` — история сообщений",
         "• `//recall` — повтор недавних команд",
         "• `//verbose` — переключить детальность сообщений",
         "• `//upgrade` — обновление ccgram и перезапуск",

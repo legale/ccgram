@@ -66,7 +66,6 @@ async def app():
 
     from ccgram.bot import (
         bind_command,
-        history_command,
         text_handler,
     )
     from ccgram.handlers.callback_registry import (
@@ -86,7 +85,6 @@ async def app():
     )
 
     application.add_handler(CommandHandler("bind", bind_command))
-    application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("sessions", sessions_command))
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(

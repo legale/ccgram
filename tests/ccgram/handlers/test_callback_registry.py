@@ -239,7 +239,6 @@ class TestLoadHandlers:
             "aq:",
             "vc:",
             "sh:",
-            "hp:",
             "sess:",
             "sync:",
         ):
@@ -256,7 +255,6 @@ class TestLoadHandlers:
         expected_modules = [
             "ccgram.handlers.topics.directory_callbacks",
             "ccgram.handlers.topics.window_callbacks",
-            "ccgram.handlers.recovery.history_callbacks",
             "ccgram.handlers.live.screenshot_callbacks",
             "ccgram.handlers.interactive.interactive_callbacks",
             "ccgram.handlers.voice.voice_callbacks",

@@ -10,7 +10,6 @@ added ``commands/``):
   - messaging/: inter-agent message broker, spawn approval, Telegram notifications
   - messaging_pipeline/: outbound message queue, routing, sender, tool batching
   - polling/: status polling coordinator, per-window tick (decide/observe/apply)
-  - recovery/: dead-window recovery, /restore, /resume, transcript discovery, history
   - send/: /send file delivery, browser navigation, security validation
   - shell/: NL→command flow, prompt-marker setup, output capture
   - status/: status bubble lifecycle, status-bar actions, topic emoji updates

@@ -36,7 +36,6 @@ from .file_handler import handle_document_message, handle_photo_message
 from .inline import inline_query_handler, unsupported_content_handler
 from .live import live_command, panes_command, screenshot_command
 from .messaging_pipeline import toolcalls_command, verbose_command
-from .recovery.history import history_command
 from .send import send_command
 from .sessions_dashboard import sessions_command
 from .sync_command import sync_command
@@ -86,7 +85,6 @@ def register_all(
     with / can pass through directly to tmux without being intercepted.
     """
     command_specs: list[CommandSpec] = [
-        CommandSpec("history", history_command),
         CommandSpec(("commands", "help"), commands_command),
         CommandSpec(("sessions", "ses"), sessions_command),
         CommandSpec("unbind", unbind_command),
@@ -164,7 +162,6 @@ def register_all(
 
 
 COMMAND_NAMES: tuple[str, ...] = (
-    "history",
     "commands",
     "help",
     "sessions",

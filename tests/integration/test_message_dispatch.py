@@ -63,7 +63,6 @@ async def app():
 
     from ccgram.bot import (
         bind_command,
-        history_command,
         text_handler,
     )
     from ccgram.handlers.callback_registry import (
@@ -83,7 +82,6 @@ async def app():
     )
 
     application.add_handler(CommandHandler("bind", bind_command))
-    application.add_handler(CommandHandler("history", history_command))
     application.add_handler(CommandHandler("sessions", sessions_command))
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(
@@ -159,25 +157,6 @@ async def test_bind_command_dispatched(app) -> None:
         mock_handle.assert_awaited_once()
 
 
-async def test_history_command_dispatched(app) -> None:
-    update = _make_update("/history", bot=app.bot)
-
-    with (
-        patch(
-            "ccgram.handlers.recovery.history.config.is_user_allowed", return_value=True
-        ),
-        patch(
-            "ccgram.handlers.recovery.history.thread_router.resolve_window_for_thread",
-            return_value=None,
-        ),
-        patch(
-            "ccgram.handlers.recovery.history.safe_reply", new_callable=AsyncMock
-        ) as mock_reply,
-    ):
-        await app.process_update(update)
-        mock_reply.assert_awaited_once()
-
-
 async def test_unknown_command_forwarded(app) -> None:
     update = _make_update("/sometool", bot=app.bot)
 
@@ -211,22 +190,22 @@ async def test_unknown_command_forwarded(app) -> None:
 
 
 async def test_command_priority_over_text(app) -> None:
-    """Commands like /history should be handled by CommandHandler, not text_handler."""
-    update = _make_update("/history", bot=app.bot)
+    """Commands like /bind should be handled by CommandHandler, not text_handler."""
+    update = _make_update("/bind", bot=app.bot)
 
     with (
         patch(
-            "ccgram.handlers.recovery.history.config.is_user_allowed", return_value=True
+            "ccgram.handlers.topics.bind_command.config.is_user_allowed",
+            return_value=True,
         ),
         patch(
             "ccgram.handlers.text.text_handler.handle_text_message",
             new_callable=AsyncMock,
         ) as mock_text,
         patch(
-            "ccgram.handlers.recovery.history.thread_router.resolve_window_for_thread",
-            return_value=None,
+            "ccgram.handlers.text.text_handler._handle_unbound_topic",
+            new_callable=AsyncMock,
         ),
-        patch("ccgram.handlers.recovery.history.safe_reply", new_callable=AsyncMock),
     ):
         await app.process_update(update)
         mock_text.assert_not_awaited()

@@ -32,7 +32,6 @@ from .handlers.inline import inline_query_handler, unsupported_content_handler
 from .handlers.commands import commands_command, toolbar_command
 from .handlers.messaging_pipeline import toolcalls_command, verbose_command
 from .handlers.messaging_pipeline.message_sender import safe_reply
-from .handlers.recovery.history import history_command
 from .handlers.registry import register_all
 from .handlers.text.text_handler import handle_text_message, text_handler
 from .handlers.topics import bind_command
@@ -50,7 +49,6 @@ __all__ = [
     "commands_command",
     "create_bot",
     "handle_text_message",
-    "history_command",
     "inline_query_handler",
     "is_user_allowed",
     "bind_command",

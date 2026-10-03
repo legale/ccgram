@@ -4,7 +4,6 @@ Defines all CB_* prefixes used for routing callback queries in the bot.
 Each prefix identifies a specific action or navigation target.
 
 Constants:
-  - CB_HISTORY_*: History pagination
   - CB_DIR_*: Directory browser navigation
   - CB_WIN_*: Window picker (bind existing unbound window)
   - CB_SCREENSHOT_*: Screenshot refresh
@@ -14,10 +13,6 @@ Constants:
   - CB_RECOVERY_*: Dead window recovery UI (fresh, continue, resume)
   - CB_KEYS_PREFIX: Screenshot control keys (kb:<key_id>:<window>)
 """
-
-# History pagination
-CB_HISTORY_PREV = "hp:"  # history page older
-CB_HISTORY_NEXT = "hn:"  # history page newer
 
 # Directory browser
 CB_DIR_SELECT = "db:sel:"
