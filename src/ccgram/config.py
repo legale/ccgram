@@ -123,6 +123,7 @@ class Config:
             else Path.home() / ".claude"
         )
         self.claude_projects_path = self.claude_config_dir / "projects"
+
         self.monitor_poll_interval = max(
             0.5, float(os.getenv("MONITOR_POLL_INTERVAL", "1.0"))
         )
@@ -143,11 +144,6 @@ class Config:
         self.instance_name: str = (
             _env_with_fallback("CCGRAM_INSTANCE_NAME", "CCBOT_INSTANCE_NAME")
             or socket.gethostname()
-        )
-
-        # Provider selection
-        self.provider_name: str = _env_with_fallback(
-            "CCGRAM_PROVIDER", "CCBOT_PROVIDER", "shell"
         )
 
         # Directory browser: show hidden (dot) directories

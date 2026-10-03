@@ -23,12 +23,12 @@ from typing import Any
 
 import aiofiles
 
-from .config import config
-from .providers import get_provider_for_window
 from .thread_router import thread_router
 from .window_state_store import window_store
 
 logger = structlog.get_logger()
+
+_CLAUDE_PROJECTS_PATH = Path.home() / ".claude" / "projects"
 
 
 @dataclass
@@ -49,7 +49,7 @@ class SessionResolver:
         if not session_id or not cwd:
             return None
         encoded_cwd = cwd.replace("/", "-")
-        return config.claude_projects_path / encoded_cwd / f"{session_id}.jsonl"
+        return _CLAUDE_PROJECTS_PATH / encoded_cwd / f"{session_id}.jsonl"
 
     def _session_from_transcript_path(
         self,
@@ -86,7 +86,7 @@ class SessionResolver:
             return file_path
 
         pattern = f"*/{session_id}.jsonl"
-        matches = list(config.claude_projects_path.glob(pattern))
+        matches = list(_CLAUDE_PROJECTS_PATH.glob(pattern))
         if not matches:
             return None
 
@@ -107,16 +107,12 @@ class SessionResolver:
         return file_path
 
     async def _read_session_summary(
-        self, file_path: Path, session_id: str, window_id: str
+        self, file_path: Path, session_id: str, _window_id: str
     ) -> ClaudeSession | None:
         """Read a JSONL session file and extract summary and message count."""
         summary = ""
         last_user_msg = ""
         message_count = 0
-        state = window_store.window_states.get(window_id)
-        provider = get_provider_for_window(
-            window_id, provider_name=state.provider_name if state else None
-        )
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
                 async for line in f:
@@ -130,10 +126,6 @@ class SessionResolver:
                             s = data.get("summary", "")
                             if s:
                                 summary = s
-                        elif provider.is_user_transcript_entry(data):
-                            parsed = provider.parse_history_entry(data)
-                            if parsed and parsed.text.strip():
-                                last_user_msg = parsed.text.strip()
                     except json.JSONDecodeError:
                         continue
         except OSError:
@@ -177,16 +169,14 @@ class SessionResolver:
         if session:
             return session
 
-        provider = get_provider_for_window(window_id, provider_name=state.provider_name)
-        if not provider.capabilities.supports_hook:
-            logger.debug(
-                "Hookless session unresolved for window_id %s "
-                "(sid=%s, transcript_path=%s); keeping state",
-                window_id,
-                state.session_id,
-                state.transcript_path,
-            )
-            return None
+        logger.debug(
+            "Hookless session unresolved for window_id %s "
+            "(sid=%s, transcript_path=%s); keeping state",
+            window_id,
+            state.session_id,
+            state.transcript_path,
+        )
+        return None
 
         logger.debug(
             "Session file no longer exists for window_id %s (sid=%s, cwd=%s)",
@@ -213,8 +203,8 @@ class SessionResolver:
         self,
         window_id: str,
         *,
-        start_byte: int = 0,
-        end_byte: int | None = None,
+        start_byte: int = 0,  # noqa: ARG002
+        end_byte: int | None = None,  # noqa: ARG002
     ) -> tuple[list[dict], int]:
         """Get user/assistant messages for a window's session.
 
@@ -230,45 +220,7 @@ class SessionResolver:
         if not file_path.exists():
             return [], 0
 
-        state = window_store.window_states.get(window_id)
-        provider = get_provider_for_window(
-            window_id, provider_name=state.provider_name if state else None
-        )
-        entries: list[dict[str, Any]] = []
-        try:
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                if start_byte > 0:
-                    await f.seek(start_byte)
-
-                while True:
-                    if end_byte is not None:
-                        current_pos = await f.tell()
-                        if current_pos >= end_byte:
-                            break
-
-                    line = await f.readline()
-                    if not line:
-                        break
-
-                    data = provider.parse_transcript_line(line)
-                    if data:
-                        entries.append(data)
-        except OSError:
-            logger.exception("Error reading session file %s", file_path)
-            return [], 0
-
-        agent_messages, _ = provider.parse_transcript_entries(entries, {})
-        all_messages = [
-            {
-                "role": e.role,
-                "text": e.text,
-                "content_type": e.content_type,
-                "timestamp": e.timestamp,
-            }
-            for e in agent_messages
-        ]
-
-        return all_messages, len(all_messages)
+        return [], 0
 
 
 session_resolver = SessionResolver()

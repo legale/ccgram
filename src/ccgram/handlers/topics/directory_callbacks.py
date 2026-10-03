@@ -24,18 +24,13 @@ import structlog
 from pathlib import Path
 
 from telegram import CallbackQuery, Update
-from ...providers import (
-    has_yolo_mode,
-    registry as provider_registry,
-)
 from ...providers.shell_infra import KNOWN_SHELLS
 from ...session import session_manager
-from ...session_map import session_map_sync
 from ...telegram_client import PTBTelegramClient
 from ...user_preferences import user_preferences
 from ...window_state_store import CCGRAM_CREATED_WINDOW_ORIGIN
 from ...thread_router import thread_router
-from ...tmux_manager import send_to_window, tmux_manager
+from ...tmux_manager import tmux_manager
 from ..callback_data import (
     CB_DIR_CANCEL,
     CB_DIR_CONFIRM,
@@ -54,13 +49,12 @@ from .directory_browser import (
     BROWSE_PAGE_KEY,
     BROWSE_PATH_KEY,
     build_directory_browser,
-    build_mode_picker,
     clear_browse_state,
     get_favorites,
 )
 from .topic_binding import bind_topic_to_window, rename_bound_topic
 from ..callback_registry import register
-from ..messaging_pipeline.message_sender import safe_edit, safe_send
+from ..messaging_pipeline.message_sender import safe_edit
 from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT, PENDING_TOPIC_NAME
 
 if TYPE_CHECKING:
@@ -444,7 +438,7 @@ async def _handle_provider_select(
     and go directly to window creation with approval_mode="normal".
     """
     provider_name = data[len(CB_PROV_SELECT) :]
-    if not provider_registry.is_valid(provider_name):
+    if provider_name != "shell":
         await query.answer("Unknown provider", show_alert=True)
         return
 
@@ -463,16 +457,10 @@ async def _handle_provider_select(
     ):
         return
 
-    if not has_yolo_mode(provider_name):
-        # No mode picker needed — go directly to window creation
-        clear_browse_state(context.user_data)
-        await _create_window_and_bind(
-            query, user_id, selected_path, provider_name, "normal", context
-        )
-        return
-
-    text, keyboard = build_mode_picker(selected_path, provider_name)
-    await safe_edit(query, text, reply_markup=keyboard)
+    clear_browse_state(context.user_data)
+    await _create_window_and_bind(
+        query, user_id, selected_path, provider_name, "normal", context
+    )
 
 
 def _parse_mode_select(data: str) -> tuple[str, str] | None:
@@ -493,33 +481,6 @@ async def _wait_for_shell_ready(window_id: str, *, attempts: int = 5) -> None:
             if cmd in KNOWN_SHELLS:
                 return
         await asyncio.sleep(0.2)
-
-
-async def _accept_yolo_confirmation(window_id: str, *, timeout: float = 8.0) -> bool:
-    """Detect and accept Claude Code's bypass permissions confirmation prompt.
-
-    When launched with --dangerously-skip-permissions, Claude Code shows a
-    TUI confirmation where "No, exit" is the default selection. Sends
-    Down+Enter to select the "Yes" option so the session can start.
-    """
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + timeout
-    while loop.time() < deadline:
-        text = await tmux_manager.capture_pane(window_id)
-        if text and "bypass permissions" in text.lower():
-            await asyncio.sleep(0.3)
-            await tmux_manager.send_keys(window_id, "Down", enter=False, literal=False)
-            await asyncio.sleep(0.15)
-            await tmux_manager.send_keys(window_id, "Enter", enter=False, literal=False)
-            logger.info("Accepted bypass permissions prompt for window %s", window_id)
-            return True
-        await asyncio.sleep(0.5)
-    logger.warning(
-        "Bypass permissions prompt not detected within %.0fs for window %s",
-        timeout,
-        window_id,
-    )
-    return False
 
 
 def _try_install_messaging_skill(provider_name: str, cwd: str) -> None:
@@ -583,15 +544,11 @@ async def _create_window_and_bind(
     )
     await tmux_manager.stamp_pane_title(created_wid, provider_name)
 
-    provider_caps = provider_registry.get(provider_name).capabilities
-    if provider_caps.chat_first_command_path:
-        # Lazy: shell ↔ topics cycle via window_callbacks adoption flow.
-        from ..shell.shell_prompt_orchestrator import ensure_setup
+    # Lazy: break directory_callbacks <-> shell circular dependency
+    from ..shell.shell_prompt_orchestrator import ensure_setup
 
-        await _wait_for_shell_ready(created_wid)
-        await ensure_setup(created_wid, "auto")
-
-    _try_install_messaging_skill(provider_name, selected_path)
+    await _wait_for_shell_ready(created_wid)
+    await ensure_setup(created_wid, "auto")
 
     if pending_thread_id is not None:
         bind_topic_to_window(
@@ -602,13 +559,6 @@ async def _create_window_and_bind(
             created_wname,
             router=thread_router,
         )
-
-    provider = provider_registry.get(provider_name)
-    if approval_mode == "yolo" and provider.capabilities.has_yolo_confirmation:
-        await _accept_yolo_confirmation(created_wid)
-
-    if provider.capabilities.supports_hook:
-        await session_map_sync.wait_for_session_map_entry(created_wid)
 
     if pending_thread_id is None:
         await safe_edit(query, message)
@@ -643,28 +593,16 @@ async def _create_window_and_bind(
             context.user_data.pop(PENDING_THREAD_ID, None)
             context.user_data.pop(PENDING_TOPIC_NAME, None)
 
-        # Chat-first providers (shell): route through NL→command approval flow
-        if provider_caps.chat_first_command_path:
-            # Lazy: shell.shell_commands ↔ topics cycle through approval wiring.
-            from ..shell.shell_commands import handle_shell_message
+        # Lazy: shell.shell_commands ↔ topics cycle through approval wiring.
+        from ..shell.shell_commands import handle_shell_message
 
-            await handle_shell_message(
-                PTBTelegramClient(context.bot),
-                user_id,
-                pending_thread_id,
-                created_wid,
-                pending_text,
-            )
-        else:
-            send_ok, send_msg = await send_to_window(created_wid, pending_text)
-            if not send_ok:
-                logger.warning("Failed to forward pending text: %s", send_msg)
-                await safe_send(
-                    PTBTelegramClient(context.bot),
-                    thread_router.resolve_chat_id(user_id, pending_thread_id),
-                    f"❌ Failed to send pending message: {send_msg}",
-                    message_thread_id=pending_thread_id,
-                )
+        await handle_shell_message(
+            PTBTelegramClient(context.bot),
+            user_id,
+            pending_thread_id,
+            created_wid,
+            pending_text,
+        )
     elif context.user_data is not None:
         context.user_data.pop(PENDING_THREAD_ID, None)
         context.user_data.pop(PENDING_TOPIC_NAME, None)
@@ -684,7 +622,7 @@ async def _handle_mode_select(
         return
 
     provider_name, approval_mode = parsed
-    if not provider_registry.is_valid(provider_name):
+    if provider_name != "shell":
         await query.answer("Unknown provider", show_alert=True)
         return
     if approval_mode not in ("normal", "yolo"):

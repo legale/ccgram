@@ -21,11 +21,11 @@ from __future__ import annotations
 import time
 import zlib
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from ...providers.base import StatusUpdate
+from .polling_types import StatusUpdate
 from ...topic_state_registry import topic_state
 from .polling_types import (
     MAX_PROBE_FAILURES,
@@ -44,9 +44,10 @@ from .polling_types import ACTIVITY_THRESHOLD as _ACTIVITY_THRESHOLD
 if TYPE_CHECKING:
     from telegram import Bot
 
-    from ...providers.base import AgentProvider
     from ...screen_buffer import ScreenBuffer
     from ...tmux_manager import PaneInfo as TmuxPaneInfo
+
+    AgentProvider = Any
 
 logger = structlog.get_logger()
 

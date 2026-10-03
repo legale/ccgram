@@ -21,7 +21,6 @@ from pathlib import Path
 
 from collections.abc import Callable
 
-from .providers import resolve_capabilities
 from .telegram_draft import draft_unavailable_reason, is_draft_unavailable
 from .utils import ccgram_dir, tmux_session_name
 
@@ -276,30 +275,22 @@ def _fix_orphans(orphans: list[tuple[str, str]], fix: bool) -> None:
 
 def doctor_main(fix: bool = False) -> None:
     """Entry point for `ccgram doctor [--fix]`."""
-    caps = resolve_capabilities()
+    provider_name = os.environ.get("CCGRAM_PROVIDER", "shell")
     has_failures = False
 
-    print(f"Provider: {caps.name}")
+    print(f"Provider: {provider_name}")
 
     # Core checks
     _, _, failed = _run_check(_check_tmux)
     has_failures = has_failures or failed
 
-    _, _, failed = _run_check(lambda: _check_provider_command(caps.name))
+    _, _, failed = _run_check(lambda: _check_provider_command(provider_name))
     has_failures = has_failures or failed
 
     _, _, failed = _run_check(_check_tmux_session)
     has_failures = has_failures or failed
 
-    # Hook checks — only relevant for providers with hook support
-    if caps.supports_hook:
-        hook_status, hook_msg, event_status = _check_hooks()
-        _print_check(hook_status, hook_msg)
-        if hook_status == _FAIL:
-            has_failures = True
-        _fix_hooks(event_status, fix)
-    else:
-        _print_check(_PASS, f"hook check skipped ({caps.name} has no hook support)")
+    _print_check(_PASS, f"hook check skipped ({provider_name} has no hook support)")
 
     for check_fn in (_check_config_dir, _check_bot_token, _check_allowed_users):
         _, _, failed = _run_check(check_fn)

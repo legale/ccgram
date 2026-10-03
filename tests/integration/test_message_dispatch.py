@@ -7,7 +7,7 @@ external dependencies (Bot API, TmuxManager, SessionManager).
 
 import os
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from telegram import Chat, Message, MessageEntity, Update, User
@@ -69,7 +69,6 @@ async def app():
         dispatch as callback_handler,
         load_handlers,
     )
-    from ccgram.handlers.commands import forward_command_handler
     from ccgram.handlers.sessions_dashboard import sessions_command
     from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
 
@@ -87,7 +86,6 @@ async def app():
     application.add_handler(
         MessageHandler(filters.StatusUpdate.FORUM_TOPIC_CLOSED, topic_closed_handler)
     )
-    application.add_handler(MessageHandler(filters.COMMAND, forward_command_handler))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
     )
@@ -155,38 +153,6 @@ async def test_bind_command_dispatched(app) -> None:
     ):
         await app.process_update(update)
         mock_handle.assert_awaited_once()
-
-
-async def test_unknown_command_forwarded(app) -> None:
-    update = _make_update("/sometool", bot=app.bot)
-
-    with (
-        patch(
-            "ccgram.handlers.commands.forward.config.is_user_allowed",
-            return_value=True,
-        ),
-        patch(
-            "ccgram.handlers.commands.forward.thread_router.resolve_window_for_thread",
-            return_value="@0",
-        ),
-        patch(
-            "ccgram.handlers.commands.forward.tmux_manager.find_window_by_id",
-            new_callable=AsyncMock,
-            return_value=MagicMock(window_id="@0"),
-        ),
-        patch(
-            "ccgram.handlers.commands.forward.send_to_window",
-            new_callable=AsyncMock,
-            return_value=(True, "Sent"),
-        ),
-        patch(
-            "ccgram.handlers.commands.forward.thread_router.get_display_name",
-            return_value="test-win",
-        ),
-        patch("ccgram.handlers.commands.forward.safe_reply", new_callable=AsyncMock),
-        patch.object(Chat, "send_action", new_callable=AsyncMock),
-    ):
-        await app.process_update(update)
 
 
 async def test_command_priority_over_text(app) -> None:

@@ -14,6 +14,7 @@ without subclassing ``ShellProvider``.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import os
 import re
@@ -216,6 +217,65 @@ def _replace_setup_commands(shell: str, prefix: str) -> str:
     return cmds.get(shell, cmds["bash"])
 
 
+async def _run_ps(tty_path: str) -> bytes | None:
+    """Run ``ps -t <tty>`` with timeout, kill on timeout. None on error."""
+    proc: asyncio.subprocess.Process | None = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ps",
+            "-t",
+            tty_path,
+            "-o",
+            "pid=,pgid=,stat=,args=",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        async with asyncio.timeout(3.0):
+            stdout, _ = await proc.communicate()
+    except TimeoutError:
+        if proc:
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+                await proc.wait()
+        return None
+    except OSError:
+        return None
+    return stdout if proc.returncode == 0 else None
+
+
+async def get_foreground_args(tty_path: str) -> tuple[str, int]:
+    """Get the full argv and PGID of the foreground process on a TTY."""
+    if not tty_path:
+        return "", 0
+
+    stdout = await _run_ps(tty_path)
+    if not stdout:
+        return "", 0
+
+    best_args = ""
+    best_pgid = 0
+    min_ps_parts = 4
+    for line in stdout.decode("utf-8", errors="replace").strip().splitlines():
+        parts = line.split(None, 3)
+        if len(parts) < min_ps_parts:
+            continue
+        pid_s, pgid_s, stat, args = parts
+        if "+" not in stat:
+            continue
+        try:
+            pid = int(pid_s)
+            pgid = int(pgid_s)
+        except ValueError:
+            continue
+        if pid == pgid:
+            return args, pgid
+        if not best_args:
+            best_args = args
+            best_pgid = pgid
+
+    return best_args, best_pgid
+
+
 async def _is_interactive_shell(window_id: str) -> bool:
     """Check if the pane has an interactive shell at a prompt (not running a script).
 
@@ -233,11 +293,6 @@ async def _is_interactive_shell(window_id: str) -> bool:
     w = await tmux_manager.find_window_by_id(window_id)
     if not w or not w.pane_tty:
         return False
-
-    # Lazy: process_detection runs `ps` subprocesses; only loaded when an
-    # interactive-shell pane is being verified.
-    # Lazy: only needed when reading TTY foreground processes
-    from .process_detection import get_foreground_args
 
     args, _ = await get_foreground_args(w.pane_tty)
     if not args:

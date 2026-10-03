@@ -76,10 +76,6 @@ class TestBootstrapApplication:
                 "ccgram.bootstrap.install_global_exception_handler",
                 side_effect=lambda: order.append("exc_handler"),
             ),
-            patch(
-                "ccgram.bootstrap.register_provider_commands",
-                new=AsyncMock(side_effect=lambda _app: order.append("commands")),
-            ),
             patch("ccgram.bootstrap.session_manager") as sm,
             patch(
                 "ccgram.bootstrap._adopt_unbound_windows",
@@ -109,7 +105,6 @@ class TestBootstrapApplication:
 
         assert order == [
             "exc_handler",
-            "commands",
             "stale_ids",
             "adopt",
             "wire",

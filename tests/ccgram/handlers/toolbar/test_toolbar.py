@@ -388,19 +388,11 @@ class TestRefreshButtonLabel:
         query = AsyncMock()
         query.edit_message_reply_markup = AsyncMock()
         mode_action = BUILTIN_ACTIONS["mode"]
-        mock_provider = AsyncMock()
-        mock_provider.scrape_current_mode = AsyncMock(return_value="Edit")
-        with (
-            patch(
-                "ccgram.handlers.toolbar.toolbar_keyboard.get_provider_for_window",
-                return_value=mock_provider,
-            ),
-            patch("ccgram.handlers.toolbar.toolbar_keyboard.window_query") as mock_sm,
-        ):
-            mock_sm.view_window.return_value = MagicMock(provider_name="claude")
+        with patch("ccgram.handlers.toolbar.toolbar_keyboard.window_query") as mock_sm:
+            mock_sm.view_window.return_value = MagicMock(provider_name="shell")
             result = await refresh_button_label(mode_action, query, "@5", delay=0)
-        assert result == "Edit"
-        assert _get_action_label("@5", "mode") == "Edit"
+        assert result == "Def"
+        assert _get_action_label("@5", "mode") == "Def"
         query.edit_message_reply_markup.assert_awaited_once()
 
     async def test_keyboard_rebuild_shows_stored_label(self) -> None:
@@ -417,43 +409,7 @@ class TestRefreshButtonLabel:
         assert mode_btn is not None
         assert "Plan" in mode_btn.text
 
-    async def test_seed_button_states_populates_mode_label(self) -> None:
+    async def test_seed_button_states_noop(self) -> None:
         _clear_toolbar_labels("@111")
-        mock_provider = AsyncMock()
-        mock_provider.scrape_current_mode = AsyncMock(return_value="Plan")
-        with patch(
-            "ccgram.handlers.toolbar.toolbar_keyboard.get_provider_for_window",
-            return_value=mock_provider,
-        ):
-            await seed_button_states("@111")
-        assert _get_action_label("@111", "mode") == "Plan"
-
-    async def test_seed_button_states_no_label_when_none(self) -> None:
-        _clear_toolbar_labels("@222")
-        mock_provider = AsyncMock()
-        mock_provider.scrape_current_mode = AsyncMock(return_value=None)
-        with patch(
-            "ccgram.handlers.toolbar.toolbar_keyboard.get_provider_for_window",
-            return_value=mock_provider,
-        ):
-            await seed_button_states("@222")
-        assert _get_action_label("@222", "mode") is None
-
-    async def test_capture_failure_returns_def_label(self) -> None:
-        query = AsyncMock()
-        query.edit_message_reply_markup = AsyncMock()
-        mock_provider = AsyncMock()
-        mock_provider.scrape_current_mode = AsyncMock(return_value=None)
-        with (
-            patch(
-                "ccgram.handlers.toolbar.toolbar_keyboard.get_provider_for_window",
-                return_value=mock_provider,
-            ),
-            patch("ccgram.handlers.toolbar.toolbar_keyboard.window_query") as mock_sm,
-        ):
-            mock_sm.view_window.return_value = MagicMock(provider_name="claude")
-            result = await refresh_button_label(
-                BUILTIN_ACTIONS["mode"], query, "@42", delay=0
-            )
-        assert result == "Def"
-        assert _get_action_label("@42", "mode") == "Def"
+        await seed_button_states("@111")
+        assert _get_action_label("@111", "mode") is None

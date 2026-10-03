@@ -72,7 +72,6 @@ async def app():
         dispatch as callback_handler,
         load_handlers,
     )
-    from ccgram.handlers.commands import forward_command_handler
     from ccgram.handlers.sessions_dashboard import sessions_command
     from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
 
@@ -90,7 +89,6 @@ async def app():
     application.add_handler(
         MessageHandler(filters.StatusUpdate.FORUM_TOPIC_CLOSED, topic_closed_handler)
     )
-    application.add_handler(MessageHandler(filters.COMMAND, forward_command_handler))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler)
     )

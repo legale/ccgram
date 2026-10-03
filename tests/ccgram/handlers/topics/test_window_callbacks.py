@@ -293,45 +293,6 @@ class TestBindProviderDetection:
         call_args = mock_ensure.call_args
         assert call_args[0] == ("@5", "auto")
 
-    async def test_bind_claude_window_does_not_offer_prompt_setup(self) -> None:
-        user_data = {UNBOUND_WINDOWS_KEY: ["@5"], PENDING_THREAD_ID: 42}
-        query, update, context = _make_query_update_context(user_data=user_data)
-
-        mock_window = MagicMock()
-        mock_window.window_name = "my-project"
-        mock_window.pane_current_command = "claude"
-
-        with (
-            patch("ccgram.handlers.topics.window_callbacks.session_manager") as mock_sm,
-            patch("ccgram.handlers.topics.window_callbacks.thread_router") as mock_tr,
-            patch(
-                "ccgram.handlers.topics.window_callbacks.tmux_manager.find_window_by_id",
-                new_callable=AsyncMock,
-                return_value=mock_window,
-            ),
-            patch("ccgram.handlers.topics.window_callbacks.safe_edit"),
-            patch(
-                "ccgram.providers.detect_provider_from_pane",
-                new_callable=AsyncMock,
-                return_value="claude",
-            ),
-            patch(
-                "ccgram.providers.get_provider_for_window",
-                return_value=MagicMock(
-                    capabilities=MagicMock(chat_first_command_path=False)
-                ),
-            ),
-            patch(
-                "ccgram.handlers.shell.shell_prompt_orchestrator.ensure_setup",
-                new_callable=AsyncMock,
-            ) as mock_ensure,
-        ):
-            mock_tr.resolve_chat_id.return_value = -100
-            mock_sm.get_approval_mode.return_value = "normal"
-            await handle_window_callback(query, 100, f"{CB_WIN_BIND}0", update, context)
-
-        mock_ensure.assert_not_awaited()
-
     async def test_bind_shell_pending_text_routes_through_shell_handler(self) -> None:
         user_data = {
             UNBOUND_WINDOWS_KEY: ["@5"],

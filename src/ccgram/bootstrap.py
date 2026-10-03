@@ -22,11 +22,8 @@ import contextlib
 from typing import TYPE_CHECKING
 
 import structlog
-from telegram.error import TelegramError
 
-from .cc_commands import register_commands
 from .config import config
-from .handlers.commands import setup_menu_refresh_job
 from .handlers.hook_events import dispatch_hook_event, register_stop_callback
 from .handlers.messaging_pipeline.message_queue import shutdown_workers
 from .handlers.messaging_pipeline.message_routing import handle_new_message
@@ -39,7 +36,6 @@ from .handlers.topics.topic_orchestration import (
 from .handlers.topics.topic_orchestration import (
     handle_new_window as _handle_new_window,
 )
-from .providers import get_provider
 from .session import session_manager
 from .telegram_client import PTBTelegramClient
 from .session_monitor import (
@@ -52,9 +48,11 @@ from .session_monitor import (
 from .utils import task_done_callback
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from telegram.ext import Application
 
-    from .providers.base import HookEvent
+    HookEvent = Any
 
 logger = structlog.get_logger()
 
@@ -82,16 +80,6 @@ def _global_exception_handler(
         )
     else:
         logger.error("asyncio exception handler: %s", msg)
-
-
-async def register_provider_commands(application: Application) -> None:
-    """Register the default provider's BotCommand list and schedule menu refresh."""
-    default_provider = get_provider()
-    try:
-        await register_commands(application.bot, provider=default_provider)
-    except TelegramError:
-        logger.warning("Failed to register bot commands at startup, will retry later")
-    setup_menu_refresh_job(application)
 
 
 def wire_runtime_callbacks() -> None:
@@ -169,7 +157,6 @@ def start_status_polling(application: Application) -> asyncio.Task[None]:
 async def bootstrap_application(application: Application) -> None:
     """Run the full post_init sequence in the prescribed order."""
     install_global_exception_handler()
-    await register_provider_commands(application)
     await session_manager.resolve_stale_ids()
     await _adopt_unbound_windows(PTBTelegramClient(application.bot))
     wire_runtime_callbacks()

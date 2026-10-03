@@ -109,21 +109,16 @@ async def _detect_and_setup_provider(
     )
     if detected:
         session_manager.set_window_provider(window_id, detected)
-        # Lazy: same providers cycle as detect_provider_from_pane.
-        from ...providers import get_provider_for_window
+        # Lazy: shell ↔ topics cycle via prompt-marker callbacks.
+        from ..shell.shell_prompt_orchestrator import ensure_setup
 
-        provider = get_provider_for_window(window_id, detected)
-        if provider and provider.capabilities.chat_first_command_path:
-            # Lazy: shell ↔ topics cycle via prompt-marker callbacks.
-            from ..shell.shell_prompt_orchestrator import ensure_setup
-
-            await ensure_setup(
-                window_id,
-                "auto",
-                client=client,
-                chat_id=thread_router.resolve_chat_id(user_id, thread_id),
-                thread_id=thread_id,
-            )
+        await ensure_setup(
+            window_id,
+            "auto",
+            client=client,
+            chat_id=thread_router.resolve_chat_id(user_id, thread_id),
+            thread_id=thread_id,
+        )
     return detected
 
 
@@ -133,7 +128,7 @@ async def _forward_pending_text(
     thread_id: int,
     window_id: str,
     text: str,
-    provider_name: str,
+    _provider_name: str,
     *,
     is_existing_window: bool = False,
 ) -> None:
@@ -144,12 +139,7 @@ async def _forward_pending_text(
             one from directory browser).  For shell, skips handle_shell_message
             to avoid _ensure_prompt_marker racing with the offer keyboard.
     """
-    # Lazy: same providers cycle as _detect_and_setup_provider.
-    from ...providers import get_provider_for_window
-
-    provider = get_provider_for_window(window_id, provider_name)
-    is_chat_first = bool(provider and provider.capabilities.chat_first_command_path)
-    if is_chat_first and not is_existing_window:
+    if not is_existing_window:
         # Lazy: shell ↔ topics cycle.
         from ..shell.shell_commands import handle_shell_message
 

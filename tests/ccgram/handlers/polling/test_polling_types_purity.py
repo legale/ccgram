@@ -83,11 +83,9 @@ def test_polling_types_imports_are_restricted() -> None:
         "collections.abc",
         "dataclasses",
         "typing",
-        "ccgram.providers.base",
-        "providers.base",
     )
     forbidden = [mod for mod in runtime_imports if mod not in allowed]
     assert not forbidden, (
-        f"polling_types must only import stdlib + ccgram.providers.base; "
+        f"polling_types must only import stdlib; "
         f"forbidden top-level imports: {forbidden}"
     )

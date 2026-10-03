@@ -12,8 +12,7 @@ from ccgram.handlers.polling.polling_state import (
     TerminalPollState,
     TerminalScreenBuffer,
 )
-from ccgram.handlers.polling.polling_types import PaneTransition
-from ccgram.providers.base import StatusUpdate
+from ccgram.handlers.polling.polling_types import PaneTransition, StatusUpdate
 from ccgram.tmux_manager import PaneInfo as TmuxPaneInfo
 from ccgram.window_state_store import PaneInfo, window_store
 

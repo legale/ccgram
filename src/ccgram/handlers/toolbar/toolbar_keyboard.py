@@ -11,7 +11,6 @@ from __future__ import annotations
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from ...config import config
-from ...providers import get_provider_for_window
 from ... import window_query
 from ...topic_state_registry import topic_state
 from ...toolbar_config import (
@@ -103,7 +102,7 @@ def build_toolbar_keyboard(
 # ──────────────────────────────────────────────────────────────────────
 
 
-async def seed_button_states(window_id: str) -> None:
+async def seed_button_states(_window_id: str) -> None:
     """Populate toggle-button label overrides with the actual current state.
 
     Called from /toolbar handler BEFORE rendering the keyboard, so the
@@ -114,12 +113,6 @@ async def seed_button_states(window_id: str) -> None:
     mode_action = cfg.actions.get("mode")
     if mode_action is None or not mode_action.read_state:
         return
-    provider = get_provider_for_window(
-        window_id, provider_name=window_query.get_window_provider(window_id)
-    )
-    label = await provider.scrape_current_mode(window_id)
-    if label:
-        _set_action_label(window_id, "mode", label)
 
 
 async def refresh_button_label(
@@ -146,11 +139,8 @@ async def refresh_button_label(
 
     await asyncio.sleep(delay)
     view = window_query.view_window(window_id)
-    provider_name = view.provider_name if view else "claude"
-    provider = get_provider_for_window(window_id, provider_name=provider_name)
-    short_label = await provider.scrape_current_mode(window_id)
-    if not short_label:
-        short_label = "Def"
+    provider_name = view.provider_name if view else "shell"
+    short_label = "Def"
     _set_action_label(window_id, action.name, short_label)
     new_kb = build_toolbar_keyboard(window_id, provider_name)
     try:

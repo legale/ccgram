@@ -232,7 +232,7 @@ class TestShellDetectionSafety:
         with (
             patch("ccgram.tmux_manager.tmux_manager", mock_tmux),
             patch(
-                "ccgram.providers.process_detection.get_foreground_args",
+                "ccgram.providers.shell_infra.get_foreground_args",
                 new_callable=AsyncMock,
                 return_value=("bash ./scripts/restart.sh run", 0),
             ),
@@ -250,7 +250,7 @@ class TestShellDetectionSafety:
         with (
             patch("ccgram.tmux_manager.tmux_manager", mock_tmux),
             patch(
-                "ccgram.providers.process_detection.get_foreground_args",
+                "ccgram.providers.shell_infra.get_foreground_args",
                 new_callable=AsyncMock,
                 return_value=("-bash", 1234),
             ),

@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/github/license/alexei-led/ccgram)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-**Control terminal and tmux sessions directly from Telegram.** CCGram provides a clean, direct bridge from Telegram forum topics to tmux sessions on your machine: browse directories, create shell sessions, send commands, monitor screen output deltas, capture ANSI screenshots, and interact with full remote control.
+**Control terminal and tmux sessions directly from Telegram.** CCGram provides a clean, direct bridge from Telegram forum topics to tmux sessions on your machine: input directories, create shell sessions, send commands, and receive output directly in Telegram.
 
 ---
 
@@ -18,7 +18,7 @@
 - **Desktop to phone, seamless continuity** — walk away from your desk and monitor your running terminal tasks from Telegram.
 - **Phone back to desktop anytime** — run `tmux attach` on your machine and you are right where you left off with full scrollback.
 - **Topic per session** — each Telegram topic maps directly to an isolated tmux session/window.
-- **Double slash bot commands (`//`)** — keeps native single-slash `/` commands uncluttered in your shell and bot commands isolated (`//help`, `//screen`, `//live`, etc.).
+- **Double slash bot commands (`//`)** — keeps native single-slash `/` commands uncluttered in your shell and bot commands isolated (`//commands`, `//unbind`, `//sessions`, `//ses`).
 
 ---
 
@@ -35,9 +35,8 @@ graph LR
 
   subgraph bridge["CCGram Bridge"]
     direction TB
-    B1["Screen deltas & passive capture"]
+    B1["Output capture"]
     B2["Direct keystrokes (send-keys)"]
-    B3["ANSI → PNG renderer"]
   end
 
   subgraph machine["Your Machine — tmux"]
@@ -47,8 +46,8 @@ graph LR
     W3["session cc_ops · shell"]
   end
 
-  phone -- "commands (//, !cmd)" --> bridge
-  bridge -- "deltas / screenshots / live view" --> phone
+  phone -- "commands (//, text)" --> bridge
+  bridge -- "output" --> phone
   bridge <--> machine
 
   style phone fill:#e8f4fd,stroke:#0088cc,stroke-width:2px,color:#333
@@ -56,25 +55,15 @@ graph LR
   style machine fill:#f0faf0,stroke:#2ea44f,stroke-width:2px,color:#333
 ```
 
-Each Telegram Forum topic binds to a tmux session/window. Messages you send in the topic are executed in tmux; output changes and deltas are relayed back directly.
+Each Telegram Forum topic binds to a tmux session/window. Messages you send in the topic are executed in tmux; output changes are relayed back directly.
 
 ---
 
-## Features
+## Commands
 
-### Direct Session & Terminal Control
-
-- **Topic-per-session** — each Telegram Forum topic manages its own tmux session and window.
-- **Directory browser** — create sessions by navigating the filesystem directly in Telegram, or send paths like `~/work/repo` or `cd ~/work/repo`.
-- **Command routing** — send raw commands directly (`!command` or text commands), or use optional LLM natural language command suggestions with approval buttons.
-- **Output monitoring & deltas** — prompt marker tracking (`⌘N⌘` wrap mode or `ccgram:N❯` replace mode) detects command completion, exit codes, and relays output changes.
-- **Terminal screenshots** (`//screen`, `//screenshot`) — converts captured terminal panes with full ANSI color codes (16/256/RGB) into crisp PNG images using JetBrains Mono, Noto Sans CJK, and Symbola fonts.
-- **Live view** (`//live` or Live button) — auto-refreshing terminal screenshot stream with content-hash change detection.
-- **Interactive remote control** — inline keyboard control buttons (Space, Tab, Enter, Esc, ^C, Arrow keys) to interact with interactive CLI tools directly from Telegram.
-- **Multi-pane support** (`//panes`) — inspect, switch, and screenshot multi-pane layouts.
-- **File delivery** (`//send`) — send files from the project directory directly to Telegram.
-- **Action toolbar** (`//toolbar`) — fast inline buttons for frequent terminal actions.
-- **Sessions dashboard** (`//sessions`) — list active sessions and manage windows.
+- `//commands` — list available bot commands
+- `//unbind` — unbind current topic from tmux window (session continues running)
+- `//sessions` / `//ses` — list active bridge sessions and manage bindings
 
 ---
 

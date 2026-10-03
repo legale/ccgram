@@ -302,31 +302,6 @@ async def test_create_window_sets_ccgram_window_id(tmux, tmp_path) -> None:
     assert expected in output
 
 
-# ── YOLO bypass prompt detection ────────────────────────────────────────
-
-
-async def test_accept_yolo_confirmation_detects_prompt(tmux, tmp_path) -> None:
-    from unittest.mock import patch
-
-    ok, _msg, _name, window_id = await tmux.create_window(
-        str(tmp_path), window_name="yolo-test", start_agent=False
-    )
-    assert ok
-
-    await tmux.send_keys(
-        window_id,
-        'echo "WARNING: Claude Code running in Bypass Permissions mode"',
-    )
-    await asyncio.sleep(0.5)
-
-    with patch("ccgram.handlers.topics.directory_callbacks.tmux_manager", tmux):
-        from ccgram.handlers.topics.directory_callbacks import _accept_yolo_confirmation
-
-        result = await _accept_yolo_confirmation(window_id, timeout=3.0)
-
-    assert result is True
-
-
 async def test_create_window_with_special_char_launch_command(tmux, tmp_path) -> None:
     """Launch command containing = and / is sent literally (regression for Gemini bug).
 
@@ -352,22 +327,3 @@ async def test_create_window_with_special_char_launch_command(tmux, tmp_path) ->
     assert "special/path/value" in output, (
         f"Launch command with = and / was not sent literally. Pane output: {output!r}"
     )
-
-
-async def test_accept_yolo_confirmation_timeout_on_no_prompt(tmux, tmp_path) -> None:
-    from unittest.mock import patch
-
-    ok, _msg, _name, window_id = await tmux.create_window(
-        str(tmp_path), window_name="yolo-nope", start_agent=False
-    )
-    assert ok
-
-    await tmux.send_keys(window_id, "echo hello world")
-    await asyncio.sleep(0.3)
-
-    with patch("ccgram.handlers.topics.directory_callbacks.tmux_manager", tmux):
-        from ccgram.handlers.topics.directory_callbacks import _accept_yolo_confirmation
-
-        result = await _accept_yolo_confirmation(window_id, timeout=1.0)
-
-    assert result is False

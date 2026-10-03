@@ -23,9 +23,7 @@ import structlog
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.error import BadRequest, NetworkError, RetryAfter, TelegramError, TimedOut
 
-from ...providers import get_provider_for_window
 from ...telegram_client import TelegramClient
-from ...window_query import get_window_provider
 from ...thread_router import thread_router
 from ...tmux_manager import tmux_manager
 from ...topic_state_registry import topic_state
@@ -266,25 +264,7 @@ async def _capture_interactive_content(
         )
         return None
 
-    provider = get_provider_for_window(
-        window_id, provider_name=get_window_provider(window_id)
-    )
-    pane_title = ""
-    if provider.capabilities.uses_pane_title and not pane_id:
-        pane_title = await tmux_manager.get_pane_title(window_id)
-    status = provider.parse_terminal_status(pane_text, pane_title=pane_title)
-    if status is None or not status.is_interactive:
-        return None
-
-    if not status.ui_type:
-        logger.warning(
-            "Interactive status with no ui_type in window_id %s pane %s",
-            window_id,
-            pane_id,
-        )
-        return None
-
-    return status.ui_type, status.raw_text
+    return None
 
 
 def _lookup_pane_name(window_id: str, pane_id: str) -> str | None:

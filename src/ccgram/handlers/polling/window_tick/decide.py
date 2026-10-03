@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import time
 
-from ....providers.base import StatusUpdate
 from ....terminal_parser import status_emoji_prefix
 from ..polling_types import (
     STARTUP_TIMEOUT,
+    StatusUpdate,
     TickContext,
     TickDecision,
     is_shell_prompt,

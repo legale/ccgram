@@ -19,7 +19,6 @@ from telegram.constants import ChatAction
 from ...config import config
 from ...telegram_client import PTBTelegramClient, TelegramClient
 from ..callback_helpers import get_thread_id as _get_thread_id
-from ..commands import sync_scoped_menu_for_text_context
 from ..topics.directory_browser import (
     BROWSE_DIRS_KEY,
     BROWSE_PAGE_KEY,
@@ -49,7 +48,6 @@ from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
 from ..user_state import PENDING_TOPIC_NAME
 from ... import window_query
 from ...thread_router import thread_router
-from ...providers import get_provider_for_window
 from ...session import session_manager
 from ...user_preferences import user_preferences
 from ...window_state_store import CCGRAM_CREATED_WINDOW_ORIGIN
@@ -274,7 +272,7 @@ async def _capture_bash_output(
     user_id: int,
     thread_id: int,
     window_id: str,
-    command: str,
+    _command: str,
 ) -> None:
     """Background task: capture ``!`` bash command output from tmux pane.
 
@@ -295,10 +293,7 @@ async def _capture_bash_output(
             if raw is None:
                 return
 
-            output = get_provider_for_window(
-                window_id,
-                provider_name=window_query.get_window_provider(window_id),
-            ).extract_bash_output(raw, command)
+            output = None
             if not output or output == last_output:
                 await asyncio.sleep(1.0)
                 continue
@@ -584,7 +579,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not update.message or not update.message.text:
         return
 
-    await sync_scoped_menu_for_text_context(update, user.id)
     await handle_text_message(update, context)
 
 
@@ -666,28 +660,21 @@ async def handle_text_message(
     ):
         return
 
-    # Shell provider: route through LLM or raw execution
-    provider = get_provider_for_window(
-        window_id, provider_name=window_query.get_window_provider(window_id)
+    # Lazy: break text_handler <-> shell circular dependency
+    from ..shell.shell_commands import handle_shell_message
+
+    if not text.startswith("!"):
+        text = f"!{text}"
+
+    await handle_shell_message(
+        PTBTelegramClient(context.bot),
+        user.id,
+        thread_id,
+        window_id,
+        text,
+        message,
     )
-    if not provider.capabilities.supports_mailbox_delivery:
-        # Lazy: shell.shell_commands ↔ text_handler via approval callback.
-        from ..shell.shell_commands import handle_shell_message
-
-        if window_query.get_window_provider(
-            window_id
-        ) == "shell" and not text.startswith("!"):
-            text = f"!{text}"
-
-        await handle_shell_message(
-            PTBTelegramClient(context.bot),
-            user.id,
-            thread_id,
-            window_id,
-            text,
-            message,
-        )
-        return
+    return
 
     # Forward message to window
     await _forward_message(

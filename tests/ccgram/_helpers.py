@@ -2,14 +2,14 @@
 
 from unittest.mock import MagicMock
 
-from ccgram.providers.base import AgentProvider, StatusUpdate
+from ccgram.handlers.polling.polling_types import StatusUpdate
 
 
 def make_mock_provider(
     *, has_status: bool = False, interactive: bool = False
 ) -> MagicMock:
     """Build a mock provider with parse_terminal_status configured."""
-    provider = MagicMock(spec=AgentProvider)
+    provider = MagicMock()
     if has_status:
         status = StatusUpdate(
             raw_text="Working...",

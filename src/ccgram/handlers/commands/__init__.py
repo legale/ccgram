@@ -1,29 +1,6 @@
-"""Commands subpackage — slash-command forward, menu sync, probes, snapshots.
-
-Round-5 split of the former ``handlers/command_orchestration.py`` (775
-LOC) into four cohesive modules:
-
-  - ``forward``: ``forward_command_handler`` — the main pipeline that
-    routes /-commands to the topic's provider session via tmux.
-  - ``menu_sync``: per-user/per-chat/global Telegram command menu cache
-    + the periodic refresh job. Owns provider command metadata.
-  - ``failure_probe``: post-send transcript + pane delta probes for
-    "unknown command" failure surfacing, plus the cross-provider
-    awareness check.
-  - ``status_snapshot``: /status and /stats fallback that synthesises a
-    one-shot snapshot from the transcript when the provider doesn't
-    reply natively.
-
-Hosts the ``/commands`` and ``/toolbar`` Telegram entry points here
-because they are light orchestration that mixes provider command
-discovery with toolbar rendering — they don't fit any single submodule.
-
-Public surface (re-exported here) is what ``bot.py``, ``bootstrap.py``,
-``handlers/registry.py`` and ``handlers/text/text_handler.py`` import.
-"""
+"""Commands subpackage — bot commands and toolbar entry points."""
 
 from __future__ import annotations
-
 
 from typing import TYPE_CHECKING
 
@@ -37,14 +14,6 @@ from ...utils import handle_general_topic_message, is_general_topic
 from ..callback_helpers import get_thread_id as _get_thread_id
 from ..messaging_pipeline.message_sender import safe_reply
 from ..toolbar import build_toolbar_keyboard, seed_button_states
-from .forward import forward_command_handler
-from .menu_sync import (
-    get_global_provider_menu,
-    set_global_provider_menu,
-    setup_menu_refresh_job,
-    sync_scoped_menu_for_text_context,
-    sync_scoped_provider_menu,
-)
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -111,9 +80,7 @@ async def toolbar_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -
         await safe_reply(update.message, "This topic is not bound to any session.")
         return
 
-    provider_name = window_query.get_window_provider(window_id) or "claude"
-    # Seed toggle-button labels with the actual current state so the
-    # initial render shows "Edit"/"Plan"/"YOLO"/"Def" instead of "Mode".
+    provider_name = window_query.get_window_provider(window_id) or "shell"
     await seed_button_states(window_id)
     keyboard = build_toolbar_keyboard(window_id, provider_name)
     display = thread_router.get_display_name(window_id)
@@ -126,11 +93,5 @@ async def toolbar_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -
 
 __all__ = [
     "commands_command",
-    "forward_command_handler",
-    "get_global_provider_menu",
-    "set_global_provider_menu",
-    "setup_menu_refresh_job",
-    "sync_scoped_menu_for_text_context",
-    "sync_scoped_provider_menu",
     "toolbar_command",
 ]

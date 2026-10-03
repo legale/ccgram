@@ -21,11 +21,7 @@ from telegram.error import NetworkError, RetryAfter, TelegramError, TimedOut
 
 from ... import window_query
 from ...config import config
-from ...providers import (
-    detect_provider_from_pane,
-    detect_provider_from_runtime,
-    should_probe_pane_title_for_provider_detection,
-)
+from ...providers import detect_provider_from_pane
 from ...session import session_manager
 from ...session_monitor import NewWindowEvent
 from ...telegram_client import TelegramClient
@@ -102,14 +98,6 @@ async def _auto_detect_provider(window_id: str) -> None:
         pane_tty=w.pane_tty,
         window_id=window_id,
     )
-    if not detected and should_probe_pane_title_for_provider_detection(
-        w.pane_current_command
-    ):
-        pane_title = await tmux_manager.get_pane_title(window_id)
-        detected = detect_provider_from_runtime(
-            w.pane_current_command,
-            pane_title=pane_title,
-        )
     if detected:
         session_manager.set_window_provider(window_id, detected)
         logger.info(

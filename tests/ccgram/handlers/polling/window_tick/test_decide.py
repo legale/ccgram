@@ -4,6 +4,7 @@ import pytest
 
 from ccgram.handlers.polling.polling_types import (
     STARTUP_TIMEOUT,
+    StatusUpdate,
     TickContext,
 )
 from ccgram.handlers.polling.window_tick.decide import (
@@ -11,7 +12,6 @@ from ccgram.handlers.polling.window_tick.decide import (
     decide_tick,
     is_shell_prompt,
 )
-from ccgram.providers.base import StatusUpdate
 
 
 def _make_ctx(

@@ -58,6 +58,10 @@ def _primary_session_grace_sec() -> float:
         return _DEFAULT_PRIMARY_SESSION_GRACE_SEC
 
 
+def _session_map_file() -> Path:
+    return getattr(config, "session_map_file", config.config_dir / "session_map.json")
+
+
 def _transcript_mtime(transcript_path: str) -> float | None:
     if not transcript_path:
         return None
@@ -204,10 +208,10 @@ class SessionMapSync:
         Also cleans up window_states entries not in current session_map.
         Updates window_display_names from the "window_name" field in values.
         """
-        if not config.session_map_file.exists():
+        if not _session_map_file().exists():
             return
         try:
-            async with aiofiles.open(config.session_map_file, "r") as f:
+            async with aiofiles.open(_session_map_file(), "r") as f:
                 content = await f.read()
             session_map = json.loads(content)
         except (json.JSONDecodeError, OSError):  # fmt: skip
@@ -326,7 +330,7 @@ class SessionMapSync:
         for key in old_format_keys:
             logger.info("Removing old-format session_map key: %s", key)
             del session_map[key]
-        atomic_write_json(config.session_map_file, session_map)
+        atomic_write_json(_session_map_file(), session_map)
 
     async def wait_for_session_map_entry(
         self, window_id: str, timeout: float = 5.0, interval: float = 0.5
@@ -345,8 +349,8 @@ class SessionMapSync:
         deadline = loop.time() + timeout
         while loop.time() < deadline:
             try:
-                if config.session_map_file.exists():
-                    async with aiofiles.open(config.session_map_file, "r") as f:
+                if _session_map_file().exists():
+                    async with aiofiles.open(_session_map_file(), "r") as f:
                         content = await f.read()
                     session_map = json.loads(content)
                     info = session_map.get(key, {})
@@ -378,10 +382,10 @@ class SessionMapSync:
         # Lazy: same cycle + wiring contract as _prefer_existing_primary.
         from .window_state_store import window_store
 
-        if not config.session_map_file.exists():
+        if not _session_map_file().exists():
             return
         try:
-            raw = json.loads(config.session_map_file.read_text())
+            raw = json.loads(_session_map_file().read_text())
         except (json.JSONDecodeError, OSError):  # fmt: skip
             return
 
@@ -407,7 +411,7 @@ class SessionMapSync:
                 window_store.remove_window(window_id)
                 changed_state = True
 
-        atomic_write_json(config.session_map_file, raw)
+        atomic_write_json(_session_map_file(), raw)
         if changed_state:
             self._schedule_save()
 
@@ -417,10 +421,10 @@ class SessionMapSync:
         Includes native windows (stripped to @id) and emdash windows
         (full qualified key like "emdash-claude-main-xxx:@0").
         """
-        if not config.session_map_file.exists():
+        if not _session_map_file().exists():
             return set()
         try:
-            raw = json.loads(config.session_map_file.read_text())
+            raw = json.loads(_session_map_file().read_text())
         except (json.JSONDecodeError, OSError):  # fmt: skip
             return set()
         prefix = f"{config.tmux_session_name}:"
@@ -477,7 +481,7 @@ class SessionMapSync:
         # Lazy: same cycle + wiring contract as _prefer_existing_primary.
         from .thread_router import thread_router
 
-        map_file = config.session_map_file
+        map_file = _session_map_file()
         map_file.parent.mkdir(parents=True, exist_ok=True)
         # Foreign windows (emdash) are already fully qualified
         if is_foreign_window(window_id):
@@ -533,18 +537,18 @@ class SessionMapSync:
 
     def clear_session_map_entry(self, window_id: str) -> None:
         """Remove a window's entry from session_map.json if present."""
-        if not config.session_map_file.exists():
+        if not _session_map_file().exists():
             return
-        lock_path = config.session_map_file.with_suffix(".lock")
+        lock_path = _session_map_file().with_suffix(".lock")
         try:
             with open(lock_path, "w") as lock_f:
                 fcntl.flock(lock_f, fcntl.LOCK_EX)
                 try:
-                    raw = json.loads(config.session_map_file.read_text())
+                    raw = json.loads(_session_map_file().read_text())
                     key = f"{config.tmux_session_name}:{window_id}"
                     if key in raw:
                         del raw[key]
-                        atomic_write_json(config.session_map_file, raw)
+                        atomic_write_json(_session_map_file(), raw)
                         logger.debug("Cleared session_map entry for %s", window_id)
                 except (json.JSONDecodeError, OSError):  # fmt: skip
                     return

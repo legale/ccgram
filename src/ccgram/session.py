@@ -372,10 +372,13 @@ class SessionManager:
         Includes native windows (stripped to @id) and emdash windows
         (full qualified key like "emdash-claude-main-xxx:@0").
         """
-        if not config.session_map_file.exists():
+        session_map_file = getattr(
+            config, "session_map_file", config.config_dir / "session_map.json"
+        )
+        if not session_map_file.exists():
             return set()
         try:
-            raw = json.loads(config.session_map_file.read_text())
+            raw = json.loads(session_map_file.read_text())
         except (json.JSONDecodeError, OSError):  # fmt: skip
             return set()
         prefix = f"{config.tmux_session_name}:"
@@ -592,26 +595,13 @@ class SessionManager:
         *,
         cwd: str | None = None,
     ) -> None:
-        """Set the provider for a window.
-
-        Resolves whether the new provider supports hooks so that
-        ``window_state_store`` remains free of provider imports.
-        """
-        supports_hook = True
-        if provider_name:
-            # Lazy: providers.registry imports concrete provider modules
-            # which transitively touch session state; keep lookup local.
-            from .providers.registry import UnknownProviderError, registry
-
-            try:
-                supports_hook = registry.get(provider_name).capabilities.supports_hook
-            except UnknownProviderError:
-                supports_hook = True
         window_store.set_window_provider(
             window_id,
             provider_name,
             cwd=cwd,
-            new_provider_supports_hook=supports_hook,
+            new_provider_supports_hook=(
+                provider_name != "shell" and bool(provider_name)
+            ),
         )
 
     def _clear_session_map_entry(self, window_id: str) -> None:

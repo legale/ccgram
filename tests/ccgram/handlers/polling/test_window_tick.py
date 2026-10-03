@@ -22,7 +22,7 @@ from ccgram.handlers.polling.window_tick import (
     decide_tick,
     tick_window,
 )
-from ccgram.providers.base import StatusUpdate
+from ccgram.handlers.polling.polling_types import StatusUpdate
 
 
 @pytest.fixture(autouse=True)

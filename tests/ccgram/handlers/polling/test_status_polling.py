@@ -598,7 +598,7 @@ class TestPyteFallbackInUpdateStatus:
             )
 
     async def test_uses_pyte_result_when_available(self) -> None:
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         pyte_status = StatusUpdate(
             raw_text="Reading file",
@@ -912,7 +912,7 @@ class TestScanWindowPanes:
         mock_handle.assert_not_called()
 
     async def test_detects_interactive_prompt_in_non_active_pane(self) -> None:
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         bot = AsyncMock(spec=Bot)
         interactive = StatusUpdate(
@@ -967,7 +967,7 @@ class TestScanWindowPanes:
         mock_tm.capture_pane_by_id.assert_called_once_with("%2", window_id="@0")
 
     async def test_deduplicates_same_prompt(self) -> None:
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         bot = AsyncMock(spec=Bot)
         interactive = StatusUpdate(
@@ -1083,7 +1083,7 @@ class TestUpdateStatusMessageEdgeCases:
         from ccgram.handlers.polling.window_tick import (
             _update_status as update_status_message,
         )
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         terminal_poll_state.get_state(
             "@0"
@@ -1134,7 +1134,7 @@ class TestUpdateStatusMessageEdgeCases:
         from ccgram.handlers.polling.window_tick import (
             _update_status as update_status_message,
         )
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         pyte_status = StatusUpdate(
             raw_text="Working", display_label="\u23f3 Working\u2026"
@@ -1184,7 +1184,7 @@ class TestUpdateStatusMessageEdgeCases:
         from ccgram.handlers.polling.window_tick import (
             _update_status as update_status_message,
         )
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         pyte_status = StatusUpdate(
             raw_text=(
@@ -1241,7 +1241,7 @@ class TestUpdateStatusMessageEdgeCases:
         from ccgram.handlers.polling.window_tick import (
             _update_status as update_status_message,
         )
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         non_interactive = StatusUpdate(raw_text="Working", display_label="...working")
         mock_window = MagicMock()
@@ -1288,7 +1288,7 @@ class TestUpdateStatusMessageEdgeCases:
         from ccgram.handlers.polling.window_tick import (
             _update_status as update_status_message,
         )
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         interactive_status = StatusUpdate(
             raw_text="Allow?",
@@ -1339,7 +1339,7 @@ class TestCheckInteractiveOnly:
     )
     async def test_detects_interactive_ui(self, interactive_window: str | None) -> None:
         from ccgram.handlers.polling.window_tick import _check_interactive_only
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         interactive_status = StatusUpdate(
             raw_text="Allow?",
@@ -1378,7 +1378,7 @@ class TestCheckInteractiveOnly:
 
     async def test_clears_interactive_mode_on_handle_failure(self) -> None:
         from ccgram.handlers.polling.window_tick import _check_interactive_only
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         interactive_status = StatusUpdate(
             raw_text="Allow?",
@@ -1446,7 +1446,7 @@ class TestCheckInteractiveOnly:
 
     async def test_no_action_when_not_interactive(self) -> None:
         from ccgram.handlers.polling.window_tick import _check_interactive_only
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         normal_status = StatusUpdate(
             raw_text="Reading file", display_label="reading..."
@@ -1526,7 +1526,7 @@ class TestCheckInteractiveOnly:
         self, uses_pane_title: bool, expected_title: str
     ) -> None:
         from ccgram.handlers.polling.window_tick import _check_interactive_only
-        from ccgram.providers.base import StatusUpdate
+        from ccgram.handlers.polling.polling_types import StatusUpdate
 
         interactive_status = StatusUpdate(
             raw_text="Allow?",

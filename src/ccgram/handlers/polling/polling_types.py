@@ -17,7 +17,16 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from ...providers.base import StatusUpdate
+
+@dataclass(frozen=True, slots=True)
+class StatusUpdate:
+    """Parsed terminal status line from the agent's pane."""
+
+    raw_text: str
+    display_label: str
+    is_interactive: bool = False
+    ui_type: str | None = None
+
 
 if TYPE_CHECKING:
     from telegram import Bot

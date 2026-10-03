@@ -10,13 +10,13 @@ active — that side effect must run in the coordinator before
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from .... import window_query
 from ....providers import get_provider_for_window
-from ....providers.base import StatusUpdate
+from ..polling_types import StatusUpdate
 from ....session_monitor import get_active_monitor
 from ....tmux_manager import has_insert_indicator, notify_vim_insert_seen, tmux_manager
 from ..polling_state import terminal_poll_state, terminal_screen_buffer
@@ -24,7 +24,7 @@ from ..polling_types import TickContext, is_shell_prompt
 from .decide import build_status_line
 
 if TYPE_CHECKING:
-    from ....providers.base import AgentProvider
+    AgentProvider = Any
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()

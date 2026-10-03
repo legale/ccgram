@@ -50,16 +50,3 @@ def _disable_send_rate_limit(monkeypatch):
     monkeypatch.setattr(
         "ccgram.handlers.messaging_pipeline.message_sender.MESSAGE_SEND_INTERVAL", 0
     )
-
-
-@pytest.fixture(autouse=True)
-def _zero_command_orchestration_delays(monkeypatch):
-    """Collapse command-orchestration probe / fallback delays."""
-    monkeypatch.setattr(
-        "ccgram.handlers.commands.status_snapshot._CODEX_STATUS_FALLBACK_DELAY_SECONDS",
-        0,
-    )
-    monkeypatch.setattr(
-        "ccgram.handlers.commands.failure_probe._COMMAND_ERROR_PROBE_DELAY_SECONDS",
-        0,
-    )

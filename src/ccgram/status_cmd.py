@@ -62,20 +62,7 @@ def _list_tmux_windows(session_name: str) -> list[dict[str, str]]:
 
 def _capability_summary() -> tuple[str, str]:
     """Return (provider_name, comma-separated capability flags)."""
-    # Lazy: keep `ccgram status` startup snappy
-    from .providers import resolve_capabilities
-
-    caps = resolve_capabilities()
-    flags = [
-        label
-        for flag, label in (
-            (caps.supports_hook, "hook"),
-            (caps.supports_resume, "resume"),
-            (caps.supports_continue, "continue"),
-        )
-        if flag
-    ]
-    return caps.name, ", ".join(flags) or "none"
+    return "shell", "none"
 
 
 def status_main() -> None:

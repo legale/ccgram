@@ -146,3 +146,6 @@ fd4ee5d refactor(providers): remove external agent providers, retain shell only
 - **Тесты**: pytest, 32 workers, `pytest-xdist`, marks: `integration`, `e2e` (исключены из `make check`)
 - **Линтеры**: ruff (format + check), pyright, deptry
 - **Layering tests**: `test_handler_layering_invariants.py` — PTB bot escapes allowlist + singleton access allowlist
+- **Никаких эмодзи**: ни в коде, ни в коммитах, ни в ответах ассистента, ни в документах/планах
+- **Отметки в плане**: `[x]` - done, `[/]` - in progress, `[ ]` - not done
+

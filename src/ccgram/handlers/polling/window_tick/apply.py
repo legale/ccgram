@@ -55,9 +55,10 @@ from .decide import decide_tick
 from .observe import _check_vim_insert, _resolve_status, build_context
 
 if TYPE_CHECKING:
+    from typing import Any
     from telegram import Bot
 
-    from ....providers.base import AgentProvider
+    AgentProvider = Any
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()

@@ -27,7 +27,6 @@ from telegram.error import TelegramError
 from .config import config
 from .idle_tracker import IdleTracker
 from .monitor_state import MonitorState
-from .providers import get_provider_for_window, registry  # noqa: F401 (used by test patches)
 from .session_map import parse_session_map
 from .session_lifecycle import session_lifecycle
 from .tmux_manager import tmux_manager
@@ -74,7 +73,9 @@ class SessionMonitor:
         state_file: Path | None = None,
     ):
         self.projects_path = (
-            projects_path if projects_path is not None else config.claude_projects_path
+            projects_path
+            if projects_path is not None
+            else Path.home() / ".claude/projects"
         )
         self.poll_interval = (
             poll_interval if poll_interval is not None else config.monitor_poll_interval
@@ -92,7 +93,7 @@ class SessionMonitor:
         # Lazy: providers.base imports HookEvent and gets imported back
         # through tmux_manager → providers; keep at call site.
         # Lazy: HookEvent pulled by hook dispatch path; defer until that path runs
-        from .providers.base import HookEvent
+        from .handlers.hook_events import HookEvent
 
         self._hook_event_callback: Callable[[HookEvent], Awaitable[None]] | None = None
 
@@ -211,9 +212,10 @@ class SessionMonitor:
 
     async def _load_current_session_map(self) -> dict[str, dict[str, str]]:
         """Load current session_map and return window_key -> details mapping."""
-        if config.session_map_file.exists():
+        map_file = config.config_dir / "session_map.json"
+        if map_file.exists():
             try:
-                async with aiofiles.open(config.session_map_file, "r") as f:
+                async with aiofiles.open(map_file, "r") as f:
                     content = await f.read()
                 raw = json.loads(content)
                 prefix = f"{config.tmux_session_name}:"

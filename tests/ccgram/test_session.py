@@ -422,100 +422,7 @@ class TestWindowStateApprovalMode:
         assert ws.approval_mode == "yolo"
 
 
-class TestGlobFallbackCwdUpdate:
-    @pytest.fixture(autouse=True)
-    def _mock_provider(self, monkeypatch):
-        from ccgram.providers.base import ProviderCapabilities
-
-        class _MockClaude:
-            capabilities = ProviderCapabilities(
-                name="claude",
-                launch_command="claude",
-                transcript_format="jsonl",
-            )
-
-        monkeypatch.setattr(
-            "ccgram.session_resolver.get_provider_for_window",
-            lambda _wid, provider_name=None: _MockClaude(),
-        )
-
-    async def test_glob_fallback_updates_cwd_when_dir_exists(
-        self, mgr: SessionManager, tmp_path, monkeypatch
-    ) -> None:
-        from pathlib import Path
-
-        projects_path = tmp_path / "projects"
-        encoded_dir = projects_path / "-data-code-proj"
-        encoded_dir.mkdir(parents=True)
-        session_file = encoded_dir / "session-abc.jsonl"
-        session_file.write_text('{"type":"summary","summary":"test"}\n')
-
-        monkeypatch.setattr("ccgram.session.config.claude_projects_path", projects_path)
-
-        mgr.window_states["@1"] = WindowState(
-            session_id="session-abc", cwd="/wrong/path"
-        )
-
-        _orig_is_dir = Path.is_dir
-
-        def _mock_is_dir(self):
-            if str(self) == "/data/code/proj":
-                return True
-            return _orig_is_dir(self)
-
-        with patch.object(Path, "is_dir", _mock_is_dir):
-            session = await session_resolver._get_session_direct(
-                "session-abc", "/wrong/path", "@1"
-            )
-
-        assert session is not None
-        assert mgr.window_states["@1"].cwd == "/data/code/proj"
-
-    async def test_glob_fallback_skips_update_for_nonexistent_decoded_path(
-        self, mgr: SessionManager, tmp_path, monkeypatch
-    ) -> None:
-        projects_path = tmp_path / "projects"
-        encoded_dir = projects_path / "-tmp-my-project"
-        encoded_dir.mkdir(parents=True)
-        session_file = encoded_dir / "sid-456.jsonl"
-        session_file.write_text('{"type":"summary","summary":"test"}\n')
-
-        monkeypatch.setattr("ccgram.session.config.claude_projects_path", projects_path)
-
-        mgr.window_states["@2"] = WindowState(session_id="sid-456", cwd="/wrong/path")
-
-        session = await session_resolver._get_session_direct(
-            "sid-456", "/wrong/path", "@2"
-        )
-
-        assert session is not None
-        assert mgr.window_states["@2"].cwd == "/wrong/path"
-
-    async def test_glob_fallback_no_update_without_window_id(
-        self, mgr: SessionManager, tmp_path, monkeypatch
-    ) -> None:
-        projects_path = tmp_path / "projects"
-        encoded_dir = projects_path / "-tmp-myproj"
-        encoded_dir.mkdir(parents=True)
-        session_file = encoded_dir / "sid-123.jsonl"
-        session_file.write_text('{"type":"summary","summary":"test"}\n')
-
-        monkeypatch.setattr("ccgram.session.config.claude_projects_path", projects_path)
-
-        session = await session_resolver._get_session_direct("sid-123", "/wrong/path")
-
-        assert session is not None
-        assert not mgr.window_states
-
-
 class TestSetWindowProvider:
-    @pytest.fixture(autouse=True)
-    def _mock_registry(self):
-        mock_prov = SimpleNamespace(capabilities=SimpleNamespace(supports_hook=False))
-        with patch("ccgram.providers.registry") as mock_reg:
-            mock_reg.get.return_value = mock_prov
-            yield
-
     def test_set_and_get(self, mgr: SessionManager) -> None:
         mgr.set_window_provider("@1", "codex")
         assert mgr.window_states["@1"].provider_name == "codex"
@@ -715,13 +622,6 @@ class TestResolveSessionForWindow:
             transcript_path=str(transcript),
             provider_name="gemini",
         )
-        monkeypatch.setattr(
-            "ccgram.session_resolver.get_provider_for_window",
-            lambda _wid, provider_name=None: SimpleNamespace(
-                capabilities=SimpleNamespace(supports_hook=False)
-            ),
-        )
-
         session = await session_resolver.resolve_session_for_window("@7")
 
         assert session is not None
@@ -739,12 +639,6 @@ class TestResolveSessionForWindow:
             provider_name="codex",
         )
         monkeypatch.setattr(
-            "ccgram.session_resolver.get_provider_for_window",
-            lambda _wid, provider_name=None: SimpleNamespace(
-                capabilities=SimpleNamespace(supports_hook=False)
-            ),
-        )
-        monkeypatch.setattr(
             session_resolver,
             "_get_session_direct",
             AsyncMock(return_value=None),
@@ -755,32 +649,6 @@ class TestResolveSessionForWindow:
         assert session is None
         assert mgr.window_states["@8"].session_id == "codex-uuid"
         assert mgr.window_states["@8"].cwd == "/my/project"
-
-    async def test_hook_provider_unresolved_clears_window_state(
-        self, mgr: SessionManager, monkeypatch
-    ) -> None:
-        mgr.window_states["@9"] = WindowState(
-            session_id="claude-uuid",
-            cwd="/my/project",
-            provider_name="claude",
-        )
-        monkeypatch.setattr(
-            "ccgram.session_resolver.get_provider_for_window",
-            lambda _wid, provider_name=None: SimpleNamespace(
-                capabilities=SimpleNamespace(supports_hook=True)
-            ),
-        )
-        monkeypatch.setattr(
-            session_resolver,
-            "_get_session_direct",
-            AsyncMock(return_value=None),
-        )
-
-        session = await session_resolver.resolve_session_for_window("@9")
-
-        assert session is None
-        assert mgr.window_states["@9"].session_id == ""
-        assert mgr.window_states["@9"].cwd == ""
 
 
 class TestWriteHooklessSessionMap:

@@ -13,8 +13,10 @@ from collections.abc import Awaitable, Callable
 
 import structlog
 
+from dataclasses import dataclass
+from typing import Any
+
 from ..claude_task_state import classify_wait_message, claude_task_state
-from ..providers.base import HookEvent
 from ..session_lifecycle import session_lifecycle
 from ..telegram_client import TelegramClient
 from ..thread_router import thread_router
@@ -28,6 +30,17 @@ from .interactive import (
 from .messaging_pipeline.message_queue import enqueue_status_update
 from .polling.polling_state import reset_window_polling_state
 from .status.topic_emoji import update_topic_emoji
+
+
+@dataclass
+class HookEvent:
+    """A structured event from the hook event log."""
+
+    event_type: str  # "Notification", "Stop", etc.
+    window_key: str  # "ccgram:@0"
+    session_id: str
+    data: dict[str, Any]
+    timestamp: float
 
 
 async def _stop_callback_unwired(_client: TelegramClient, _window_key: str) -> None:
