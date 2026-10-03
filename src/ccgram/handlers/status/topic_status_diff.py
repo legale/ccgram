@@ -139,7 +139,7 @@ async def update_topic_status_diff(
     window_id: str,
     pane_text: str,
     *,
-    active: bool,
+    active: bool = True,
 ) -> None:
     if not config.topic_status_diff_enabled or not pane_text or not active:
         return
@@ -160,7 +160,6 @@ async def update_topic_status_diff(
         return
 
     if now - state.last_edit_ts < config.topic_status_diff_interval:
-        state.prev_lines = current
         return
 
     text = _format_delta(window_id, state.prev_lines, current)

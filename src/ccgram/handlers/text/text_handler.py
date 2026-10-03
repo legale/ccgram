@@ -404,13 +404,14 @@ async def _handle_unbound_topic(
         return True
 
     all_windows = await tmux_manager.list_windows()
-    external_windows = await tmux_manager.discover_external_sessions()
-    all_windows.extend(external_windows)
+    if config.tmux_external_patterns:
+        external_windows = await tmux_manager.discover_external_sessions()
+        all_windows.extend(external_windows)
     bound_ids = {bound_wid for _, _, bound_wid in thread_router.iter_thread_bindings()}
     unbound = [
         (w.window_id, w.window_name, w.cwd)
         for w in all_windows
-        if w.window_id not in bound_ids
+        if w.window_id not in bound_ids and (not w.cwd or Path(w.cwd).exists())
     ]
     logger.debug(
         "Window picker check: all=%s, bound=%s, unbound=%s",

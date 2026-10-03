@@ -92,7 +92,7 @@ class TestBindWindowCallback:
 
         await handle_window_callback(query, 100, f"{CB_WIN_BIND}5", update, context)
         query.answer.assert_called_once_with(
-            "Window list changed, please retry", show_alert=True
+            "Session list changed, please retry", show_alert=True
         )
 
     async def test_bind_stale_topic_mismatch(self) -> None:

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from .utils import ccgram_dir, tmux_session_name
 
-_TMUX_FORMAT_PARTS = 2
+_TMUX_FORMAT_PARTS = 3
 
 
 def _read_json(path: Path) -> dict:
@@ -36,10 +36,9 @@ def _list_tmux_windows(session_name: str) -> list[dict[str, str]]:
             [
                 "tmux",
                 "list-windows",
-                "-t",
-                session_name,
+                "-a",
                 "-F",
-                "#{window_id}\t#{window_name}",
+                "#{session_name}\t#{window_id}\t#{window_name}",
             ],
             capture_output=True,
             text=True,
@@ -49,9 +48,13 @@ def _list_tmux_windows(session_name: str) -> list[dict[str, str]]:
             return []
         windows = []
         for line in result.stdout.strip().splitlines():
-            parts = line.split("\t", 1)
+            parts = line.split("\t", 2)
             if len(parts) == _TMUX_FORMAT_PARTS:
-                windows.append({"id": parts[0], "name": parts[1]})
+                s_name, wid, wname = parts
+                if wname == "__main__" or wname.startswith("_"):
+                    continue
+                qid = wid if s_name == session_name else f"{s_name}:{wid}"
+                windows.append({"id": qid, "name": wname})
         return windows
     except (OSError, subprocess.TimeoutExpired):  # fmt: skip
         return []

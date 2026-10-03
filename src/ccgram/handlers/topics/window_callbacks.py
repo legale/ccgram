@@ -193,14 +193,14 @@ async def _handle_bind(
         context.user_data.get(UNBOUND_WINDOWS_KEY, []) if context.user_data else []
     )
     if idx < 0 or idx >= len(cached_windows):
-        await query.answer("Window list changed, please retry", show_alert=True)
+        await query.answer("Session list changed, please retry", show_alert=True)
         return
     selected_wid = cached_windows[idx]
 
     w = await tmux_manager.find_window_by_id(selected_wid)
     if not w:
         display = thread_router.get_display_name(selected_wid)
-        await query.answer(f"Window '{display}' no longer exists", show_alert=True)
+        await query.answer(f"Session '{display}' no longer exists", show_alert=True)
         return
 
     thread_id = get_thread_id(update)
@@ -225,7 +225,7 @@ async def _handle_bind(
 
     await safe_edit(
         query,
-        f"Bound to window `{display}`",
+        f"Bound to session `{display}`",
     )
 
     chat = _get_topic_chat(update, query)

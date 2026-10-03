@@ -368,3 +368,7 @@ def build_mode_picker(
         [InlineKeyboardButton("Cancel", callback_data=CB_DIR_CANCEL)],
     ]
     return text, InlineKeyboardMarkup(buttons)
+
+
+build_ses_picker = build_window_picker
+_ses_label = _window_label

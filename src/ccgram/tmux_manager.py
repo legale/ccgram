@@ -124,6 +124,10 @@ class TmuxWindow:
     pane_height: int = 0  # Active pane height (rows)
 
 
+# Alias: entity is a tmux session/window (ses)
+TmuxSes = TmuxWindow
+
+
 class TmuxManager:
     """Manages tmux windows for Claude Code sessions."""
 
@@ -211,6 +215,8 @@ class TmuxManager:
                 if s.strip()
                 and (
                     s.strip().startswith(config.tmux_session_prefix)
+                    or s.strip().startswith("ccgram")
+                    or s.strip().startswith("cc_")
                     or s.strip() == self.session_name
                 )
             ]
@@ -932,6 +938,8 @@ class TmuxManager:
             if len(parts) < 4:  # noqa: PLR2004
                 continue
             win_id, win_name, cwd, cmd = parts[:4]
+            if win_name == config.tmux_main_window_name or win_name.startswith("_"):
+                continue
             tty = parts[4] if len(parts) > 4 else ""  # noqa: PLR2004
             detected = detect_provider_from_command(cmd)
             if not detected:

@@ -496,15 +496,9 @@ async def _update_status(
     ctx = build_context(window_id, w, status, notification_mode=notification_mode)
     decision = decide_tick(ctx)
 
-    if (
-        thread_id is not None
-        and config.topic_status_diff_enabled
-        and decision.transition == "active"
-    ):
+    if thread_id is not None and config.topic_status_diff_enabled:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-        await update_topic_status_diff(
-            client, chat_id, thread_id, window_id, pane_text, active=True
-        )
+        await update_topic_status_diff(client, chat_id, thread_id, window_id, pane_text)
 
     await _apply_tick_decision(
         bot,

@@ -56,7 +56,7 @@ class TestTopicEditedHandler:
         await topic_edited_handler(update, MagicMock())
 
         mock_tm.rename_window.assert_called_once_with("cc_old:@0", "new-name")
-        mock_tm.rename_session.assert_called_once_with("cc_old", "cc_new-name")
+        mock_tm.rename_session.assert_called_once_with("cc_old", "ccgram_new-name")
         mock_sm.set_display_name.assert_called_once_with("@0", "new-name")
 
     @_PATCH_ALLOWED
