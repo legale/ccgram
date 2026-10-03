@@ -1006,6 +1006,7 @@ class TmuxManager:
                     proc.stderr.strip(),
                 )
                 return False
+            self._reset_server()
             return True
 
         return await asyncio.to_thread(_sync_rename)

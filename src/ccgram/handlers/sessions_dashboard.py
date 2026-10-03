@@ -46,6 +46,7 @@ from .callback_helpers import user_owns_window
 from .callback_registry import register
 from .cleanup import clear_topic_state
 from .messaging_pipeline.message_sender import safe_edit, safe_reply
+from .polling.polling_state import lifecycle_strategy
 from .topics.topic_binding import bind_topic_to_window
 from .user_state import (
     SESSION_RENAME_CHAT_ID,
@@ -317,6 +318,10 @@ async def apply_session_rename(
         )
         return True
 
+    for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
+        if bound_wid == window_id:
+            lifecycle_strategy.mark_dead_notified(uid, tid, window_id)
+
     new_wid = await _execute_session_rename(window_id, name)
 
     chat = getattr(message, "chat", None)
@@ -342,7 +347,9 @@ async def _execute_session_rename(window_id: str, name: str) -> str:
         await tmux_manager.rename_window(w.window_id, name)
         if ":" in w.window_id:
             session_name, bare_id = w.window_id.rsplit(":", 1)
-            new_session_name = f"{config.tmux_session_prefix}{name}"
+            prefix = config.tmux_session_prefix
+            clean_prefix = prefix if not name.startswith(prefix) else ""
+            new_session_name = f"{clean_prefix}{name}"
             if await tmux_manager.rename_session(session_name, new_session_name):
                 new_wid = f"{new_session_name}:{bare_id}"
 
@@ -350,8 +357,13 @@ async def _execute_session_rename(window_id: str, name: str) -> str:
         for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
             if bound_wid == window_id:
                 thread_router.bind_thread(uid, tid, new_wid, window_name=name)
+                lifecycle_strategy.clear_dead_notification(uid, tid)
+                lifecycle_strategy.clear_autoclose_timer(uid, tid)
         session_manager.set_display_name(new_wid, name)
     else:
+        for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
+            if bound_wid == window_id:
+                lifecycle_strategy.clear_dead_notification(uid, tid)
         thread_router.set_display_name(window_id, name)
         session_manager.set_display_name(window_id, name)
     return new_wid
