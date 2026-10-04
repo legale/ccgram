@@ -3,7 +3,6 @@ from unittest.mock import MagicMock
 import pytest
 from telegram.ext import (
     CallbackQueryHandler,
-    InlineQueryHandler,
     MessageHandler,
     PrefixHandler,
     filters,
@@ -41,8 +40,6 @@ def test_register_all_installs_expected_command_names():
 
     assert set(command_names) == set(COMMAND_NAMES)
     assert len(command_names) == len(COMMAND_NAMES)
-    assert "bind" in command_names
-    assert "echo" in command_names
 
 
 def test_register_all_registers_all_handler_kinds():
@@ -56,8 +53,7 @@ def test_register_all_registers_all_handler_kinds():
 
     assert by_kind.get(PrefixHandler) == len(COMMAND_NAMES)
     assert by_kind.get(CallbackQueryHandler) == 1
-    assert by_kind.get(InlineQueryHandler) == 1
-    assert by_kind.get(MessageHandler) == 9
+    assert by_kind.get(MessageHandler) == 6
 
 
 def test_register_all_command_handlers_precede_message_command_fallback():

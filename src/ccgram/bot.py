@@ -28,13 +28,10 @@ from telegram.ext import (
 
 from . import bootstrap
 from .config import config
-from .handlers.inline import inline_query_handler, unsupported_content_handler
-from .handlers.commands import commands_command, toolbar_command
-from .handlers.messaging_pipeline import toolcalls_command, verbose_command
+from .handlers.commands import commands_command
 from .handlers.messaging_pipeline.message_sender import safe_reply
 from .handlers.registry import register_all
 from .handlers.text.text_handler import handle_text_message, text_handler
-from .handlers.topics import bind_command
 from .handlers.topics.directory_browser import clear_browse_state
 from .session import session_manager
 from .telegram_request import ResilientPollingHTTPXRequest
@@ -49,9 +46,7 @@ __all__ = [
     "commands_command",
     "create_bot",
     "handle_text_message",
-    "inline_query_handler",
     "is_user_allowed",
-    "bind_command",
     "post_init",
     "post_shutdown",
     "post_stop",
@@ -59,10 +54,6 @@ __all__ = [
     "session_manager",
     "text_handler",
     "thread_router",
-    "toolbar_command",
-    "toolcalls_command",
-    "unsupported_content_handler",
-    "verbose_command",
 ]
 
 logger = structlog.get_logger()
