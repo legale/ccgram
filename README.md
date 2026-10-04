@@ -106,7 +106,7 @@ CCGRAM_GROUP_ID=your_telegram_group_id
 ccgram
 ```
 
-Open your Telegram group, create a new topic, send a message — the directory browser appears. Select your working directory (or type a path like `~/code/project`), and your tmux session is created and bound immediately!
+Open your Telegram group, create topic `foo`, and send a message. ccgram binds it to tmux session `cc_foo`; if that session does not exist, ccgram creates it. To hand an existing session `foo` to ccgram, rename it to `cc_foo` first.
 
 
 ---

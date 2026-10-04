@@ -54,9 +54,6 @@ class ThreadRouter:
         self.thread_bindings: dict[int, dict[int, str]] = {}
         # "user_id:thread_id" -> chat_id (supports multiple groups per user)
         self.group_chat_ids: dict[str, int] = {}
-        # Last forum chat observed for each authorized user.  This lets the
-        # reconciler create topics without requiring a configured chat ID.
-        self.forum_chat_ids: dict[int, int] = {}
         # window_id -> display name (window_name)
         self.window_display_names: dict[str, str] = {}
         # Reverse index: (user_id, window_id) -> thread_id for O(1) lookups
@@ -68,7 +65,6 @@ class ThreadRouter:
         """Clear all state.  Used for test isolation."""
         self.thread_bindings.clear()
         self.group_chat_ids.clear()
-        self.forum_chat_ids.clear()
         self.window_display_names.clear()
         self._window_to_thread.clear()
 
@@ -83,39 +79,13 @@ class ThreadRouter:
             for tid, wid in bindings.items():
                 self._window_to_thread[(uid, wid)] = tid
 
-    def _dedup_thread_bindings(self) -> None:
-        """Enforce 1 window = 1 thread.  Keep highest thread_id per window."""
-        for _uid, bindings in self.thread_bindings.items():
-            window_threads: dict[str, list[int]] = {}
-            for tid, wid in bindings.items():
-                window_threads.setdefault(wid, []).append(tid)
-            for wid, tids in window_threads.items():
-                if len(tids) > 1:
-                    keep = max(tids)
-                    for tid in tids:
-                        if tid != keep:
-                            del bindings[tid]
-                            logger.warning(
-                                "Startup: removed duplicate binding "
-                                "thread %d -> window %s (keeping %d)",
-                                tid,
-                                wid,
-                                keep,
-                            )
-
     # ------------------------------------------------------------------
     # Serialization
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize non-lifecycle routing state for state.json persistence."""
-        return {
-            "forum_chat_ids": {
-                str(user_id): chat_id
-                for user_id, chat_id in self.forum_chat_ids.items()
-            },
-            "window_display_names": self.window_display_names,
-        }
+        return {"window_display_names": self.window_display_names}
 
     def from_dict(self, data: dict[str, Any]) -> None:
         """Restore routing state from persisted data.
@@ -127,10 +97,6 @@ class ThreadRouter:
         # resurrect runtime routes from stale state.json data.
         self.thread_bindings = {}
         self.group_chat_ids = {}
-        self.forum_chat_ids = {
-            int(user_id): int(chat_id)
-            for user_id, chat_id in data.get("forum_chat_ids", {}).items()
-        }
         self.window_display_names = data.get("window_display_names", {})
         self._rebuild_reverse_index()
 
@@ -172,9 +138,9 @@ class ThreadRouter:
 
         self.thread_bindings[user_id][thread_id] = window_id
         self._window_to_thread[(user_id, window_id)] = thread_id
-        if window_name:
+        if window_name and self.window_display_names.get(window_id) != window_name:
             self.window_display_names[window_id] = window_name
-        self._schedule_save()
+            self._schedule_save()
         display = window_name or self.get_display_name(window_id)
         logger.info(
             "Bound tg_topic %d -> tmux_session %s (%s) for user %d",
@@ -216,9 +182,9 @@ class ThreadRouter:
             for wid in ub.values()
         )
         if not still_bound and not self._has_window_state(window_id):
-            self.window_display_names.pop(window_id, None)
+            if self.window_display_names.pop(window_id, None) is not None:
+                self._schedule_save()
 
-        self._schedule_save()
         return window_id
 
     def get_window_for_thread(self, user_id: int, thread_id: int) -> str | None:
@@ -272,24 +238,12 @@ class ThreadRouter:
         key = f"{user_id}:{thread_id}"
         if self.group_chat_ids.get(key) != chat_id:
             self.group_chat_ids[key] = chat_id
-            self._schedule_save()
             logger.info(
                 "Stored group chat_id %d for user %d, thread %d",
                 chat_id,
                 user_id,
                 thread_id,
             )
-
-    def remember_forum_chat_id(self, user_id: int, chat_id: int) -> None:
-        """Remember the forum chat seen in an authorized user's update."""
-        if self.forum_chat_ids.get(user_id) == chat_id:
-            return
-        self.forum_chat_ids[user_id] = chat_id
-        self._schedule_save()
-
-    def get_forum_chat_id(self, user_id: int) -> int | None:
-        """Return the last forum chat observed for a user."""
-        return self.forum_chat_ids.get(user_id)
 
     def resolve_chat_id(self, user_id: int, thread_id: int | None = None) -> int:
         """Resolve the chat_id for sending messages.

@@ -70,7 +70,6 @@ _FLAG_TO_ENV: list[tuple[str, str]] = [
     ("autoclose_done", "AUTOCLOSE_DONE_MINUTES"),
     ("autoclose_dead", "AUTOCLOSE_DEAD_MINUTES"),
     ("provider", "CCGRAM_PROVIDER"),
-    ("show_hidden_dirs", "CCGRAM_SHOW_HIDDEN_DIRS"),
     ("ack_reaction", "CCGRAM_ACK_REACTION"),
     ("hide_tool_calls", "CCGRAM_HIDE_TOOL_CALLS"),
 ]
@@ -161,13 +160,6 @@ def apply_args_to_env(**kwargs: object) -> None:
     default=None,
     envvar="CCGRAM_PROVIDER",
     help="Agent provider name (default: claude).",
-)
-@click.option(
-    "--show-hidden-dirs",
-    is_flag=True,
-    default=None,
-    envvar="CCGRAM_SHOW_HIDDEN_DIRS",
-    help="Show hidden (dot) directories in directory browser.",
 )
 @click.option(
     "--ack-reaction",

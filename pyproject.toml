@@ -100,8 +100,6 @@ max-statements = 60
 "src/ccgram/bot.py" = ["C901", "PLR0912"]
 # Response builder: message formatting with content-type dispatch
 "src/ccgram/handlers/response_builder.py" = ["C901", "PLR0912"]
-# Directory callbacks: confirm handler with state cleanup branches
-"src/ccgram/handlers/topics/directory_callbacks.py" = ["C901"]
 
 [tool.deptry.per_rule_ignores]
 # DEP002: dev/CLI tools (never imported in src/)

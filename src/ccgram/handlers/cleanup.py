@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from telegram.error import TelegramError
+
 from ..telegram_client import PTBTelegramClient, TelegramClient
 
 if TYPE_CHECKING:
@@ -30,7 +32,6 @@ from .callback_helpers import get_thread_id
 from .messaging_pipeline.message_queue import enqueue_status_update
 from .messaging_pipeline.message_sender import safe_reply
 from .status.status_bubble import clear_status_msg_info
-from .user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
 
 
 async def clear_topic_state(
@@ -105,10 +106,6 @@ async def clear_topic_state(
         if qualified_id is not None:
             mb.clear_inbox(qualified_id)
 
-    # user_data cleanup
-    if user_data is not None and user_data.get(PENDING_THREAD_ID) == thread_id:
-        user_data.pop(PENDING_THREAD_ID, None)
-        user_data.pop(PENDING_THREAD_TEXT, None)
 
 
 async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -133,33 +130,51 @@ async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await safe_reply(update.message, "Use this command inside a topic.")
         return
 
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
-    if not window_id:
-        await safe_reply(update.message, "This topic is not bound to any session.")
-        return
-
     client = PTBTelegramClient(context.bot)
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
-    display = thread_router.get_display_name(window_id).strip()
-    if not display or display.startswith("@"):
-        await safe_reply(update.message, "Cannot determine the topic session name.")
+
+    from .topics.topic_binding import find_topic_session
+
+    session = await find_topic_session(chat_id, thread_id)
+    if session is None:
+        await safe_reply(update.message, "This topic is not bound to a managed session.")
         return
 
-    session_name = (
-        window_id.rsplit(":", 1)[0]
-        if ":" in window_id and not window_id.startswith("@")
-        else tmux_manager.session_name
-    )
-    detached_name = display
-    if session_name.startswith(config.tmux_session_prefix):
-        if not await tmux_manager.rename_session(session_name, detached_name):
-            await safe_reply(
-                update.message,
-                f"Cannot detach session `{session_name}` (target `{detached_name}` may already exist).",
-            )
-            return
+    window_id = session.window_id
+    session_name = session.window_name
+    detached_name = tmux_manager.topic_name_from_session_name(session_name)
+    if not detached_name:
+        await safe_reply(update.message, "Cannot determine the session name.")
+        return
+    try:
+        await client.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
+    except TelegramError as e:
+        await safe_reply(update.message, f"Cannot close topic: {e}")
+        return
 
-    await client.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
+    if not await tmux_manager.rename_session(session_name, detached_name):
+        try:
+            await client.reopen_forum_topic(
+                chat_id=chat_id, message_thread_id=thread_id
+            )
+        except TelegramError:
+            pass
+        await safe_reply(
+            update.message,
+            f"Cannot detach session `{session_name}` (target `{detached_name}` may already exist).",
+        )
+        return
+    if not await tmux_manager.clear_session_topic(detached_name):
+        await tmux_manager.rename_session(detached_name, session_name)
+        try:
+            await client.reopen_forum_topic(
+                chat_id=chat_id, message_thread_id=thread_id
+            )
+        except TelegramError:
+            pass
+        await safe_reply(update.message, "Cannot clear tmux topic metadata.")
+        return
+
     await enqueue_status_update(client, user.id, window_id, None, thread_id)
     await clear_topic_state(
         user.id,
@@ -172,5 +187,5 @@ async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     thread_router.unbind_thread(user.id, thread_id)
     await safe_reply(
         update.message,
-        f"Detached topic `{display}`. The tmux session `{detached_name}` is still running.",
+        f"Detached topic `{detached_name}`. The tmux session `{detached_name}` is still running.",
     )

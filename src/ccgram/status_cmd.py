@@ -1,63 +1,39 @@
-"""CLI `ccgram status` — show running state without bot token.
+"""CLI `ccgram status` — show tmux-authoritative managed sessions."""
 
-Reads state files and tmux directly to display:
-  - ccgram version
-  - Tmux session info (name, window count)
-  - Per-window status: bound/unbound, alive/dead
-
-No Config import needed — uses utils.ccgram_dir() and subprocess for tmux.
-``providers.resolve_capabilities`` and the package ``__version__`` are
-imported lazily inside the subcommand body to keep ``ccgram --help``
-free of provider-registry initialization.
-"""
-
-import json
+import os
 import subprocess
 import sys
-from pathlib import Path
-
-from .utils import ccgram_dir, tmux_session_name
 
 _TMUX_FORMAT_PARTS = 3
+_TOPIC_OPTION = "@ccgram_topic"
 
 
-def _read_json(path: Path) -> dict:
-    """Read a JSON file, returning empty dict on any error."""
-    try:
-        return json.loads(path.read_text()) if path.exists() else {}
-    except (json.JSONDecodeError, OSError):  # fmt: skip
-        return {}
-
-
-def _list_tmux_windows(session_name: str) -> list[dict[str, str]]:
-    """List tmux windows via subprocess. Returns list of {id, name}."""
+def _list_managed_sessions(prefix: str) -> list[dict[str, str]]:
+    """Return live prefixed tmux sessions and their Telegram identity."""
     try:
         result = subprocess.run(
             [
                 "tmux",
-                "list-windows",
-                "-a",
+                "list-sessions",
                 "-F",
-                "#{session_name}\t#{window_id}\t#{window_name}",
+                f"#{{session_name}}\t#{{session_path}}\t#{{{_TOPIC_OPTION}}}",
             ],
             capture_output=True,
             text=True,
             timeout=5,
         )
-        if result.returncode != 0:
-            return []
-        windows = []
-        for line in result.stdout.strip().splitlines():
-            parts = line.split("\t", 2)
-            if len(parts) == _TMUX_FORMAT_PARTS:
-                s_name, wid, wname = parts
-                if wname == "__main__" or wname.startswith("_"):
-                    continue
-                qid = wid if s_name == session_name else f"{s_name}:{wid}"
-                windows.append({"id": qid, "name": wname})
-        return windows
     except (OSError, subprocess.TimeoutExpired):  # fmt: skip
         return []
+    if result.returncode != 0:
+        return []
+
+    sessions: list[dict[str, str]] = []
+    for line in result.stdout.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != _TMUX_FORMAT_PARTS or not parts[0].startswith(prefix):
+            continue
+        sessions.append({"name": parts[0], "cwd": parts[1], "topic": parts[2]})
+    return sessions
 
 
 def _capability_summary() -> tuple[str, str]:
@@ -67,55 +43,21 @@ def _capability_summary() -> tuple[str, str]:
 
 def status_main() -> None:
     """Entry point for `ccgram status`."""
-    # Lazy: keep `ccgram status` startup snappy
     from . import __version__
 
     provider_name, cap_flags = _capability_summary()
-    config_dir = ccgram_dir()
-    session_name = tmux_session_name()
+    prefix = os.getenv("TMUX_SESSION_PREFIX", "cc_")
+    sessions = _list_managed_sessions(prefix)
 
-    # Read state files
-    state = _read_json(config_dir / "state.json")
-    # Get live tmux windows
-    live_windows = _list_tmux_windows(session_name)
-
-    # Build binding index: window_id -> (thread_id, user_id)
-    thread_bindings = state.get("thread_bindings", {})
-    display_names = state.get("window_display_names", {})
-    bound_windows: dict[str, tuple[int, int]] = {}
-    for user_id_str, bindings in thread_bindings.items():
-        for thread_id_str, window_id in bindings.items():
-            bound_windows[window_id] = (int(thread_id_str), int(user_id_str))
-
-    # Output
     print(f"ccgram {__version__}")
     print(f"Provider: {provider_name} ({cap_flags})")
-    print(f"Tmux session: {session_name} ({len(live_windows)} windows)")
-
-    if not live_windows and not bound_windows:
-        return
-
-    print()
-
-    # Show live windows first
-    shown_ids: set[str] = set()
-    for w in live_windows:
-        wid = w["id"]
-        name = display_names.get(wid, w["name"])
-        shown_ids.add(wid)
-
-        if wid in bound_windows:
-            thread_id, user_id = bound_windows[wid]
-            print(
-                f"  {wid:<5} {name:<16} -> topic {thread_id} (user {user_id})   alive"
-            )
-        else:
-            print(f"  {wid:<5} {name:<16}                              (unbound)")
-
-    # Show dead bindings (bound but window gone)
-    for wid, (thread_id, user_id) in bound_windows.items():
-        if wid not in shown_ids:
-            name = display_names.get(wid, wid)
-            print(f"  {wid:<5} {name:<16} -> topic {thread_id} (user {user_id})   dead")
+    print(f"Managed tmux sessions: {len(sessions)}")
+    if sessions:
+        print()
+    for session in sessions:
+        topic = session["topic"] or "unbound"
+        cwd = session["cwd"]
+        suffix = f" {cwd}" if cwd else ""
+        print(f"  {session['name']} -> {topic}{suffix}")
 
     sys.exit(0)

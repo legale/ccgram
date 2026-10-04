@@ -391,7 +391,7 @@ class InteractiveUIStrategy:
 class TopicLifecycleStrategy:
     """Autoclose timers, dead notification tracking, probe failure state.
 
-    Async lifecycle functions (check_autoclose_timers, probe_topic_existence) live in
+    Async lifecycle functions (for example check_autoclose_timers) live in
     topic_lifecycle.py; handle_dead_window_notification lives in window_tick.py.
     Both access state through this strategy.
     """

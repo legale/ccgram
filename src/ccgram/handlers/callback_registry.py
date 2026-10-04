@@ -134,6 +134,3 @@ def load_handlers() -> None:
 
     # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
     from .status import status_bar_actions  # noqa: F401
-
-    # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
-    from .topics import directory_callbacks, window_callbacks  # noqa: F401

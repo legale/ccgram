@@ -33,7 +33,6 @@ from .handlers.commands import commands_command
 from .handlers.messaging_pipeline.message_sender import safe_reply
 from .handlers.registry import register_all
 from .handlers.text.text_handler import handle_text_message, text_handler
-from .handlers.topics.directory_browser import clear_browse_state
 from .session import session_manager
 from .telegram_request import ResilientPollingHTTPXRequest
 from .thread_router import thread_router
@@ -43,7 +42,6 @@ from .thread_router import thread_router
 # ``ccgram.bot`` keep working without churn. Canonical homes are the
 # feature subpackages — these names are retained for ``patch`` targets.
 __all__ = [
-    "clear_browse_state",
     "commands_command",
     "create_bot",
     "handle_text_message",
@@ -59,22 +57,6 @@ __all__ = [
 
 logger = structlog.get_logger()
 
-
-async def _remember_forum_chat(update: object, _context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Learn a forum chat ID from an authorized user's incoming message."""
-    effective_user = getattr(update, "effective_user", None)
-    effective_chat = getattr(update, "effective_chat", None)
-    if not effective_user or not effective_chat:
-        return
-    if not config.is_user_allowed(effective_user.id):
-        return
-    message = getattr(update, "effective_message", None)
-    thread_id = getattr(message, "message_thread_id", None)
-    if thread_id is None or thread_id == 1:
-        return
-    # A named message_thread_id is the reliable forum signal; Chat.is_forum
-    # and Chat.type are absent or inconsistent in some incoming updates.
-    thread_router.remember_forum_chat_id(effective_user.id, effective_chat.id)
 
 
 def is_user_allowed(user_id: int | None) -> bool:
@@ -179,12 +161,6 @@ def create_bot() -> Application:
     )
 
     application.add_error_handler(_error_handler)
-    # Group -1 runs before the normal handler group and lets the rest of the
-    # bot continue processing the same update.
-    application.add_handler(
-        MessageHandler(filters.ALL & _group_filter, _remember_forum_chat),
-        group=-1,
-    )
     register_all(application, _group_filter)
 
     return application

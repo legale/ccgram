@@ -143,6 +143,13 @@ class TelegramClient(Protocol):
         **kwargs: Any,
     ) -> bool: ...
 
+    async def reopen_forum_topic(
+        self,
+        chat_id: int | str,
+        message_thread_id: int,
+        **kwargs: Any,
+    ) -> bool: ...
+
     async def delete_forum_topic(
         self,
         chat_id: int | str,
@@ -296,6 +303,13 @@ class PTBTelegramClient:
         self, chat_id: int | str, message_thread_id: int, **kwargs: Any
     ) -> bool:
         return await self._bot.close_forum_topic(
+            chat_id=chat_id, message_thread_id=message_thread_id, **kwargs
+        )
+
+    async def reopen_forum_topic(
+        self, chat_id: int | str, message_thread_id: int, **kwargs: Any
+    ) -> bool:
+        return await self._bot.reopen_forum_topic(
             chat_id=chat_id, message_thread_id=message_thread_id, **kwargs
         )
 
@@ -517,6 +531,14 @@ class FakeTelegramClient:
     ) -> bool:
         return self._record(
             "close_forum_topic",
+            {"chat_id": chat_id, "message_thread_id": message_thread_id, **kwargs},
+        )
+
+    async def reopen_forum_topic(
+        self, chat_id: int | str, message_thread_id: int, **kwargs: Any
+    ) -> bool:
+        return self._record(
+            "reopen_forum_topic",
             {"chat_id": chat_id, "message_thread_id": message_thread_id, **kwargs},
         )
 

@@ -15,7 +15,6 @@ Key functions:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from pathlib import Path
 import structlog
 
 from telegram import (
@@ -26,17 +25,15 @@ from telegram import (
     Message,
     Update,
 )
+from telegram.error import TelegramError
 from ..config import config
-from ..session import session_manager
 from ..telegram_client import PTBTelegramClient, TelegramClient
 from ..thread_router import thread_router
 from ..tmux_manager import tmux_manager
 from ..window_query import view_window  # noqa: F401 - legacy test patch seam
-from .status.topic_emoji import get_stored_topic_name, update_stored_topic_name
 from .callback_data import (
     CB_SESSIONS_KILL,
     CB_SESSIONS_KILL_CONFIRM,
-    CB_SESSIONS_NEW,
     CB_SESSIONS_REFRESH,
     CB_SESSIONS_RENAME,
     CB_SESSIONS_SCREENSHOT,
@@ -46,10 +43,8 @@ from .callback_helpers import user_owns_window  # noqa: F401 - legacy test patch
 from .callback_registry import register
 from .cleanup import clear_topic_state
 from .messaging_pipeline.message_sender import safe_edit, safe_reply
-from .polling.polling_state import lifecycle_strategy
-from .topics.topic_binding import bind_topic_to_window
+from .messaging_pipeline.message_sender import is_thread_gone
 from .user_state import (
-    SESSION_RENAME_CHAT_ID,
     SESSION_RENAME_THREAD_ID,
     SESSION_RENAME_WINDOW_ID,
 )
@@ -60,13 +55,16 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 _REFRESH_BTN = InlineKeyboardButton("Refresh", callback_data=CB_SESSIONS_REFRESH)
-_NEW_BTN = InlineKeyboardButton("New Session", callback_data=CB_SESSIONS_NEW)
 
 
 async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     """Build dashboard text and keyboard for a user's sessions."""
     bindings = thread_router.get_all_thread_windows(user_id)
-    all_sessions = await tmux_manager.list_sessions()
+    all_sessions = [
+        session
+        for session in await tmux_manager.list_sessions()
+        if session.window_name.startswith(config.tmux_session_prefix)
+    ]
 
     if not all_sessions:
         return (
@@ -89,7 +87,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
             session.window_id,
         )
         status = "+" if window_id in bound_window_ids else "o"
-        display_name = session.window_name
+        display_name = tmux_manager.topic_name_from_session_name(session.window_name)
         lines.append(f"{status} {display_name} {session.cwd}".rstrip())
         action_rows.extend(
             [
@@ -137,39 +135,6 @@ async def handle_sessions_refresh(query: CallbackQuery, user_id: int) -> None:
     await safe_edit(query, text, reply_markup=keyboard)
 
 
-async def _create_session_for_topic(
-    query: CallbackQuery, user_id: int, thread_id: int, _client: TelegramClient
-) -> None:
-    chat = query.message.chat if query.message else None
-    if chat is None:
-        await safe_edit(query, "Cannot determine topic")
-        return
-
-    topic_name = get_stored_topic_name(chat.id, thread_id)
-    if not topic_name:
-        topic_name = f"topic-{thread_id}"
-
-    success, message, created_name, created_wid = await tmux_manager.create_window(
-        str(Path.cwd()),
-        session_name=tmux_manager.topic_session_name(topic_name),
-        window_name=topic_name,
-    )
-    if not success:
-        await safe_edit(query, f"Failed to create session: {message}")
-        return
-
-    display = created_name
-    await bind_topic_to_window(
-        query,
-        user_id,
-        thread_id,
-        created_wid,
-        display,
-        router=thread_router,
-    )
-    await safe_edit(query, f"Created session `{display}`")
-
-
 async def handle_sessions_kill(
     query: CallbackQuery, _user_id: int, window_id: str
 ) -> None:
@@ -204,6 +169,23 @@ async def handle_sessions_kill_confirm(
         if ":" in window_id and not window_id.startswith("@")
         else tmux_manager.session_name
     )
+    session = next(
+        (
+            item
+            for item in await tmux_manager.list_sessions()
+            if item.window_name == session_name
+        ),
+        None,
+    )
+    if session and session.topic_ref:
+        chat_id, thread_id = session.topic_ref
+        try:
+            await client.delete_forum_topic(chat_id, thread_id)
+        except TelegramError as e:
+            if not is_thread_gone(e):
+                await safe_edit(query, f"Telegram topic was not deleted: {e}")
+                return False
+
     killed = await tmux_manager.kill_session(session_name)
     if not killed:
         await safe_edit(query, f"Session `{session_name}` was not killed.")
@@ -253,7 +235,6 @@ async def handle_sessions_rename(
     if context.user_data is not None:
         context.user_data[SESSION_RENAME_WINDOW_ID] = window_id
         context.user_data[SESSION_RENAME_THREAD_ID] = thread_id
-        context.user_data[SESSION_RENAME_CHAT_ID] = chat_id
 
     prompt_text = f"Enter new name for session `{display}`:"
     try:
@@ -279,7 +260,6 @@ async def apply_session_rename(
     thread_id: int | None,
     text: str,
     message: Message,
-    client: TelegramClient | None = None,
 ) -> bool:
     """Consume an in-flight session rename reply.
 
@@ -295,7 +275,6 @@ async def apply_session_rename(
 
     window_id = user_data.pop(SESSION_RENAME_WINDOW_ID, None)
     user_data.pop(SESSION_RENAME_THREAD_ID, None)
-    rename_chat_id = user_data.pop(SESSION_RENAME_CHAT_ID, None)
 
     if not window_id:
         return False
@@ -311,16 +290,10 @@ async def apply_session_rename(
         )
         return True
 
-    for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
-        if bound_wid == window_id:
-            lifecycle_strategy.mark_dead_notified(uid, tid, window_id)
-
     new_wid = await _execute_session_rename(window_id, name)
-
-    chat_id = rename_chat_id
-    if chat_id and thread_id is not None:
-        update_stored_topic_name(chat_id, thread_id, name)
-        await _rename_forum_topic(client, chat_id, thread_id, name)
+    if new_wid is None:
+        await safe_reply(message, f"Cannot rename session to `{name}`.")
+        return True
 
     logger.info(
         "Session renamed: window %s -> %s (%r, thread=%s)",
@@ -333,52 +306,18 @@ async def apply_session_rename(
     return True
 
 
-async def _rename_forum_topic(
-    client: TelegramClient | None,
-    chat_id: int,
-    thread_id: int,
-    name: str,
-) -> None:
-    """Best-effort rename of the Telegram forum topic."""
-    if client is None:
-        return
-    try:
-        await client.edit_forum_topic(chat_id, thread_id, name=name)
-    except Exception:  # noqa: BLE001
-        logger.debug(
-            "edit_forum_topic failed: chat=%d thread=%d name=%r",
-            chat_id,
-            thread_id,
-            name,
-        )
+async def _execute_session_rename(window_id: str, name: str) -> str | None:
+    if ":" not in window_id or window_id.startswith("@"):
+        return None
+    session_name, bare_id = window_id.rsplit(":", 1)
+    if not session_name.startswith(config.tmux_session_prefix):
+        return None
 
+    new_session_name = tmux_manager.topic_session_name(name)
+    if not await tmux_manager.rename_session(session_name, new_session_name):
+        return None
 
-async def _execute_session_rename(window_id: str, name: str) -> str:
-    new_wid = window_id
-    w = await tmux_manager.find_window_by_id(window_id)
-    if w:
-        await tmux_manager.rename_window(w.window_id, name)
-        if ":" in w.window_id:
-            session_name, bare_id = w.window_id.rsplit(":", 1)
-            topic_name = tmux_manager.topic_name_from_session_name(name)
-            new_session_name = tmux_manager.topic_session_name(topic_name)
-            if await tmux_manager.rename_session(session_name, new_session_name):
-                new_wid = f"{new_session_name}:{bare_id}"
-
-    if new_wid != window_id:
-        for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
-            if bound_wid == window_id:
-                thread_router.bind_thread(uid, tid, new_wid, window_name=name)
-                lifecycle_strategy.clear_dead_notification(uid, tid)
-                lifecycle_strategy.clear_autoclose_timer(uid, tid)
-        session_manager.set_display_name(new_wid, name)
-    else:
-        for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
-            if bound_wid == window_id:
-                lifecycle_strategy.clear_dead_notification(uid, tid)
-        thread_router.set_display_name(window_id, name)
-        session_manager.set_display_name(window_id, name)
-    return new_wid
+    return f"{new_session_name}:{bare_id}"
 
 
 async def _dispatch_window_action(
@@ -403,7 +342,6 @@ async def _dispatch_window_action(
 
 @register(
     CB_SESSIONS_REFRESH,
-    CB_SESSIONS_NEW,
     CB_SESSIONS_KILL_CONFIRM,
     CB_SESSIONS_KILL,
     CB_SESSIONS_RENAME,
@@ -422,15 +360,6 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if data == CB_SESSIONS_REFRESH:
         await handle_sessions_refresh(query, user.id)
         await query.answer("Refreshed")
-    elif data == CB_SESSIONS_NEW:
-        thread_id = getattr(query.message, "message_thread_id", None)
-        if thread_id is None:
-            await query.answer("Use in a topic", show_alert=True)
-            return
-        await _create_session_for_topic(
-            query, user.id, thread_id, PTBTelegramClient(context.bot)
-        )
-        await query.answer("Created")
     else:
         if data.startswith(CB_SESSIONS_SCREENSHOT):
             from .live.screenshot_callbacks import handle_screenshot_callback

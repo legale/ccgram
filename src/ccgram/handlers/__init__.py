@@ -14,7 +14,7 @@ added ``commands/``):
   - status/: status bubble lifecycle, status-bar actions, topic emoji updates
   - text/: text message routing (UI guards, unbound/dead window, forwarding)
   - toolbar/: /toolbar inline keyboard builder and callbacks
-  - topics/: topic lifecycle, directory browser, window picker
+  - topics/: topic binding and lifecycle
 
 Top-level modules (leaves and cross-cutting concerns):
   - callback_data: CB_* callback data constants

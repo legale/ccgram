@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 from telegram.constants import ChatAction
-from telegram.error import BadRequest, TelegramError
+from telegram.error import TelegramError
 
 from .... import window_query
 from ....config import config
@@ -24,7 +24,6 @@ from ....telegram_client import PTBTelegramClient
 from ....thread_router import thread_router
 from ....tmux_manager import tmux_manager
 from ....window_state_store import window_store
-from ...cleanup import clear_topic_state
 from ...messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
     enqueue_status_update,
@@ -227,39 +226,12 @@ async def _handle_dead_window_notification(
     )
 
     text = f"Session `{display}` ended."
-    sent = await rate_limit_send_message(
+    await rate_limit_send_message(
         client,
         chat_id,
         text,
         message_thread_id=thread_id,
     )
-    if sent is None:
-        try:
-            await client.unpin_all_forum_topic_messages(
-                chat_id=chat_id, message_thread_id=thread_id
-            )
-        except BadRequest as probe_err:
-            if (
-                "thread not found" in probe_err.message.lower()
-                or "topic_id_invalid" in probe_err.message.lower()
-            ):
-                terminal_poll_state.reset_probe_failures(wid)
-                await clear_topic_state(
-                    user_id,
-                    thread_id,
-                    client,
-                    window_id=wid,
-                    window_dead=True,
-                )
-                thread_router.unbind_thread(user_id, thread_id)
-                logger.info(
-                    "Topic deleted: unbound window %s for thread %d, user %d",
-                    wid,
-                    thread_id,
-                    user_id,
-                )
-        except TelegramError:
-            pass
     lifecycle_strategy.mark_dead_notified(user_id, thread_id, wid)
 
 

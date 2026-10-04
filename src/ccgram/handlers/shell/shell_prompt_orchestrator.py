@@ -1,9 +1,6 @@
 """Shell prompt marker setup orchestrator.
 
-Centralizes the decision of when and how to set up the shell prompt marker.
-Five trigger sites (directory browser, window bind, transcript discovery,
-shell command send, provider switch) delegate to `ensure_setup` which applies
-a policy based on trigger type:
+Centralizes shell prompt marker setup for shell command delivery.
 
 - auto: always set up (explicit shell topic creation)
 - lazy: set up only if marker missing and user hasn't skipped

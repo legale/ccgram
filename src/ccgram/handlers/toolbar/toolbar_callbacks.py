@@ -173,7 +173,7 @@ async def _builtin_send(
         await query.answer("Use in a topic", show_alert=True)
         return
     # Lazy: telegram_client wraps PTB Bot; send subpackage in turn pulls
-    # the directory browser machinery.  Keep both at call site.
+    # the file browser machinery.  Keep both at call site.
     # Lazy: PTBTelegramClient resolved per-call
     from ...telegram_client import PTBTelegramClient
 

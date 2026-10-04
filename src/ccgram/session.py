@@ -263,8 +263,7 @@ class SessionManager:
         live_pairs = [(w.window_id, w.window_name) for w in live]
         self.sync_display_names(live_pairs)
 
-        # Prune orphaned display names (preserve group_chat_ids for post-restart topic creation)
-        self.prune_stale_state(live_ids, skip_chat_ids=True)
+        self.prune_stale_state(live_ids)
 
     # --- Display name management (delegated to thread_router) ---
 
@@ -294,15 +293,8 @@ class SessionManager:
             self._save_state()
         return router_changed or ws_changed
 
-    def prune_stale_state(
-        self, live_window_ids: set[str], *, skip_chat_ids: bool = False
-    ) -> bool:
-        """Remove orphaned entries from window_display_names and group_chat_ids.
-
-        Returns True if any changes were made.
-        When skip_chat_ids=True, group_chat_ids are preserved (used during startup
-        so they remain available for post-restart topic creation).
-        """
+    def prune_stale_state(self, live_window_ids: set[str]) -> bool:
+        """Remove orphaned display names and runtime chat IDs."""
         # Collect window_ids that are "in use" (bound or have window_states)
         in_use = set(self.window_states.keys())
         for bindings in thread_router.thread_bindings.values():
@@ -321,12 +313,7 @@ class SessionManager:
             for thread_id in bindings:
                 bound_keys.add(f"{user_id}:{thread_id}")
 
-        # Prune group_chat_ids for unbound threads (unless skipped)
-        stale_chat = (
-            []
-            if skip_chat_ids
-            else [k for k in thread_router.group_chat_ids if k not in bound_keys]
-        )
+        stale_chat = [k for k in thread_router.group_chat_ids if k not in bound_keys]
 
         # Prune stale byte offsets (independent of display/chat pruning)
         all_known = live_window_ids | in_use

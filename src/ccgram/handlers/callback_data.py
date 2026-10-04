@@ -4,30 +4,13 @@ Defines all CB_* prefixes used for routing callback queries in the bot.
 Each prefix identifies a specific action or navigation target.
 
 Constants:
-  - CB_DIR_*: Directory browser navigation
-  - CB_WIN_*: Window picker (bind existing unbound window)
   - CB_SCREENSHOT_*: Screenshot refresh
   - CB_ASK_*: Interactive UI navigation (arrows, enter, esc)
-  - CB_SESSIONS_*: Sessions dashboard (refresh, new, kill)
+  - CB_SESSIONS_*: Sessions dashboard (refresh, rename, screenshot, kill)
   - CB_STATUS_*: Status message action buttons (esc, screenshot, recall)
   - CB_RECOVERY_*: Dead window recovery UI (fresh, continue, resume)
   - CB_KEYS_PREFIX: Screenshot control keys (kb:<key_id>:<window>)
 """
-
-# Directory browser
-CB_DIR_SELECT = "db:sel:"
-CB_DIR_UP = "db:up"
-CB_DIR_CONFIRM = "db:confirm"
-CB_DIR_CANCEL = "db:cancel"
-CB_DIR_PAGE = "db:page:"
-CB_DIR_FAV = "db:fav:"  # db:fav:<idx> — select a favorite directory
-CB_DIR_STAR = "db:star:"  # db:star:<idx> — star/unstar a directory
-CB_DIR_HOME = "db:home"  # jump to home directory
-
-# Window picker (bind existing unbound window)
-CB_WIN_BIND = "wb:sel:"  # wb:sel:<index>
-CB_WIN_NEW = "wb:new"  # proceed to directory browser
-CB_WIN_CANCEL = "wb:cancel"
 
 # Screenshot
 CB_SCREENSHOT_REFRESH = "ss:ref:"
@@ -45,7 +28,6 @@ CB_ASK_REFRESH = "aq:ref:"  # aq:ref:<window>
 
 # Sessions dashboard
 CB_SESSIONS_REFRESH = "sess:ref"
-CB_SESSIONS_NEW = "sess:new"
 CB_SESSIONS_KILL = "sess:kill:"  # sess:kill:<window_id>
 CB_SESSIONS_KILL_CONFIRM = "sess:killok:"  # sess:killok:<window_id>
 CB_SESSIONS_RENAME = "sess:rn:"  # sess:rn:<window_id>
@@ -63,7 +45,6 @@ CB_RECOVERY_CONTINUE = "rec:c:"  # rec:c:<window_id>
 CB_RECOVERY_RESUME = "rec:r:"  # rec:r:<window_id>
 CB_RECOVERY_PICK = "rec:p:"  # rec:p:<index> (resume picker selection)
 CB_RECOVERY_BACK = "rec:b:"  # rec:b:<window_id> (back to recovery menu)
-CB_RECOVERY_BROWSE = "rec:br:"  # rec:br:<window_id> (browse other projects)
 CB_RECOVERY_CANCEL = "rec:x"  # cancel recovery
 
 # Resume command (browse all sessions)
@@ -88,10 +69,6 @@ NOTIFY_MODE_REACT: dict[str, str] = {
     "errors_only": "\U0001f914",  # \ud83e\udd14 REACT_THINKING \u2014 selective
     "muted": "\U0001f494",  # \ud83d\udc94 REACT_FAIL \u2014 disabled
 }
-
-# Provider selection (directory browser flow)
-CB_PROV_SELECT = "prov:"  # prov:<provider_name>
-CB_MODE_SELECT = "mode:"  # mode:<provider_name>:<normal|yolo>
 
 # Pane screenshot (from /panes command)
 CB_PANE_SCREENSHOT = "pn:ss:"  # pn:ss:<window_id>:<pane_id>
