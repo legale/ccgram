@@ -51,6 +51,7 @@ class TestTopicEditedHandler:
         )
         mock_tm.rename_window = AsyncMock(return_value=True)
         mock_tm.rename_session = AsyncMock(return_value=True)
+        mock_tm.topic_session_name.side_effect = lambda name: f"ccgram_{name}"
 
         update = _make_update("new-name")
         await topic_edited_handler(update, MagicMock())

@@ -34,6 +34,10 @@ def _patch_deps():
         mock_view.side_effect = lambda wid: WindowState()
         mock_tm.list_windows = AsyncMock(return_value=[])
         mock_tm.discover_external_sessions = AsyncMock(return_value=[])
+        mock_tm.topic_session_name.side_effect = lambda name: f"ccgram_{name}"
+        mock_tm.topic_name_from_session_name.side_effect = lambda name: (
+            name.removeprefix("ccgram_")
+        )
         mock_cfg.is_user_allowed.return_value = True
         yield mock_view, mock_tr, mock_tm, mock_cfg
 
@@ -60,26 +64,6 @@ class TestBuildDashboard:
 
         text, _kb = await _build_dashboard(100)
         assert "+ myproject" in text
-
-    async def test_alive_session_shows_cwd(self, _patch_deps) -> None:
-        mock_sm, mock_tr, mock_tm, _ = _patch_deps
-        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
-        mock_tr.get_display_name.side_effect = lambda wid: "myproject"
-        mock_sm.side_effect = lambda wid: WindowState(cwd="/home/user/myproject")
-        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
-
-        text, _kb = await _build_dashboard(100)
-        assert "/home/user/myproject" in text
-
-    async def test_no_cwd_shows_no_path(self, _patch_deps) -> None:
-        mock_sm, mock_tr, mock_tm, _ = _patch_deps
-        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
-        mock_tr.get_display_name.side_effect = lambda wid: "myproject"
-        mock_sm.side_effect = lambda wid: WindowState(cwd="")
-        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
-
-        text, _kb = await _build_dashboard(100)
-        assert " /home/user/myproject" not in text
 
     async def test_dead_session(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -117,7 +101,7 @@ class TestBuildDashboard:
         text, _kb = await _build_dashboard(100)
         assert "+ bound-session" in text
         assert "o other-session" in text
-        assert "/home/user" in text
+        assert "/home/user" not in text
 
     async def test_refresh_and_new_buttons(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -151,43 +135,21 @@ class TestBuildDashboard:
         assert row[1].callback_data.startswith(CB_STATUS_SCREENSHOT)
         assert row[2].callback_data.startswith("sess:kill:")
 
-    async def test_alive_session_shows_provider(self, _patch_deps) -> None:
-        mock_sm, mock_tr, mock_tm, _ = _patch_deps
+    async def test_session_lines_have_strict_status_name_format(
+        self, _patch_deps
+    ) -> None:
+        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
         mock_tr.get_all_thread_windows.return_value = {42: "@0"}
         mock_tr.get_display_name.side_effect = lambda wid: "myproject"
-        mock_sm.side_effect = lambda wid: WindowState(
-            cwd="/home/user/myproject", provider_name="codex"
+        mock_tm.list_windows = AsyncMock(
+            return_value=[
+                MagicMock(window_id="@0", window_name="myproject"),
+                MagicMock(window_id="@1", window_name="other"),
+            ]
         )
-        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert "[codex]" in text
-
-    async def test_default_provider_shows_no_tag(self, _patch_deps) -> None:
-        mock_sm, mock_tr, mock_tm, _ = _patch_deps
-        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
-        mock_tr.get_display_name.side_effect = lambda wid: "myproject"
-        mock_sm.side_effect = lambda wid: WindowState(
-            cwd="/home/user/myproject", provider_name=""
-        )
-        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
-
-        text, _kb = await _build_dashboard(100)
-        assert text.startswith("Sessions\n\n```\n+ myproject /home/user/myproject\n")
-
-    async def test_yolo_mode_shows_tag(self, _patch_deps) -> None:
-        mock_sm, mock_tr, mock_tm, _ = _patch_deps
-        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
-        mock_tr.get_display_name.side_effect = lambda wid: "myproject"
-        mock_sm.side_effect = lambda wid: WindowState(
-            cwd="/home/user/myproject",
-            provider_name="codex",
-            approval_mode="yolo",
-        )
-        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
-
-        text, _kb = await _build_dashboard(100)
-        assert "[YOLO]" in text
+        assert "```\n+ myproject\no other\n```" in text
 
     async def test_dead_session_no_action_buttons(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps

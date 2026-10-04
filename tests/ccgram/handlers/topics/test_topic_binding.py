@@ -15,6 +15,7 @@ class TestRenameBoundTopic:
         )
         mock_tmux.rename_window = AsyncMock(return_value=True)
         mock_tmux.rename_session = AsyncMock(return_value=True)
+        mock_tmux.topic_session_name.side_effect = lambda name: f"ccgram_{name}"
 
         await rename_bound_topic(
             MagicMock(),

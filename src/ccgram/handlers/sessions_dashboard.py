@@ -66,8 +66,6 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     """Build dashboard text and keyboard for a user's sessions."""
     bindings = thread_router.get_all_thread_windows(user_id)
     all_windows = await tmux_manager.list_windows()
-    external_windows = await tmux_manager.discover_external_sessions()
-    all_windows.extend(external_windows)
     live_ids = {w.window_id for w in all_windows}
 
     if not bindings and not all_windows:
@@ -84,18 +82,10 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     for _thread_id, window_id in sorted(bindings.items()):
         bound_ids.add(window_id)
         display_name = thread_router.get_display_name(window_id)
-        view = view_window(window_id)
         alive = window_id in live_ids
-        is_external = view.external if view else False
         status = "+" if alive else "-"
 
-        # Session line with provider + mode tags and cwd detail
-        provider_tag = f" [{view.provider_name}]" if view and view.provider_name else ""
-        mode_tag = " [YOLO]" if view and view.approval_mode == "yolo" else ""
-        line = f"{status} {display_name}{provider_tag}{mode_tag}"
-        if view and view.cwd:
-            line += f" {view.cwd}"
-        lines.append(line)
+        lines.append(f"{status} {display_name}")
 
         if alive:
             row: list[InlineKeyboardButton] = [
@@ -120,10 +110,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         if w.window_id in bound_ids or w.window_id in seen_unbound:
             continue
         seen_unbound.add(w.window_id)
-        line = f"o {w.window_name}"
-        if w.cwd:
-            line += f" {w.cwd}"
-        lines.append(line)
+        lines.append(f"o {w.window_name}")
 
     content = "\n".join(lines)
     text = f"Sessions\n\n```\n{content}\n```"
@@ -307,7 +294,7 @@ async def apply_session_rename(
     if not window_id:
         return False
 
-    name = text.strip()
+    name = tmux_manager.topic_name_from_session_name(text.strip())
     if name in ("-", "/cancel", "cancel"):
         await safe_reply(message, "Rename cancelled.")
         return True
@@ -368,9 +355,8 @@ async def _execute_session_rename(window_id: str, name: str) -> str:
         await tmux_manager.rename_window(w.window_id, name)
         if ":" in w.window_id:
             session_name, bare_id = w.window_id.rsplit(":", 1)
-            prefix = config.tmux_session_prefix
-            clean_prefix = prefix if not name.startswith(prefix) else ""
-            new_session_name = f"{clean_prefix}{name}"
+            topic_name = tmux_manager.topic_name_from_session_name(name)
+            new_session_name = tmux_manager.topic_session_name(topic_name)
             if await tmux_manager.rename_session(session_name, new_session_name):
                 new_wid = f"{new_session_name}:{bare_id}"
 

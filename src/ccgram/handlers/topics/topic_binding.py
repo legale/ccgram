@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from telegram import CallbackQuery
 
-from ...config import config
 from ...tmux_manager import tmux_manager
 from ...thread_router import ThreadRouter, thread_router
 
@@ -47,5 +46,5 @@ async def rename_bound_topic(
     session_name = window.window_id.rsplit(":", 1)[0]
     if not session_name:
         return
-    new_name = f"{config.tmux_session_prefix}{window_name}"
+    new_name = tmux_manager.topic_session_name(window_name)
     await tmux_manager.rename_session(session_name, new_name)

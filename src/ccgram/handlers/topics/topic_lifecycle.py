@@ -332,7 +332,7 @@ async def topic_edited_handler(
     session_name = window.window_id.rsplit(":", 1)[0]
     session_renamed = await tmux_manager.rename_session(
         session_name,
-        f"{config.tmux_session_prefix}{clean_name}",
+        tmux_manager.topic_session_name(clean_name),
     )
     if window_renamed or session_renamed:
         session_manager.set_display_name(window_id, clean_name)

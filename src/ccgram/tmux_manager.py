@@ -156,6 +156,9 @@ class TmuxManager:
     def topic_session_name(self, topic_name: str) -> str:
         return f"{config.tmux_session_prefix}{topic_name}"
 
+    def topic_name_from_session_name(self, session_name: str) -> str:
+        return session_name.removeprefix(config.tmux_session_prefix)
+
     def _split_qualified(self, window_id: str) -> tuple[str, str]:
         if ":" in window_id and not window_id.startswith("@"):
             session_name, bare_id = window_id.rsplit(":", 1)
