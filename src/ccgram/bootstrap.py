@@ -30,17 +30,10 @@ from .handlers.messaging_pipeline.message_routing import handle_new_message
 from .handlers.polling.periodic_tasks import run_broker_cycle
 from .handlers.polling.polling_coordinator import status_poll_loop
 from .handlers.shell import register_approval_callback, show_command_approval
-from .handlers.topics.topic_orchestration import (
-    adopt_unbound_windows as _adopt_unbound_windows,
-)
-from .handlers.topics.topic_orchestration import (
-    handle_new_window as _handle_new_window,
-)
 from .session import session_manager
 from .telegram_client import PTBTelegramClient
 from .session_monitor import (
     NewMessage,
-    NewWindowEvent,
     SessionMonitor,
     clear_active_monitor,
     set_active_monitor,
@@ -128,11 +121,6 @@ async def start_session_monitor(application: Application) -> SessionMonitor:
 
     monitor.set_message_callback(message_callback)
 
-    async def new_window_callback(event: NewWindowEvent) -> None:
-        await _handle_new_window(event, client)
-
-    monitor.set_new_window_callback(new_window_callback)
-
     async def hook_event_callback(event: HookEvent) -> None:
         await dispatch_hook_event(event, client)
 
@@ -158,7 +146,6 @@ async def bootstrap_application(application: Application) -> None:
     """Run the full post_init sequence in the prescribed order."""
     install_global_exception_handler()
     await session_manager.resolve_stale_ids()
-    await _adopt_unbound_windows(PTBTelegramClient(application.bot))
     wire_runtime_callbacks()
     await start_session_monitor(application)
     start_status_polling(application)

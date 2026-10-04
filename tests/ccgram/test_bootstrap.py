@@ -78,10 +78,6 @@ class TestBootstrapApplication:
             ),
             patch("ccgram.bootstrap.session_manager") as sm,
             patch(
-                "ccgram.bootstrap._adopt_unbound_windows",
-                new=AsyncMock(side_effect=lambda _bot: order.append("adopt")),
-            ),
-            patch(
                 "ccgram.bootstrap.wire_runtime_callbacks",
                 side_effect=lambda: order.append("wire"),
             ),
@@ -106,7 +102,6 @@ class TestBootstrapApplication:
         assert order == [
             "exc_handler",
             "stale_ids",
-            "adopt",
             "wire",
             "monitor",
             "polling",
