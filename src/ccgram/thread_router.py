@@ -54,6 +54,9 @@ class ThreadRouter:
         self.thread_bindings: dict[int, dict[int, str]] = {}
         # "user_id:thread_id" -> chat_id (supports multiple groups per user)
         self.group_chat_ids: dict[str, int] = {}
+        # Last forum chat observed for each authorized user.  This lets the
+        # reconciler create topics without requiring a configured chat ID.
+        self.forum_chat_ids: dict[int, int] = {}
         # window_id -> display name (window_name)
         self.window_display_names: dict[str, str] = {}
         # Reverse index: (user_id, window_id) -> thread_id for O(1) lookups
@@ -65,6 +68,7 @@ class ThreadRouter:
         """Clear all state.  Used for test isolation."""
         self.thread_bindings.clear()
         self.group_chat_ids.clear()
+        self.forum_chat_ids.clear()
         self.window_display_names.clear()
         self._window_to_thread.clear()
 
@@ -111,6 +115,10 @@ class ThreadRouter:
                 for uid, bindings in self.thread_bindings.items()
             },
             "group_chat_ids": self.group_chat_ids,
+            "forum_chat_ids": {
+                str(user_id): chat_id
+                for user_id, chat_id in self.forum_chat_ids.items()
+            },
             "window_display_names": self.window_display_names,
         }
 
@@ -125,6 +133,10 @@ class ThreadRouter:
             for uid, bindings in data.get("thread_bindings", {}).items()
         }
         self.group_chat_ids = data.get("group_chat_ids", {})
+        self.forum_chat_ids = {
+            int(user_id): int(chat_id)
+            for user_id, chat_id in data.get("forum_chat_ids", {}).items()
+        }
         self.window_display_names = data.get("window_display_names", {})
         self._dedup_thread_bindings()
         self._rebuild_reverse_index()
@@ -274,6 +286,17 @@ class ThreadRouter:
                 user_id,
                 thread_id,
             )
+
+    def remember_forum_chat_id(self, user_id: int, chat_id: int) -> None:
+        """Remember the forum chat seen in an authorized user's update."""
+        if self.forum_chat_ids.get(user_id) == chat_id:
+            return
+        self.forum_chat_ids[user_id] = chat_id
+        self._schedule_save()
+
+    def get_forum_chat_id(self, user_id: int) -> int | None:
+        """Return the last forum chat observed for a user."""
+        return self.forum_chat_ids.get(user_id)
 
     def resolve_chat_id(self, user_id: int, thread_id: int | None = None) -> int:
         """Resolve the chat_id for sending messages.

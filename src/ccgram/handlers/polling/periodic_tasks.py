@@ -87,9 +87,19 @@ def _bound_sessions() -> dict[str, tuple[int, int, str]]:
 async def _create_topic_for_session(
     client: TelegramClient, session_name: str, window_id: str
 ) -> tuple[int, int, str] | None:
-    if config.group_id is None or not config.allowed_users:
+    if not config.allowed_users:
         logger.warning(
-            "Cannot reconcile tmux session %s: Telegram group is not configured",
+            "Cannot reconcile tmux session %s: no authorized users are configured",
+            session_name,
+        )
+        return None
+
+    user_id = min(config.allowed_users)
+    chat_id = config.group_id or thread_router.get_forum_chat_id(user_id)
+    if chat_id is None:
+        logger.info(
+            "Deferring topic creation for tmux session %s until a forum update "
+            "reveals the chat ID",
             session_name,
         )
         return None
@@ -97,10 +107,9 @@ async def _create_topic_for_session(
     topic_name = tmux_manager.topic_name_from_session_name(session_name).strip()
     if not topic_name:
         return None
-    topic = await client.create_forum_topic(config.group_id, name=topic_name)
-    user_id = min(config.allowed_users)
+    topic = await client.create_forum_topic(chat_id, name=topic_name)
     thread_router.bind_thread(user_id, topic.message_thread_id, window_id, topic_name)
-    thread_router.set_group_chat_id(user_id, topic.message_thread_id, config.group_id)
+    thread_router.set_group_chat_id(user_id, topic.message_thread_id, chat_id)
     logger.info(
         "Reconciled tmux session %s to Telegram topic %d",
         session_name,

@@ -205,6 +205,15 @@ class TestReset:
         assert list(router.iter_thread_bindings()) == []
 
 
+def test_forum_chat_id_is_persisted(router: ThreadRouter) -> None:
+    router.remember_forum_chat_id(100, -100123)
+    assert router.get_forum_chat_id(100) == -100123
+
+    restored = ThreadRouter(schedule_save=lambda: None, has_window_state=lambda _: False)
+    restored.from_dict(router.to_dict())
+    assert restored.get_forum_chat_id(100) == -100123
+
+
 class TestScheduleSave:
     def test_schedule_save_called_on_bind(self, router: ThreadRouter) -> None:
         calls = []

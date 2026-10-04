@@ -23,6 +23,7 @@ from telegram.ext import (
     AIORateLimiter,
     Application,
     ContextTypes,
+    MessageHandler,
     filters,
 )
 
@@ -57,6 +58,21 @@ __all__ = [
 ]
 
 logger = structlog.get_logger()
+
+
+async def _remember_forum_chat(update: object, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Learn a forum chat ID from an authorized user's incoming message."""
+    effective_user = getattr(update, "effective_user", None)
+    effective_chat = getattr(update, "effective_chat", None)
+    if not effective_user or not effective_chat:
+        return
+    if not config.is_user_allowed(effective_user.id):
+        return
+    if effective_chat.type not in ("group", "supergroup"):
+        return
+    if not getattr(effective_chat, "is_forum", False):
+        return
+    thread_router.remember_forum_chat_id(effective_user.id, effective_chat.id)
 
 
 def is_user_allowed(user_id: int | None) -> bool:
@@ -161,6 +177,12 @@ def create_bot() -> Application:
     )
 
     application.add_error_handler(_error_handler)
+    # Group -1 runs before the normal handler group and lets the rest of the
+    # bot continue processing the same update.
+    application.add_handler(
+        MessageHandler(filters.ALL & _group_filter, _remember_forum_chat),
+        group=-1,
+    )
     register_all(application, _group_filter)
 
     return application

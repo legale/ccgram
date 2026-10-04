@@ -66,6 +66,33 @@ async def test_reconcile_creates_topic_for_unbound_prefixed_session() -> None:
     assert periodic_tasks._session_runtime["cc_foo"].thread_id == 42
 
 
+async def test_reconcile_uses_discovered_forum_chat_without_configured_group() -> None:
+    window = _window("cc_foo")
+    client = AsyncMock()
+    client.create_forum_topic.return_value = SimpleNamespace(message_thread_id=42)
+
+    with (
+        patch.object(periodic_tasks, "tmux_manager") as tmux,
+        patch.object(periodic_tasks, "thread_router") as router,
+        patch.object(periodic_tasks, "config") as config,
+        patch.object(periodic_tasks, "prime_topic_status_diff"),
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[window])
+        tmux.capture_pane = AsyncMock(return_value="current screen")
+        tmux.topic_name_from_session_name.return_value = "foo"
+        config.tmux_session_prefix = "cc_"
+        config.group_id = None
+        config.allowed_users = {1}
+        router.iter_thread_bindings.return_value = []
+        router.get_forum_chat_id.return_value = -100123
+        router.resolve_chat_id.return_value = -100123
+
+        await periodic_tasks.reconcile(client, [window])
+
+    client.create_forum_topic.assert_awaited_once_with(-100123, name="foo")
+    router.set_group_chat_id.assert_called_once_with(1, 42, -100123)
+
+
 async def test_reconcile_creates_prefixed_session_for_topic() -> None:
     periodic_tasks._session_runtime.clear()
     client = AsyncMock()
