@@ -282,7 +282,7 @@ class TestBuiltins:
         assert mode.payload == "\x1b[Z"
 
     def test_yolo_has_read_state(self) -> None:
-        # Think was changed to read_state=False because Claude Code has no
+        # Think was changed to read_state=False because the agent has no
         # persistent chrome indicator for extended-thinking state.
         assert BUILTIN_ACTIONS["think"].read_state is False
         assert BUILTIN_ACTIONS["yolo"].read_state is True
