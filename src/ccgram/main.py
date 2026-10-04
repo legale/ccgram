@@ -1,14 +1,14 @@
 """Application entry point — Click CLI dispatcher and bot bootstrap.
 
 The ``main()`` function invokes the Click command group defined in cli.py,
-which dispatches to subcommands (run, hook, status, doctor).
+which dispatches to subcommands (run, hook, status).
 ``run_bot()`` contains the actual bot startup logic, called by the ``run``
 command after CLI flags have been applied to the environment.
 
 Module-level imports stay minimal on purpose: ``run_bot``,
 ``start_miniapp_if_enabled``, and ``stop_miniapp_if_enabled`` lazy-load
 ``config``, ``utils``, ``tmux_manager``, ``bot.create_bot``, and
-``miniapp`` so that ``ccgram doctor`` / ``status`` / ``hook`` (which
+``miniapp`` so that ``ccgram status`` / ``hook`` (which
 import ``main`` only for ``_shutdown_signal`` and ``__version__``) do
 not pay PTB or aiohttp startup cost.
 """

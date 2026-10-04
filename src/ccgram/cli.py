@@ -6,7 +6,7 @@ bot-configuration flags.  Precedence: CLI flag > env var > .env > default.
 Config reads the overridden values.
 
 Every subcommand body lazy-loads its workers (``run_bot``, ``hook_main``,
-``status_main``, ``msg_group``, ``doctor_main``).  ``ccgram --help`` and
+``status_main`` and ``msg_group``).  ``ccgram --help`` and
 ``ccgram --version`` stay snappy and avoid pulling PTB / aiohttp /
 provider chains; only the invoked subcommand pays its import cost.
 """
@@ -204,9 +204,6 @@ def status_cmd() -> None:
     status_main()
 
 
-# --- doctor command --------------------------------------------------------
-
-
 # --- msg command group -----------------------------------------------------
 
 
@@ -218,16 +215,3 @@ def _register_msg_group() -> None:
 
 
 _register_msg_group()
-
-
-# --- doctor command --------------------------------------------------------
-
-
-@cli.command("doctor")
-@click.option("--fix", is_flag=True, help="Auto-fix issues where possible.")
-def doctor_cmd(fix: bool) -> None:
-    """Validate setup and diagnose issues."""
-    # Lazy: defer subcommand import until that command is invoked, keeping `ccgram --help` fast
-    from .doctor_cmd import doctor_main
-
-    doctor_main(fix=fix)

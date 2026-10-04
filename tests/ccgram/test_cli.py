@@ -39,18 +39,12 @@ class TestCliCommands:
         assert "Commands:" in result.output
         assert "run" in result.output
         assert "status" in result.output
-        assert "doctor" in result.output
 
     def test_run_help(self, runner):
         result = runner.invoke(cli, ["run", "--help"])
         assert result.exit_code == 0
         assert "--verbose" in result.output
         assert "--config-dir" in result.output
-
-    def test_doctor_help(self, runner):
-        result = runner.invoke(cli, ["doctor", "--help"])
-        assert result.exit_code == 0
-        assert "--fix" in result.output
 
     def test_status_help(self, runner):
         result = runner.invoke(cli, ["status", "--help"])
