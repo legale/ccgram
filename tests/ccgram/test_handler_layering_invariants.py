@@ -49,7 +49,6 @@ _PTB_BOT_ALLOWLIST = frozenset(
         "status/status_bar_actions.py",
         "sync_command.py",
         "toolbar/toolbar_callbacks.py",
-        "topics/directory_callbacks.py",
     }
 )
 
@@ -92,11 +91,8 @@ _SINGLETON_ALLOWLIST = frozenset(
         "sync_command.py",
         "text/text_handler.py",
         "toolbar/toolbar_callbacks.py",
-        "topics/directory_browser.py",
-        "topics/directory_callbacks.py",
         "topics/topic_lifecycle.py",
         "topics/topic_orchestration.py",
-        "topics/window_callbacks.py",
     }
 )
 

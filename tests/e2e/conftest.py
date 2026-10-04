@@ -79,7 +79,7 @@ def e2e_tmux(monkeypatch):
 
     monkeypatch.setattr(config, "tmux_session_name", E2E_TMUX_SESSION)
     # Suppress external-session discovery so the dev's own tmux sessions
-    # don't bleed into the test's window picker. The pattern matches
+    # don't bleed into topic/session discovery. The pattern matches
     # nothing, which short-circuits ``discover_external_sessions``.
     monkeypatch.setattr(config, "tmux_external_patterns", "__no_external_in_e2e__")
 
@@ -107,13 +107,11 @@ def e2e_tmux(monkeypatch):
         "ccgram.session",
         "ccgram.session_monitor",
         "ccgram.handlers.text.text_handler",
-        "ccgram.handlers.topics.directory_callbacks",
         "ccgram.handlers.polling.polling_coordinator",
         "ccgram.handlers.sessions_dashboard",
         "ccgram.handlers.live.screenshot_callbacks",
         "ccgram.handlers.interactive.interactive_ui",
         "ccgram.handlers.interactive.interactive_callbacks",
-        "ccgram.handlers.topics.window_callbacks",
         "ccgram.handlers.sync_command",
         "ccgram.handlers.commands.forward",
         "ccgram.handlers.topics.topic_orchestration",
@@ -242,8 +240,6 @@ async def e2e_app(e2e_state_dir, e2e_tmux, intercepted_calls, monkeypatch):
         "ccgram.session",
         "ccgram.bot",
         "ccgram.handlers.text.text_handler",
-        "ccgram.handlers.topics.directory_callbacks",
-        "ccgram.handlers.topics.directory_browser",
         "ccgram.handlers.polling.polling_coordinator",
         "ccgram.handlers.messaging_pipeline.message_queue",
         "ccgram.handlers.sessions_dashboard",
@@ -251,7 +247,6 @@ async def e2e_app(e2e_state_dir, e2e_tmux, intercepted_calls, monkeypatch):
         "ccgram.handlers.hook_events",
         "ccgram.handlers.file_handler",
         "ccgram.handlers.voice.voice_callbacks",
-        "ccgram.handlers.topics.window_callbacks",
         "ccgram.handlers.sync_command",
         "ccgram.handlers.commands.forward",
         "ccgram.handlers.topics.topic_orchestration",

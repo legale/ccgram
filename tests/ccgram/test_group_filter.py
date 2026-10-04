@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from telegram.ext import CommandHandler, MessageHandler, filters
 
-from ccgram.bot import _remember_forum_chat, create_bot
+from ccgram.bot import create_bot
 from ccgram.handlers.callback_registry import dispatch as callback_handler
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -57,39 +57,6 @@ class TestGroupFilterModule:
         result_none = filters.Chat(chat_id=None) if None else filters.ALL
         assert result_none is filters.ALL
 
-
-class TestForumChatDiscovery:
-    async def test_named_topic_remembers_chat_without_chat_type(self) -> None:
-        update = MagicMock()
-        update.effective_user = MagicMock(id=100)
-        update.effective_chat = MagicMock(id=-100999)
-        update.effective_message = MagicMock(message_thread_id=42)
-
-        with (
-            patch("ccgram.bot.config") as mock_config,
-            patch("ccgram.bot.thread_router") as mock_thread_router,
-        ):
-            mock_config.is_user_allowed.return_value = True
-
-            await _remember_forum_chat(update, MagicMock())
-
-        mock_thread_router.remember_forum_chat_id.assert_called_once_with(100, -100999)
-
-    async def test_general_topic_does_not_remember_chat(self) -> None:
-        update = MagicMock()
-        update.effective_user = MagicMock(id=100)
-        update.effective_chat = MagicMock(id=-100999)
-        update.effective_message = MagicMock(message_thread_id=1)
-
-        with (
-            patch("ccgram.bot.config") as mock_config,
-            patch("ccgram.bot.thread_router") as mock_thread_router,
-        ):
-            mock_config.is_user_allowed.return_value = True
-
-            await _remember_forum_chat(update, MagicMock())
-
-        mock_thread_router.remember_forum_chat_id.assert_not_called()
 
 
 # ── Handler registration tests ──────────────────────────────────────────

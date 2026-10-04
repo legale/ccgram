@@ -163,35 +163,33 @@ class TestDisplayNames:
 
 
 class TestToDictRoundtrip:
-    def test_roundtrip(self, router: ThreadRouter) -> None:
+    def test_roundtrip_keeps_only_non_lifecycle_state(self, router: ThreadRouter) -> None:
         router.bind_thread(100, 1, "@1", window_name="proj")
-        router.bind_thread(200, 2, "@2")
         router.set_group_chat_id(100, 1, -999)
-
         data = router.to_dict()
+        assert "thread_bindings" not in data
+        assert "group_chat_ids" not in data
+
         new_router = ThreadRouter(
             schedule_save=lambda: None,
             has_window_state=lambda _wid: False,
         )
         new_router.from_dict(data)
 
-        assert new_router.get_window_for_thread(100, 1) == "@1"
-        assert new_router.get_window_for_thread(200, 2) == "@2"
-        assert new_router.resolve_chat_id(100, 1) == -999
+        assert new_router.get_window_for_thread(100, 1) is None
         assert new_router.get_display_name("@1") == "proj"
-        assert new_router.get_thread_for_window(100, "@1") == 1
 
-    def test_from_dict_dedup(self, router: ThreadRouter) -> None:
-        data = {
-            "thread_bindings": {
-                "100": {"1": "@1", "2": "@1"},
-            },
-            "group_chat_ids": {},
-            "window_display_names": {},
-        }
-        router.from_dict(data)
-        assert router.get_window_for_thread(100, 2) == "@1"
-        assert router.get_window_for_thread(100, 1) is None
+    def test_from_dict_ignores_legacy_bindings(self, router: ThreadRouter) -> None:
+        router.from_dict(
+            {
+                "thread_bindings": {"100": {"1": "@1"}},
+                "group_chat_ids": {"100:1": -999},
+                "window_display_names": {"@1": "proj"},
+            }
+        )
+        assert list(router.iter_thread_bindings()) == []
+        assert router.resolve_chat_id(100, 1) == 100
+        assert router.get_display_name("@1") == "proj"
 
 
 class TestReset:
@@ -205,36 +203,32 @@ class TestReset:
         assert list(router.iter_thread_bindings()) == []
 
 
-def test_forum_chat_id_is_persisted(router: ThreadRouter) -> None:
-    router.remember_forum_chat_id(100, -100123)
-    assert router.get_forum_chat_id(100) == -100123
-
-    restored = ThreadRouter(schedule_save=lambda: None, has_window_state=lambda _: False)
-    restored.from_dict(router.to_dict())
-    assert restored.get_forum_chat_id(100) == -100123
-
 
 class TestScheduleSave:
-    def test_schedule_save_called_on_bind(self, router: ThreadRouter) -> None:
-        calls = []
-        router._schedule_save = lambda: calls.append(1)
-        router.bind_thread(100, 1, "@1")
-        assert len(calls) == 1
-
-    def test_schedule_save_called_on_unbind(self, router: ThreadRouter) -> None:
-        calls = []
-        router.bind_thread(100, 1, "@1")
-        router._schedule_save = lambda: calls.append(1)
-        router.unbind_thread(100, 1)
-        assert len(calls) == 1
-
-    def test_schedule_save_called_on_set_group_chat_id(
+    def test_schedule_save_only_when_bind_changes_persisted_name(
         self, router: ThreadRouter
     ) -> None:
         calls = []
         router._schedule_save = lambda: calls.append(1)
+        router.bind_thread(100, 1, "@1")
+        assert calls == []
+        router.bind_thread(100, 1, "@1", window_name="proj")
+        assert calls == [1]
+
+    def test_schedule_save_on_unbind_only_when_display_name_removed(
+        self, router: ThreadRouter
+    ) -> None:
+        calls = []
+        router.bind_thread(100, 1, "@1", window_name="proj")
+        router._schedule_save = lambda: calls.append(1)
+        router.unbind_thread(100, 1)
+        assert calls == [1]
+
+    def test_set_group_chat_id_is_runtime_only(self, router: ThreadRouter) -> None:
+        calls = []
+        router._schedule_save = lambda: calls.append(1)
         router.set_group_chat_id(100, 1, -999)
-        assert len(calls) == 1
+        assert calls == []
 
     def test_schedule_save_called_on_set_display_name(
         self, router: ThreadRouter

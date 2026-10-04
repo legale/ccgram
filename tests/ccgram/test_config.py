@@ -109,19 +109,6 @@ class TestConfigMissingEnv:
 
 
 @pytest.mark.usefixtures("_base_env")
-class TestShowHiddenDirs:
-    def test_show_hidden_dirs_default_false(self):
-        cfg = Config()
-        assert cfg.show_hidden_dirs is False
-
-    @pytest.mark.parametrize("value", ["1", "true", "yes", "True", "YES"])
-    def test_show_hidden_dirs_enabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_SHOW_HIDDEN_DIRS", value)
-        cfg = Config()
-        assert cfg.show_hidden_dirs is True
-
-
-@pytest.mark.usefixtures("_base_env")
 class TestHideToolCalls:
     def test_hide_tool_calls_default_true(self, monkeypatch):
         monkeypatch.delenv("CCGRAM_HIDE_TOOL_CALLS", raising=False)

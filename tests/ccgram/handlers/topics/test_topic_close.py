@@ -1,119 +1,48 @@
-"""Tests for FORUM_TOPIC_CLOSED handler (unbind thread, keep window)."""
+"""Tests for FORUM_TOPIC_CLOSED under tmux ownership."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from ccgram.tmux_manager import TmuxWindow
 
-def _make_update(thread_id: int = 42, user_id: int = 1) -> MagicMock:
-    """Create a mock Update for FORUM_TOPIC_CLOSED."""
+
+def _update() -> MagicMock:
     update = MagicMock()
-    update.effective_user.id = user_id
-    update.message.message_thread_id = thread_id
+    update.effective_user.id = 1
+    update.effective_chat.id = -100
+    update.message.message_thread_id = 42
     return update
 
 
-_PATCH_ALLOWED = patch("ccgram.config.Config.is_user_allowed", return_value=True)
+async def test_reopens_bound_managed_topic() -> None:
+    from ccgram.handlers.topics import topic_lifecycle
 
+    context = MagicMock()
+    context.bot.reopen_forum_topic = AsyncMock()
+    session = TmuxWindow("cc_foo:@1", "cc_foo", "/tmp", topic_ref=(-100, 42))
+    with (
+        patch("ccgram.config.Config.is_user_allowed", return_value=True),
+        patch.object(
+            topic_lifecycle, "find_topic_session", new=AsyncMock(return_value=session)
+        ),
+    ):
+        await topic_lifecycle.topic_closed_handler(_update(), context)
 
-class TestTopicClosedHandler:
-    @_PATCH_ALLOWED
-    @patch(
-        "ccgram.handlers.topics.topic_lifecycle.clear_topic_state",
-        new_callable=AsyncMock,
+    context.bot.reopen_forum_topic.assert_awaited_once_with(
+        chat_id=-100, message_thread_id=42
     )
-    @patch("ccgram.handlers.topics.topic_lifecycle.thread_router")
-    async def test_unbinds_bound_topic(
-        self, mock_tr: MagicMock, mock_clear: AsyncMock, _allowed: MagicMock
-    ) -> None:
-        from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
 
-        mock_tr.get_window_for_thread.return_value = "@0"
-        mock_tr.get_display_name.return_value = "my-project"
 
-        update = _make_update()
-        ctx = MagicMock()
-        await topic_closed_handler(update, ctx)
+async def test_ignores_unmanaged_topic_close() -> None:
+    from ccgram.handlers.topics import topic_lifecycle
 
-        mock_tr.get_window_for_thread.assert_called_once_with(1, 42)
-        mock_clear.assert_called_once()
-        clear_args = mock_clear.call_args
-        assert clear_args.args[0:2] == (1, 42)
-        assert clear_args.args[2].bot is ctx.bot
-        assert clear_args.args[3] is ctx.user_data
-        assert clear_args.kwargs == {"window_id": "@0", "window_dead": False}
-        mock_tr.unbind_thread.assert_called_once_with(1, 42)
+    context = MagicMock()
+    context.bot.reopen_forum_topic = AsyncMock()
+    with (
+        patch("ccgram.config.Config.is_user_allowed", return_value=True),
+        patch.object(
+            topic_lifecycle, "find_topic_session", new=AsyncMock(return_value=None)
+        ),
+    ):
+        await topic_lifecycle.topic_closed_handler(_update(), context)
 
-    @_PATCH_ALLOWED
-    @patch(
-        "ccgram.handlers.topics.topic_lifecycle.clear_topic_state",
-        new_callable=AsyncMock,
-    )
-    @patch("ccgram.handlers.topics.topic_lifecycle.thread_router")
-    async def test_skips_unbound_topic(
-        self, mock_tr: MagicMock, mock_clear: AsyncMock, _allowed: MagicMock
-    ) -> None:
-        from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
-
-        mock_tr.get_window_for_thread.return_value = None
-
-        update = _make_update()
-        await topic_closed_handler(update, MagicMock())
-
-        mock_tr.unbind_thread.assert_not_called()
-        mock_clear.assert_not_called()
-
-    @patch(
-        "ccgram.handlers.topics.topic_lifecycle.clear_topic_state",
-        new_callable=AsyncMock,
-    )
-    @patch("ccgram.handlers.topics.topic_lifecycle.thread_router")
-    async def test_skips_disallowed_user(
-        self, mock_tr: MagicMock, mock_clear: AsyncMock
-    ) -> None:
-        from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
-
-        update = _make_update()
-        with patch("ccgram.config.Config.is_user_allowed", return_value=False):
-            await topic_closed_handler(update, MagicMock())
-
-        mock_tr.get_window_for_thread.assert_not_called()
-        mock_clear.assert_not_called()
-
-    @_PATCH_ALLOWED
-    @patch(
-        "ccgram.handlers.topics.topic_lifecycle.clear_topic_state",
-        new_callable=AsyncMock,
-    )
-    @patch("ccgram.handlers.topics.topic_lifecycle.thread_router")
-    async def test_skips_general_topic(
-        self, mock_tr: MagicMock, mock_clear: AsyncMock, _allowed: MagicMock
-    ) -> None:
-        from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
-
-        update = MagicMock()
-        update.effective_user.id = 1
-        update.message.message_thread_id = 1
-
-        await topic_closed_handler(update, MagicMock())
-
-        mock_tr.get_window_for_thread.assert_not_called()
-        mock_clear.assert_not_called()
-
-    @_PATCH_ALLOWED
-    @patch(
-        "ccgram.handlers.topics.topic_lifecycle.clear_topic_state",
-        new_callable=AsyncMock,
-    )
-    @patch("ccgram.handlers.topics.topic_lifecycle.thread_router")
-    async def test_skips_no_thread_id(
-        self, mock_tr: MagicMock, mock_clear: AsyncMock, _allowed: MagicMock
-    ) -> None:
-        from ccgram.handlers.topics.topic_lifecycle import topic_closed_handler
-
-        update = MagicMock()
-        update.effective_user.id = 1
-        update.message.message_thread_id = None
-
-        await topic_closed_handler(update, MagicMock())
-
-        mock_tr.get_window_for_thread.assert_not_called()
-        mock_clear.assert_not_called()
+    context.bot.reopen_forum_topic.assert_not_called()

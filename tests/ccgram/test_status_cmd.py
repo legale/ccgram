@@ -1,108 +1,59 @@
 """Tests for ccgram status command."""
 
 import contextlib
-import json
 
-from ccgram.status_cmd import _read_json, status_main
+from ccgram.status_cmd import _list_managed_sessions, status_main
 
 
-class TestReadJson:
-    def test_valid_json(self, tmp_path) -> None:
-        path = tmp_path / "test.json"
-        path.write_text('{"key": "value"}')
-        assert _read_json(path) == {"key": "value"}
+class TestListManagedSessions:
+    def test_filters_prefix_and_keeps_topic_identity(self, monkeypatch) -> None:
+        result = type("R", (), {
+            "returncode": 0,
+            "stdout": "cc_foo\t/tmp/foo\t-100:42\nother\t/tmp/other\t\n",
+        })()
+        monkeypatch.setattr("ccgram.status_cmd.subprocess.run", lambda *a, **kw: result)
 
-    def test_missing_file(self, tmp_path) -> None:
-        assert _read_json(tmp_path / "nonexistent.json") == {}
-
-    def test_invalid_json(self, tmp_path) -> None:
-        path = tmp_path / "bad.json"
-        path.write_text("not json")
-        assert _read_json(path) == {}
+        assert _list_managed_sessions("cc_") == [
+            {"name": "cc_foo", "cwd": "/tmp/foo", "topic": "-100:42"}
+        ]
 
 
 class TestStatusMain:
-    def test_no_state_files(self, tmp_path, monkeypatch, capsys) -> None:
-        monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        monkeypatch.setenv("TMUX_SESSION_NAME", "test-session")
-        monkeypatch.setattr("ccgram.status_cmd._list_tmux_windows", lambda _: [])
+    def test_no_managed_sessions(self, monkeypatch, capsys) -> None:
+        monkeypatch.setattr("ccgram.status_cmd._list_managed_sessions", lambda _: [])
 
         with contextlib.suppress(SystemExit):
             status_main()
 
-        captured = capsys.readouterr()
-        assert "ccgram" in captured.out
-        assert "test-session (0 windows)" in captured.out
+        out = capsys.readouterr().out
+        assert "ccgram" in out
+        assert "Managed tmux sessions: 0" in out
 
-    def test_with_bound_window(self, tmp_path, monkeypatch, capsys) -> None:
-        monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        monkeypatch.setenv("TMUX_SESSION_NAME", "ccgram")
-
-        state = {
-            "thread_bindings": {"12345": {"42": "@5"}},
-            "window_display_names": {"@5": "my-project"},
-        }
-        (tmp_path / "state.json").write_text(json.dumps(state))
-
+    def test_bound_and_unbound_sessions(self, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("TMUX_SESSION_PREFIX", "cc_")
         monkeypatch.setattr(
-            "ccgram.status_cmd._list_tmux_windows",
-            lambda _: [{"id": "@5", "name": "my-project"}],
+            "ccgram.status_cmd._list_managed_sessions",
+            lambda _: [
+                {"name": "cc_foo", "cwd": "/tmp/foo", "topic": "-100:42"},
+                {"name": "cc_bar", "cwd": "/tmp/bar", "topic": ""},
+            ],
         )
 
         with contextlib.suppress(SystemExit):
             status_main()
 
-        captured = capsys.readouterr()
-        assert "1 windows" in captured.out
-        assert "@5" in captured.out
-        assert "my-project" in captured.out
-        assert "topic 42" in captured.out
-        assert "alive" in captured.out
+        out = capsys.readouterr().out
+        assert "Managed tmux sessions: 2" in out
+        assert "cc_foo -> -100:42 /tmp/foo" in out
+        assert "cc_bar -> unbound /tmp/bar" in out
 
-    def test_dead_binding(self, tmp_path, monkeypatch, capsys) -> None:
-        monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        monkeypatch.setenv("TMUX_SESSION_NAME", "ccgram")
-
-        state = {
-            "thread_bindings": {"12345": {"42": "@5"}},
-            "window_display_names": {"@5": "gone-project"},
-        }
-        (tmp_path / "state.json").write_text(json.dumps(state))
-
-        monkeypatch.setattr("ccgram.status_cmd._list_tmux_windows", lambda _: [])
-
-        with contextlib.suppress(SystemExit):
-            status_main()
-
-        captured = capsys.readouterr()
-        assert "dead" in captured.out
-        assert "gone-project" in captured.out
-
-    def test_unbound_window(self, tmp_path, monkeypatch, capsys) -> None:
-        monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-        monkeypatch.setenv("TMUX_SESSION_NAME", "ccgram")
-
-        monkeypatch.setattr(
-            "ccgram.status_cmd._list_tmux_windows",
-            lambda _: [{"id": "@10", "name": "orphan"}],
-        )
-
-        with contextlib.suppress(SystemExit):
-            status_main()
-
-        captured = capsys.readouterr()
-        assert "(unbound)" in captured.out
-        assert "orphan" in captured.out
-
-    def test_shows_provider_info(self, tmp_path, monkeypatch, capsys) -> None:
-        monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
+    def test_shows_provider_info(self, monkeypatch, capsys) -> None:
         monkeypatch.setenv("CCGRAM_PROVIDER", "shell")
-        monkeypatch.setenv("TMUX_SESSION_NAME", "test")
-        monkeypatch.setattr("ccgram.status_cmd._list_tmux_windows", lambda _: [])
+        monkeypatch.setattr("ccgram.status_cmd._list_managed_sessions", lambda _: [])
 
         with contextlib.suppress(SystemExit):
             status_main()
 
-        captured = capsys.readouterr()
-        assert "Provider: shell" in captured.out
-        assert "hook" not in captured.out.split("Provider:")[1].split("\n")[0]
+        out = capsys.readouterr().out
+        assert "Provider: shell" in out
+        assert "hook" not in out.split("Provider:")[1].split("\n")[0]

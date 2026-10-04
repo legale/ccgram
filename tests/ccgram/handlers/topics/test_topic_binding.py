@@ -1,52 +1,105 @@
-"""Tests for topic binding helpers."""
+"""Tests for strict tmux-authoritative topic binding."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from ccgram.tmux_manager import TmuxWindow
 
-class TestRenameBoundTopic:
-    @patch("ccgram.handlers.topics.topic_binding.tmux_manager")
-    async def test_renames_topic_scoped_window_and_session(
-        self, mock_tmux: MagicMock
-    ) -> None:
-        from ccgram.handlers.topics.topic_binding import rename_bound_topic
 
-        mock_tmux.find_window_by_id = AsyncMock(
-            return_value=MagicMock(window_id="cc_old:@7")
-        )
-        mock_tmux.rename_window = AsyncMock(return_value=True)
-        mock_tmux.rename_session = AsyncMock(return_value=True)
-        mock_tmux.topic_session_name.side_effect = lambda name: f"cc_{name}"
+def _session(name: str = "cc_foo", ref: tuple[int, int] | None = None) -> TmuxWindow:
+    return TmuxWindow(f"{name}:@1", name, "/tmp", topic_ref=ref)
 
-        await rename_bound_topic(
-            MagicMock(),
-            user_id=1,
-            thread_id=42,
-            window_id="@7",
-            window_name="backend-api",
-            approval_mode="normal",
+
+async def test_existing_topic_ref_wins_over_name() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    session = _session("cc_bar", (-100, 42))
+    router = MagicMock()
+    with patch.object(topic_binding, "tmux_manager") as tmux:
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.topic_name_from_session_name.return_value = "bar"
+        window_id, error = await topic_binding.ensure_topic_session(
+            1, -100, 42, "foo", router=router
         )
 
-        mock_tmux.rename_window.assert_awaited_once_with("cc_old:@7", "backend-api")
-        mock_tmux.rename_session.assert_awaited_once_with(
-            "cc_old", "cc_backend-api"
+    assert error is None
+    assert window_id == "cc_bar:@1"
+    tmux.set_session_topic.assert_not_called()
+    tmux.create_window.assert_not_called()
+    router.bind_thread.assert_called_once_with(1, 42, "cc_bar:@1", window_name="bar")
+
+
+async def test_claims_exact_unbound_session() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    session = _session()
+    router = MagicMock()
+    with patch.object(topic_binding, "tmux_manager") as tmux:
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.topic_session_name.return_value = "cc_foo"
+        tmux.topic_name_from_session_name.return_value = "foo"
+        tmux.set_session_topic = AsyncMock(return_value=True)
+        window_id, error = await topic_binding.ensure_topic_session(
+            1, -100, 42, "foo", router=router
         )
 
-    @patch("ccgram.handlers.topics.topic_binding.tmux_manager")
-    async def test_skips_default_session_window(self, mock_tmux: MagicMock) -> None:
-        from ccgram.handlers.topics.topic_binding import rename_bound_topic
+    assert error is None
+    assert window_id == "cc_foo:@1"
+    tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 42)
+    tmux.create_window.assert_not_called()
 
-        mock_tmux.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@7"))
-        mock_tmux.rename_window = AsyncMock()
-        mock_tmux.rename_session = AsyncMock()
 
-        await rename_bound_topic(
-            MagicMock(),
-            user_id=1,
-            thread_id=42,
-            window_id="@7",
-            window_name="backend-api",
-            approval_mode="normal",
+async def test_creates_missing_exact_session() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    router = MagicMock()
+    with (
+        patch.object(topic_binding, "tmux_manager") as tmux,
+        patch.object(topic_binding, "config") as config,
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[])
+        tmux.topic_session_name.return_value = "cc_foo"
+        tmux.topic_name_from_session_name.return_value = "foo"
+        tmux.create_window = AsyncMock(return_value=(True, "", "foo", "cc_foo:@1"))
+        tmux.set_session_topic = AsyncMock(return_value=True)
+        config.session_working_directory = "/tmp"
+        window_id, error = await topic_binding.ensure_topic_session(
+            1, -100, 42, "foo", router=router
         )
 
-        mock_tmux.rename_window.assert_not_called()
-        mock_tmux.rename_session.assert_not_called()
+    assert error is None
+    assert window_id == "cc_foo:@1"
+    tmux.create_window.assert_awaited_once_with(
+        "/tmp", session_name="cc_foo", window_name="foo", start_agent=False
+    )
+    tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 42)
+
+
+async def test_rejects_duplicate_topic_name() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    session = _session(ref=(-100, 7))
+    router = MagicMock()
+    with patch.object(topic_binding, "tmux_manager") as tmux:
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.topic_session_name.return_value = "cc_foo"
+        window_id, error = await topic_binding.ensure_topic_session(
+            1, -100, 42, "foo", router=router
+        )
+
+    assert window_id is None
+    assert "already bound" in (error or "")
+    tmux.set_session_topic.assert_not_called()
+    tmux.create_window.assert_not_called()
+    router.bind_thread.assert_not_called()
+
+
+async def test_rejects_duplicate_tmux_topic_ref() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    sessions = [_session("cc_foo", (-100, 42)), _session("cc_bar", (-100, 42))]
+    with patch.object(topic_binding, "tmux_manager") as tmux:
+        tmux.list_sessions = AsyncMock(return_value=sessions)
+        window_id, error = await topic_binding.ensure_topic_session(1, -100, 42, "foo")
+
+    assert window_id is None
+    assert "Multiple tmux sessions" in (error or "")

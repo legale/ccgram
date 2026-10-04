@@ -1,156 +1,163 @@
+"""Tests for tmux-authoritative reconciliation."""
+
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram.error import BadRequest
+
 from ccgram.handlers.polling import periodic_tasks
+from ccgram.thread_router import ThreadRouter
 from ccgram.tmux_manager import TmuxWindow
 
 
-def _window(session: str, window_id: str = "@1") -> TmuxWindow:
-    return TmuxWindow(
-        window_id=f"{session}:{window_id}",
-        window_name="foo",
-        cwd="/tmp",
-    )
+def _session(
+    name: str = "cc_foo", ref: tuple[int, int] | None = (-100, 42)
+) -> TmuxWindow:
+    return TmuxWindow(f"{name}:@1", name, "/tmp", topic_ref=ref)
 
 
-async def test_reconcile_primes_existing_session_without_sending_snapshot() -> None:
-    periodic_tasks._session_runtime.clear()
-    window = _window("cc_foo")
+def _router() -> ThreadRouter:
+    return ThreadRouter(schedule_save=lambda: None, has_window_state=lambda _wid: False)
+
+
+async def test_reconcile_restores_runtime_from_tmux_option() -> None:
+    session = _session()
     client = AsyncMock()
+    router = _router()
 
     with (
         patch.object(periodic_tasks, "tmux_manager") as tmux,
-        patch.object(periodic_tasks, "thread_router") as router,
+        patch.object(periodic_tasks, "thread_router", router),
         patch.object(periodic_tasks, "config") as config,
         patch.object(periodic_tasks, "prime_topic_status_diff") as prime,
     ):
-        tmux.list_sessions = AsyncMock(return_value=[window])
-        tmux.capture_pane = AsyncMock(return_value="current screen")
-        tmux.session_name = "ccgram"
-        config.tmux_session_prefix = "cc_"
-        router.iter_thread_bindings.return_value = [(1, 42, window.window_id)]
-        router.resolve_chat_id.return_value = -100
-
-        await periodic_tasks.reconcile(client, [window])
-
-    assert periodic_tasks._session_runtime["cc_foo"].thread_id == 42
-    prime.assert_called_once_with(-100, 42, window.window_id, "current screen")
-    client.create_forum_topic.assert_not_awaited()
-
-
-async def test_reconcile_creates_topic_for_unbound_prefixed_session() -> None:
-    periodic_tasks._session_runtime.clear()
-    window = _window("cc_foo")
-    client = AsyncMock()
-    client.create_forum_topic.return_value = SimpleNamespace(message_thread_id=42)
-
-    with (
-        patch.object(periodic_tasks, "tmux_manager") as tmux,
-        patch.object(periodic_tasks, "thread_router") as router,
-        patch.object(periodic_tasks, "config") as config,
-        patch.object(periodic_tasks, "prime_topic_status_diff"),
-    ):
-        tmux.list_sessions = AsyncMock(return_value=[window])
-        tmux.capture_pane = AsyncMock(return_value="current screen")
+        tmux.list_sessions = AsyncMock(return_value=[session])
         tmux.topic_name_from_session_name.return_value = "foo"
-        config.tmux_session_prefix = "cc_"
-        config.group_id = -100
-        config.allowed_users = {1}
-        router.iter_thread_bindings.return_value = []
-        router.resolve_chat_id.return_value = -100
-
-        await periodic_tasks.reconcile(client, [window])
-
-    client.create_forum_topic.assert_awaited_once_with(-100, name="foo")
-    router.bind_thread.assert_called_once_with(1, 42, window.window_id, "foo")
-    assert periodic_tasks._session_runtime["cc_foo"].thread_id == 42
-
-
-async def test_reconcile_uses_discovered_forum_chat_without_configured_group() -> None:
-    window = _window("cc_foo")
-    client = AsyncMock()
-    client.create_forum_topic.return_value = SimpleNamespace(message_thread_id=42)
-
-    with (
-        patch.object(periodic_tasks, "tmux_manager") as tmux,
-        patch.object(periodic_tasks, "thread_router") as router,
-        patch.object(periodic_tasks, "config") as config,
-        patch.object(periodic_tasks, "prime_topic_status_diff"),
-    ):
-        tmux.list_sessions = AsyncMock(return_value=[window])
         tmux.capture_pane = AsyncMock(return_value="current screen")
-        tmux.topic_name_from_session_name.return_value = "foo"
         config.tmux_session_prefix = "cc_"
-        config.group_id = None
         config.allowed_users = {1}
-        router.iter_thread_bindings.return_value = []
-        router.get_forum_chat_id.return_value = -100123
-        router.resolve_chat_id.return_value = -100123
+        await periodic_tasks.reconcile(client)
 
-        await periodic_tasks.reconcile(client, [window])
+    assert router.get_window_for_thread(1, 42) == "cc_foo:@1"
+    assert router.resolve_chat_id(1, 42) == -100
+    prime.assert_called_once_with(-100, 42, "cc_foo:@1", "current screen")
+    client.reopen_forum_topic.assert_awaited_once_with(-100, 42)
+    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="foo")
+    client.create_forum_topic.assert_not_called()
 
-    client.create_forum_topic.assert_awaited_once_with(-100123, name="foo")
-    router.set_group_chat_id.assert_called_once_with(1, 42, -100123)
 
-
-async def test_reconcile_creates_prefixed_session_for_topic() -> None:
-    periodic_tasks._session_runtime.clear()
+async def test_reconcile_ignores_unbound_prefixed_candidate() -> None:
+    session = _session(ref=None)
     client = AsyncMock()
+    router = _router()
+    with (
+        patch.object(periodic_tasks, "tmux_manager") as tmux,
+        patch.object(periodic_tasks, "thread_router", router),
+        patch.object(periodic_tasks, "config") as config,
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        config.tmux_session_prefix = "cc_"
+        await periodic_tasks.reconcile(client)
+
+    client.create_forum_topic.assert_not_called()
+    client.delete_forum_topic.assert_not_called()
+    assert list(router.iter_thread_bindings()) == []
+
+
+async def test_reconcile_deletes_topic_when_tmux_session_disappears() -> None:
+    client = AsyncMock()
+    router = _router()
+    router.bind_thread(1, 42, "cc_foo:@1", "foo")
+    router.set_group_chat_id(1, 42, -100)
 
     with (
         patch.object(periodic_tasks, "tmux_manager") as tmux,
-        patch.object(periodic_tasks, "thread_router") as router,
-        patch.object(periodic_tasks, "window_query") as window_query,
+        patch.object(periodic_tasks, "thread_router", router),
         patch.object(periodic_tasks, "config") as config,
-        patch.object(periodic_tasks, "prime_topic_status_diff"),
+        patch("ccgram.handlers.cleanup.clear_topic_state", new_callable=AsyncMock),
     ):
         tmux.list_sessions = AsyncMock(return_value=[])
-        tmux.topic_session_name.return_value = "prefix_foo"
-        tmux.create_window = AsyncMock(return_value=(True, "", "foo", "prefix_foo:@2"))
-        tmux.capture_pane = AsyncMock(return_value="current screen")
-        config.tmux_session_prefix = "prefix_"
-        config.session_working_directory = "/tmp"
-        router.iter_thread_bindings.return_value = [(1, 42, "prefix_foo:@1")]
-        router.get_display_name.return_value = "foo"
-        router.resolve_chat_id.return_value = -100
-        window_query.view_window.return_value = None
+        config.tmux_session_prefix = "cc_"
+        await periodic_tasks.reconcile(client)
 
-        await periodic_tasks.reconcile(client, [])
-
-    tmux.create_window.assert_awaited_once_with(
-        "/tmp",
-        session_name="prefix_foo",
-        window_name="foo",
-        start_agent=False,
-    )
-    router.bind_thread.assert_called_once_with(1, 42, "prefix_foo:@2", "foo")
+    client.delete_forum_topic.assert_awaited_once_with(-100, 42)
+    tmux.create_window.assert_not_called()
+    assert router.get_window_for_thread(1, 42) is None
 
 
-async def test_send_with_reconcile_retries_once_after_missing_window() -> None:
+async def test_reconcile_session_rename_keeps_topic_and_updates_route() -> None:
+    session = _session("cc_bar")
+    client = AsyncMock()
+    router = _router()
+    router.bind_thread(1, 42, "cc_foo:@1", "foo")
+    router.set_group_chat_id(1, 42, -100)
+
+    with (
+        patch.object(periodic_tasks, "tmux_manager") as tmux,
+        patch.object(periodic_tasks, "thread_router", router),
+        patch.object(periodic_tasks, "config") as config,
+        patch.object(periodic_tasks, "prime_topic_status_diff"),
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.topic_name_from_session_name.return_value = "bar"
+        tmux.capture_pane = AsyncMock(return_value=None)
+        config.tmux_session_prefix = "cc_"
+        config.allowed_users = {1}
+        await periodic_tasks.reconcile(client)
+
+    assert router.get_window_for_thread(1, 42) == "cc_bar:@1"
+    client.delete_forum_topic.assert_not_called()
+    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
+
+
+async def test_reconcile_recreates_missing_telegram_topic() -> None:
+    session = _session()
+    client = AsyncMock()
+    client.reopen_forum_topic.side_effect = BadRequest("Message thread not found")
+    client.create_forum_topic.return_value = SimpleNamespace(message_thread_id=99)
+    router = _router()
+
+    with (
+        patch.object(periodic_tasks, "tmux_manager") as tmux,
+        patch.object(periodic_tasks, "thread_router", router),
+        patch.object(periodic_tasks, "config") as config,
+        patch.object(periodic_tasks, "prime_topic_status_diff"),
+        patch("ccgram.handlers.cleanup.clear_topic_state", new_callable=AsyncMock),
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.topic_name_from_session_name.return_value = "foo"
+        tmux.capture_pane = AsyncMock(return_value=None)
+        tmux.set_session_topic = AsyncMock(return_value=True)
+        config.tmux_session_prefix = "cc_"
+        config.allowed_users = {1}
+        await periodic_tasks.reconcile(client)
+
+    client.create_forum_topic.assert_awaited_once_with(-100, name="foo")
+    tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 99)
+    assert session.topic_ref == (-100, 99)
+    assert router.get_window_for_thread(1, 42) is None
+    assert router.get_window_for_thread(1, 99) == "cc_foo:@1"
+
+
+async def test_send_with_reconcile_retries_only_after_route_changes() -> None:
     client = AsyncMock()
     sender = AsyncMock(
         side_effect=[
             (False, "Window not found (may have been closed)"),
-            (True, "Sent to foo"),
+            (True, "Sent"),
         ]
     )
+    router = MagicMock()
+    router.get_window_for_thread.return_value = "cc_bar:@2"
 
     with (
         patch.object(periodic_tasks, "reconcile", new_callable=AsyncMock) as reconcile,
-        patch.object(periodic_tasks, "tmux_manager") as tmux,
-        patch.object(periodic_tasks, "thread_router") as router,
+        patch.object(periodic_tasks, "thread_router", router),
     ):
-        tmux.list_windows = AsyncMock(return_value=[])
-        router.get_window_for_thread.return_value = "cc_foo:@2"
         result = await periodic_tasks.send_with_reconcile(
-            client,
-            1,
-            42,
-            "cc_foo:@1",
-            "hello",
-            send_fn=sender,
+            client, 1, 42, "cc_foo:@1", "hello", send_fn=sender
         )
 
-    assert result == (True, "Sent to foo")
+    assert result == (True, "Sent")
     reconcile.assert_awaited_once()
     assert sender.await_count == 2
