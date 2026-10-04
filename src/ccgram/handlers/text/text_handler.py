@@ -182,15 +182,12 @@ async def _create_shell_session_for_directory(
         f"Session `{created_wname}` created at `{selected_path}`.\nBound to this topic. Send commands here.",
     )
     if pending_text and bot is not None:
-        # Lazy: break text_handler <-> shell_commands circular dependency
-        from ..shell.shell_commands import handle_shell_message
-
-        await handle_shell_message(
-            PTBTelegramClient(bot),
+        await _forward_message(
+            created_wid,
             user_id,
             thread_id,
-            created_wid,
             pending_text,
+            PTBTelegramClient(bot),
             message,
         )
 
