@@ -636,10 +636,13 @@ async def handle_text_message(
 
     text = message.text
 
-    # Store group chat_id for forum topic message routing
+    # Learn the forum chat from the normal incoming-message path.  This is
+    # also the source used by reconciliation when no chat ID is configured.
     chat = message.chat
-    if chat.type in ("group", "supergroup") and thread_id is not None:
-        thread_router.set_group_chat_id(user.id, thread_id, chat.id)
+    if chat and chat.type in ("group", "supergroup"):
+        thread_router.remember_forum_chat_id(user.id, chat.id)
+        if thread_id is not None:
+            thread_router.set_group_chat_id(user.id, thread_id, chat.id)
 
     # Rename captures (pane or session)
     if await _handle_rename_captures(
