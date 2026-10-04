@@ -19,6 +19,7 @@ from pathlib import Path
 
 import structlog
 
+from ...config import config
 from ...utils import assert_sendable
 
 logger = structlog.get_logger()
@@ -57,9 +58,6 @@ _EXCLUDED_DIRS: frozenset[str] = frozenset(
         ".gradle",
     }
 )
-
-_TELEGRAM_FILE_LIMIT = 50 * 1024 * 1024  # 50 MB
-
 
 def is_path_contained(path: Path, root: Path) -> bool:
     """Return True if *path* resolves to a location within *root*."""
@@ -203,9 +201,9 @@ def _check_size_and_type(path: Path) -> str | None:
         return "File not accessible"
     if not stat.S_ISREG(st.st_mode):
         return "Not a regular file"
-    if st.st_size > _TELEGRAM_FILE_LIMIT:
+    if st.st_size > config.file_size_limit_mb * 1024 * 1024:
         size_mb = st.st_size / (1024 * 1024)
-        return f"File too large: {size_mb:.0f} MB (limit: 50 MB)"
+        return f"File too large: {size_mb:.0f} MB (limit: {config.file_size_limit_mb} MB)"
     return None
 
 

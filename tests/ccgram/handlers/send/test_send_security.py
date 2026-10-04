@@ -317,7 +317,7 @@ path = ".*private.*"
         import stat as stat_module
 
         mock_stat = MagicMock()
-        mock_stat.st_size = 60 * 1024 * 1024
+        mock_stat.st_size = 2 * 1024 * 1024 * 1024
         mock_stat.st_mode = stat_module.S_IFREG | 0o644
         mock_result = MagicMock()
         mock_result.returncode = 1

@@ -209,6 +209,9 @@ class Config:
     def _init_send(self) -> None:
         self.send_search_depth: int = _parse_int_env("CCGRAM_SEND_SEARCH_DEPTH", 5)
         self.send_max_results: int = _parse_int_env("CCGRAM_SEND_MAX_RESULTS", 50)
+        self.file_size_limit_mb: int = max(
+            1, _parse_int_env("CCGRAM_FILE_SIZE_LIMIT_MB", 1024)
+        )
 
     def _init_lifecycle(self) -> None:
         self.autoclose_done_minutes: int = int(

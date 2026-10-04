@@ -39,9 +39,6 @@ _UPLOAD_DIR = ".ccgram-uploads"
 # Max filename length after sanitization
 _MAX_FILENAME_LEN = 200
 
-# Max file size in bytes (50 MB — Telegram Bot API limit for getFile)
-_MAX_FILE_SIZE = 50 * 1024 * 1024
-
 # Pattern for allowed filename characters
 _SAFE_FILENAME_RE = re.compile(r"[^a-zA-Z0-9._-]")
 
@@ -50,6 +47,10 @@ _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 # Max caption length forwarded to Claude
 _MAX_CAPTION_LEN = 500
+
+
+def _max_file_size_bytes() -> int:
+    return config.file_size_limit_mb * 1024 * 1024
 
 
 def _sanitize_filename(name: str) -> str:
@@ -145,11 +146,12 @@ async def _download_and_save(
     replied to the user).
     """
     # Pre-download size check
-    if file_size is not None and file_size > _MAX_FILE_SIZE:
+    max_file_size = _max_file_size_bytes()
+    if file_size is not None and file_size > max_file_size:
         size_mb = file_size / (1024 * 1024)
         await safe_reply(
             message,
-            f"\u274c {size_label} too large ({size_mb:.1f} MB). Maximum {_MAX_FILE_SIZE // (1024 * 1024)} MB.",
+            f"\u274c {size_label} too large ({size_mb:.1f} MB). Maximum {config.file_size_limit_mb} MB.",
         )
         return None
 
@@ -171,12 +173,12 @@ async def _download_and_save(
         await file.download_to_drive(str(dest))
         # Post-download size check (file_size can be None from Telegram API)
         actual_size = dest.stat().st_size
-        if actual_size > _MAX_FILE_SIZE:
+        if actual_size > max_file_size:
             dest.unlink(missing_ok=True)
             size_mb = actual_size / (1024 * 1024)
             await safe_reply(
                 message,
-                f"\u274c {size_label} too large ({size_mb:.1f} MB). Maximum {_MAX_FILE_SIZE // (1024 * 1024)} MB.",
+                f"\u274c {size_label} too large ({size_mb:.1f} MB). Maximum {config.file_size_limit_mb} MB.",
             )
             return None
     except (OSError, TelegramError) as e:

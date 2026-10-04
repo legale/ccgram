@@ -134,6 +134,7 @@ Open your Telegram group, create a new topic, send a message — the directory b
 | `CCGRAM_LIVE_VIEW_TIMEOUT`     | `300`                          | Live view auto-stop timeout in seconds                                                                      |
 | `CCGRAM_SEND_SEARCH_DEPTH`     | `5`                            | Max directory depth for `/send` file search                                                                 |
 | `CCGRAM_SEND_MAX_RESULTS`      | `50`                           | Max file results returned by `/send` search                                                                 |
+| `CCGRAM_FILE_SIZE_LIMIT_MB`    | `1024`                         | Maximum file size for Telegram uploads and `//send`, in MB                                                  |
 | `AUTOCLOSE_DONE_MINUTES`       | `30`                           | Auto-close completed topics after N minutes                                                                 |
 | `AUTOCLOSE_DEAD_MINUTES`       | `10`                           | Auto-close dead sessions after N minutes                                                                    |
 | `CCGRAM_PANE_LIFECYCLE_NOTIFY` | `false`                        | Default for per-window pane create/close notifications                                                      |

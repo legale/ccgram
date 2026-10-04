@@ -39,6 +39,13 @@ class TestConfigValid:
         cfg = Config()
         assert cfg.session_working_directory == "/tmp/work"
 
+    def test_file_size_limit_defaults_to_1gb(self):
+        assert Config().file_size_limit_mb == 1024
+
+    def test_custom_file_size_limit(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_FILE_SIZE_LIMIT_MB", "2048")
+        assert Config().file_size_limit_mb == 2048
+
     def test_is_user_allowed_true(self):
         cfg = Config()
         assert cfg.is_user_allowed(12345) is True
