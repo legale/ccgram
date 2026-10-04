@@ -94,7 +94,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         mode_tag = " [YOLO]" if view and view.approval_mode == "yolo" else ""
         line = f"{status} {display_name}{provider_tag}{mode_tag}"
         if view and view.cwd:
-            line += f" — {view.cwd}"
+            line += f" {view.cwd}"
         lines.append(line)
 
         if alive:
@@ -122,7 +122,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         seen_unbound.add(w.window_id)
         line = f"o {w.window_name}"
         if w.cwd:
-            line += f" — {w.cwd}"
+            line += f" {w.cwd}"
         lines.append(line)
 
     content = "\n".join(lines)
