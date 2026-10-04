@@ -17,6 +17,7 @@ from ccgram.handlers.polling.window_tick import (
     _handle_dead_window_notification,
     _maybe_check_passive_shell,
     _scan_window_panes,
+    _apply_active_transition,
     _update_status,
     decide_tick,
     tick_window,
@@ -212,6 +213,30 @@ class TestUpdateStatusTopicDiff:
 
 
 class TestUpdateStatusActiveLine:
+    async def test_idle_active_transition_does_not_send_typing(self):
+        bot = AsyncMock(spec=Bot)
+        decision = TickDecision(transition="active", send_status=False)
+
+        with (
+            patch(
+                "ccgram.handlers.polling.window_tick.apply._send_typing_throttled",
+                new_callable=AsyncMock,
+            ) as mock_typing,
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
+                new_callable=AsyncMock,
+            ),
+            patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
+        ):
+            mock_tr.resolve_chat_id.return_value = 42
+            mock_tr.get_display_name.return_value = "agy"
+
+            await _apply_active_transition(
+                bot, 1, "cc_agy:@1", 100, decision, "all"
+            )
+
+        mock_typing.assert_not_awaited()
+
     async def test_active_status_enqueues_and_sets_emoji(self):
         bot = AsyncMock(spec=Bot)
         w = _make_window()
