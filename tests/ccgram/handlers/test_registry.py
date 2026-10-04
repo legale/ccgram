@@ -5,8 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from telegram import Chat, Message, Update
-from datetime import datetime
+from telegram import Message, Update
 from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,

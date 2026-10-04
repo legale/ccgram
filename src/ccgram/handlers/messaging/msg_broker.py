@@ -215,6 +215,8 @@ async def broker_delivery_cycle(
     # path stays free of provider / window_resolver weight.
     # Lazy: providers / window_query proxies wired by SessionManager constructor
     from ...providers import get_provider_for_window
+
+    # Lazy: mailbox is only needed while delivering broker messages.
     from ...mailbox import sanitize_dir_name
 
     # Lazy: providers / window_query proxies wired by SessionManager constructor

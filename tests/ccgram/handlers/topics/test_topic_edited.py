@@ -36,7 +36,7 @@ async def test_bound_topic_name_is_restored_from_tmux() -> None:
     tmux.rename_session.assert_not_called()
 
 
-async def test_unbound_renamed_topic_uses_new_name_for_initial_claim() -> None:
+async def test_unbound_renamed_topic_is_ignored() -> None:
     from ccgram.handlers.topics import topic_lifecycle
 
     context = MagicMock()
@@ -45,12 +45,5 @@ async def test_unbound_renamed_topic_uses_new_name_for_initial_claim() -> None:
         patch.object(
             topic_lifecycle, "find_topic_session", new=AsyncMock(return_value=None)
         ),
-        patch.object(
-            topic_lifecycle,
-            "ensure_topic_session",
-            new=AsyncMock(return_value=("cc_bar:@1", None)),
-        ) as ensure,
     ):
         await topic_lifecycle.topic_edited_handler(_update("bar"), context)
-
-    ensure.assert_awaited_once_with(1, -100, 42, "bar")

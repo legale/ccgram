@@ -37,6 +37,7 @@ async def _handle_unbound_topic(
     if thread_router.get_window_for_thread(user_id, thread_id) is not None:
         return False
 
+    # Lazy: topic binding imports the topic lifecycle graph.
     from ..topics.topic_binding import bind_runtime, find_topic_session
 
     chat = message.chat
@@ -66,6 +67,7 @@ async def _handle_all_topic(
     if chat is None:
         return True
 
+    # Lazy: topic creation is needed only for messages in the all topic.
     from ..topics.topic_binding import create_from_all
 
     _window_id, error = await create_from_all(user_id, chat.id, text, client)
@@ -87,6 +89,7 @@ async def _forward_message(
     """Forward one text message to the bound tmux window."""
     await message.chat.send_action(ChatAction.TYPING)  # type: ignore[union-attr]
 
+    # Lazy: periodic tasks imports the polling and messaging orchestration.
     from ..polling.periodic_tasks import send_with_reconcile
 
     success, error = await send_with_reconcile(
@@ -153,6 +156,7 @@ async def handle_text_message(
         else None
     )
     if window_id and message.chat is not None and thread_id is not None:
+        # Lazy: status diff state is needed only for Telegram activity updates.
         from ..status.topic_status_diff import mark_topic_status_activity
 
         mark_topic_status_activity(

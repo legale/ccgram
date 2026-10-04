@@ -183,31 +183,13 @@ async def post_spawn_approval_keyboard(
 
 
 async def _create_topic_for_spawn(
-    client: TelegramClient,
-    window_id: str,
-    window_name: str,
-    req: SpawnRequest,
+    _client: TelegramClient,
+    _window_id: str,
+    _window_name: str,
+    _req: SpawnRequest,
 ) -> None:
-    # Lazy: topic_orchestration participates in the sync_command ↔
-    # topic_orchestration cycle (see topic_orchestration.py for context).
-    # Lazy: msg_spawn ↔ topic_orchestration cycle through topic creation
-    from ..topics.topic_orchestration import collect_target_chats, create_topic_in_chat
-
-    target_chats = collect_target_chats(window_id)
-    for chat_id in target_chats:
-        await create_topic_in_chat(client, chat_id, window_id, window_name)
-
-    topic_info = resolve_topic(req.requester_window)
-    if topic_info:
-        _, thread_id, chat_id, _ = topic_info
-        text = f"Spawned {window_name} ({window_id}) for: {req.prompt}"
-        await rate_limit_send_message(
-            client,
-            chat_id,
-            text,
-            message_thread_id=thread_id,
-            disable_notification=True,
-        )
+    """Keep the spawn hook while automatic topic creation is disabled."""
+    return None
 
 
 # ── Callback handlers for spawn approval buttons ───────��─────────────────

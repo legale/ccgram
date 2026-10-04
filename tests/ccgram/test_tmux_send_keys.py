@@ -49,8 +49,9 @@ class TestCreateWindowIds:
         window.active_pane = pane
         session = MagicMock()
         session.session_name = "cc_topic"
-        session.new_window.return_value = window
-        tmux.get_or_create_session = MagicMock(return_value=session)
+        tmux.get_session = MagicMock(return_value=None)
+        tmux.server.new_session = MagicMock(return_value=session)
+        session.windows = [window]
 
         ok, _msg, _name, window_id = await tmux.create_window(
             str(tmp_path),

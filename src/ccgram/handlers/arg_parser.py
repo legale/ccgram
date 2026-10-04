@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-class IncompleteCommand(ValueError):
+class IncompleteCommand(ValueError):  # noqa: N818 - public parser exception name
     """Raised when next_arg() is called with no arguments left."""
 
 

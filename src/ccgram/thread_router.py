@@ -181,7 +181,7 @@ class ThreadRouter:
             for ub in self.thread_bindings.values()
             for wid in ub.values()
         )
-        if not still_bound and not self._has_window_state(window_id):
+        if not still_bound and not self._has_window_state(window_id):  # noqa: SIM102
             if self.window_display_names.pop(window_id, None) is not None:
                 self._schedule_save()
 

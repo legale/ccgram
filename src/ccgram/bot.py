@@ -23,7 +23,6 @@ from telegram.ext import (
     AIORateLimiter,
     Application,
     ContextTypes,
-    MessageHandler,
     filters,
 )
 

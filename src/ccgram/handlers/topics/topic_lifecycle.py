@@ -126,6 +126,7 @@ async def topic_closed_handler(
     if not user or not config.is_user_allowed(user.id) or not chat:
         return
 
+    # Lazy: callback helpers are needed only while handling topic events.
     from ..callback_helpers import get_thread_id
 
     thread_id = get_thread_id(update)
@@ -156,7 +157,10 @@ async def topic_created_handler(
     if not created or not created.name:
         return
 
+    # Lazy: callback helpers are needed only while handling topic events.
     from ..callback_helpers import get_thread_id
+
+    # Lazy: topic name synchronization is needed only on topic creation.
     from ..status.topic_emoji import strip_emoji_prefix, sync_topic_name
 
     thread_id = get_thread_id(update)
@@ -192,7 +196,10 @@ async def topic_edited_handler(
     if not message.forum_topic_edited or not message.forum_topic_edited.name:
         return
 
+    # Lazy: callback helpers are needed only while handling topic events.
     from ..callback_helpers import get_thread_id
+
+    # Lazy: topic name cache is needed only on topic edits.
     from ..status.topic_emoji import update_stored_topic_name
 
     thread_id = get_thread_id(update)

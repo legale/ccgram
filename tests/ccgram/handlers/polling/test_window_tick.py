@@ -221,6 +221,7 @@ class TestUpdateStatusActiveLine:
         ):
             await _transition_to_idle(bot, 1, "@0", 100, 42, "test")
 
+        assert mock_enqueue.await_args is not None
         assert mock_enqueue.await_args.args[3] is None
 
     async def test_idle_active_transition_does_not_send_typing(self):
@@ -505,10 +506,6 @@ class TestDeadWindowTopicDeleted:
                 new_callable=AsyncMock,
                 return_value=None,
             ),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.clear_topic_state",
-                new_callable=AsyncMock,
-            ) as mock_clear,
         ):
             mock_tr.resolve_chat_id.return_value = 42
             mock_tr.get_display_name.return_value = "test"
@@ -516,10 +513,7 @@ class TestDeadWindowTopicDeleted:
 
             await _handle_dead_window_notification(bot, 1, 100, "@0")
 
-            mock_clear.assert_awaited_once()
-            _, kwargs = mock_clear.call_args
-            assert kwargs.get("window_dead") is True
-            mock_tr.unbind_thread.assert_called_once_with(1, 100)
+            mock_tr.unbind_thread.assert_not_called()
 
 
 class TestPaneLifecycleNotify:

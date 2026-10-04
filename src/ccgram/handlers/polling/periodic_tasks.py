@@ -50,6 +50,7 @@ async def _clear_runtime_topic(
     *,
     window_dead: bool,
 ) -> None:
+    # Lazy: cleanup imports polling state and would create an import cycle here.
     from ..cleanup import clear_topic_state
 
     for user_id in list(_topic_users(chat_id, thread_id)):
@@ -137,7 +138,7 @@ async def _replace_missing_topic(
 
     new_thread_id = topic.message_thread_id
     if not await tmux_manager.set_session_topic(session_name, chat_id, new_thread_id):
-        try:
+        try:  # noqa: SIM105 - cleanup is best effort
             await client.delete_forum_topic(chat_id, new_thread_id)
         except TelegramError:
             pass
@@ -394,7 +395,8 @@ async def run_periodic_tasks(
 
 
 async def run_lifecycle_tasks(
-    client: TelegramClient, all_windows: list["TmuxWindow"]
+    client: TelegramClient,
+    all_windows: list["TmuxWindow"],  # noqa: ARG001 - lifecycle API
 ) -> None:
     """Run per-tick topic lifecycle tasks."""
     await check_autoclose_timers(client)

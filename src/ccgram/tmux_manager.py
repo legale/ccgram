@@ -302,7 +302,9 @@ class TmuxManager:
                 parts = line.split("\t", 2)
                 session_name = parts[0].strip()
                 cwd = parts[1] if len(parts) > 1 else ""
-                topic_ref = self._parse_topic_ref(parts[2] if len(parts) > 2 else "")
+                topic_ref = self._parse_topic_ref(  # noqa: PLR2004
+                    parts[2] if len(parts) > 2 else ""  # noqa: PLR2004
+                )
                 session_name = session_name.strip()
                 if not session_name:
                     continue

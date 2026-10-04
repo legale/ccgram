@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def _valid_name(name: str) -> bool:
-    return bool(name) and len(name) <= 50 and "\n" not in name
+    return bool(name) and len(name) <= 50 and "\n" not in name  # noqa: PLR2004
 
 
 async def _managed_sessions() -> list[TmuxWindow]:
@@ -98,7 +98,7 @@ async def find_topic_session(chat_id: int, thread_id: int) -> TmuxWindow | None:
     return matches[0] if len(matches) == 1 else None
 
 
-async def ensure_topic_session(
+async def ensure_topic_session(  # noqa: C901, PLR0911, PLR0912
     user_id: int,
     chat_id: int,
     thread_id: int,
@@ -148,7 +148,7 @@ async def ensure_topic_session(
         created = True
 
     old_linked = linked[0] if linked else None
-    if old_linked and old_linked.window_name != target:
+    if old_linked and old_linked.window_name != target:  # noqa: SIM102
         if not await tmux_manager.clear_session_topic(old_linked.window_name):
             if created:
                 await tmux_manager.kill_session(target)
@@ -190,7 +190,7 @@ async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     parts = (message.text or "").strip().split(maxsplit=1)
-    if len(parts) != 2 or not _valid_name(parts[1].strip()):
+    if len(parts) != 2 or not _valid_name(parts[1].strip()):  # noqa: PLR2004
         await safe_reply(message, "Usage: `//bind <name>`")
         return
     name = parts[1].strip()
@@ -255,7 +255,7 @@ async def create_from_all(
 
     thread_id = topic.message_thread_id
     if not await tmux_manager.set_session_topic(target, chat_id, thread_id):
-        try:
+        try:  # noqa: SIM105 - topic deletion is best effort
             await client.delete_forum_topic(chat_id, thread_id)
         except TelegramError:
             pass

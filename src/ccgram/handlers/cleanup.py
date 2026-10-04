@@ -38,7 +38,7 @@ async def clear_topic_state(
     user_id: int,
     thread_id: int,
     client: TelegramClient | None = None,
-    user_data: dict[str, Any] | None = None,
+    user_data: dict[str, Any] | None = None,  # noqa: ARG001 - callback API
     window_id: str | None = None,
     *,
     window_dead: bool = True,
@@ -107,7 +107,9 @@ async def clear_topic_state(
             mb.clear_inbox(qualified_id)
 
 
-async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def detach_command(  # noqa: C901 - Telegram rollback flow is intentionally explicit
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """Close a topic and preserve its session outside the managed prefix."""
     user = update.effective_user
     if not user or not config.is_user_allowed(user.id):
@@ -132,6 +134,7 @@ async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     client = PTBTelegramClient(context.bot)
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
 
+    # Lazy: topic binding imports the topic lifecycle graph.
     from .topics.topic_binding import find_topic_session
 
     session = await find_topic_session(chat_id, thread_id)
@@ -154,7 +157,7 @@ async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if not await tmux_manager.rename_session(session_name, detached_name):
-        try:
+        try:  # noqa: SIM105 - rollback failure is intentionally ignored
             await client.reopen_forum_topic(
                 chat_id=chat_id, message_thread_id=thread_id
             )
@@ -167,7 +170,7 @@ async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     if not await tmux_manager.clear_session_topic(detached_name):
         await tmux_manager.rename_session(detached_name, session_name)
-        try:
+        try:  # noqa: SIM105 - rollback failure is intentionally ignored
             await client.reopen_forum_topic(
                 chat_id=chat_id, message_thread_id=thread_id
             )

@@ -43,6 +43,7 @@ def _capability_summary() -> tuple[str, str]:
 
 def status_main() -> None:
     """Entry point for `ccgram status`."""
+    # Lazy: version metadata is needed only for the CLI status command.
     from . import __version__
 
     provider_name, cap_flags = _capability_summary()

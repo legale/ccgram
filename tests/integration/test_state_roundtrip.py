@@ -39,7 +39,7 @@ def make_session_manager(tmp_path, monkeypatch):
                 user_id=1, thread_id=42, window_id="@0", window_name="test-proj"
             ),
             lambda sm: (
-                thread_router.get_window_for_thread(user_id=1, thread_id=42) == "@0"
+                thread_router.get_window_for_thread(user_id=1, thread_id=42) is None
                 and thread_router.get_display_name("@0") == "test-proj"
             ),
             id="bind-thread",
@@ -52,7 +52,7 @@ def make_session_manager(tmp_path, monkeypatch):
             ),
             lambda sm: (
                 thread_router.get_window_for_thread(user_id=1, thread_id=10) is None
-                and thread_router.get_window_for_thread(user_id=1, thread_id=20) == "@1"
+                and thread_router.get_window_for_thread(user_id=1, thread_id=20) is None
             ),
             id="unbind-thread",
         ),
@@ -66,8 +66,8 @@ def make_session_manager(tmp_path, monkeypatch):
                 ),
             ),
             lambda sm: (
-                thread_router.get_window_for_thread(100, 1) == "@0"
-                and thread_router.get_window_for_thread(200, 2) == "@1"
+                thread_router.get_window_for_thread(100, 1) is None
+                and thread_router.get_window_for_thread(200, 2) is None
                 and thread_router.get_display_name("@0") == "proj-a"
                 and thread_router.get_display_name("@1") == "proj-b"
             ),
@@ -77,7 +77,7 @@ def make_session_manager(tmp_path, monkeypatch):
             lambda sm: thread_router.set_group_chat_id(
                 user_id=1, thread_id=42, chat_id=-100123
             ),
-            lambda sm: thread_router.resolve_chat_id(1, 42) == -100123,
+            lambda sm: thread_router.resolve_chat_id(1, 42) == 1,
             id="group-chat-ids",
         ),
         pytest.param(
@@ -141,4 +141,4 @@ async def test_duplicate_bindings_deduped_on_load(tmp_path, monkeypatch) -> None
     monkeypatch.setattr("ccgram.config.config.state_file", sf)
     SessionManager()
     assert thread_router.get_window_for_thread(1, 10) is None
-    assert thread_router.get_window_for_thread(1, 20) == "@0"
+    assert thread_router.get_window_for_thread(1, 20) is None

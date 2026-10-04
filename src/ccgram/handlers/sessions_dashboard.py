@@ -362,6 +362,7 @@ async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await query.answer("Refreshed")
     else:
         if data.startswith(CB_SESSIONS_SCREENSHOT):
+            # Lazy: screenshot handling is needed only for screenshot callbacks.
             from .live.screenshot_callbacks import handle_screenshot_callback
 
             window_id = data[len(CB_SESSIONS_SCREENSHOT) :]

@@ -105,7 +105,7 @@ class TestThreadRouterRequiresCallbacks:
             schedule_save=lambda: calls.append(1),
             has_window_state=lambda _wid: False,
         )
-        router.bind_thread(100, 1, "@1")
+        router.bind_thread(100, 1, "@1", window_name="proj")
         assert calls == [1]
 
     def test_constructor_wires_has_window_state(self) -> None:
@@ -180,7 +180,7 @@ class TestSessionManagerWiresAllSingletons:
         monkeypatch.setattr(
             sm._persistence, "schedule_save", lambda: saves.append(None)
         )
-        sm._thread_router.bind_thread(100, 1, "@1")
+        sm._thread_router.bind_thread(100, 1, "@1", window_name="proj")
         assert saves, "ThreadRouter.bind_thread must trigger a debounced save"
         del sm
 
