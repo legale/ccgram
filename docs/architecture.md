@@ -4,7 +4,7 @@ Generated from code state 2026-05-02 (post Round 5 modularity decouple).
 
 ## System Overview
 
-ccgram maps each Telegram Forum topic to one tmux window running one agent CLI (Claude Code, Codex, Gemini, Pi, or Shell). All internal routing is keyed by tmux window ID (`@0`, `@12`).
+ccgram maps each Telegram Forum topic to one tmux window running one agent CLI (Claude, Codex, Gemini, Pi, or Shell). All internal routing is keyed by tmux window ID (`@0`, `@12`).
 
 ```mermaid
 graph TB
@@ -16,7 +16,7 @@ graph TB
     Handlers["handlers/<br>14 feature subpackages"]
     TmuxMgr["tmux_manager.py <br> libtmux + subprocess"]
     Windows["tmux windows <br> (Claude, Codex, Gemini, Pi, Shell)"]
-    Hook["hook.py<br>Claude Code hooks"]
+    Hook["hook.py<br>agent hooks"]
     Monitor["session_monitor.py<br>poll loop"]
     State["State files<br>~/.ccgram/"]
 
@@ -241,7 +241,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant Claude as Claude Code
+    participant Claude as agent
     participant Hook as hook.py
     participant EventFiles as events.jsonl<br>session_map.json
     participant EventReader as event_reader.py

@@ -348,7 +348,7 @@ resolve → containment → hidden → secret → gitleaks → gitignore → ass
 
 - Test `/send` with real Telegram bot: all three modes + toolbar button
 - Test toolbar per provider: spawn Claude/Codex/Gemini/Shell topics, verify correct buttons
-- Test Shift+Tab actually cycles Claude Code permission mode
+- Test Shift+Tab actually cycles agent permission mode
 - Test Ctrl+Y actually toggles Gemini YOLO
 - Test security: dotfiles, `.env`, `*.pem`, path traversal, symlinks
 - Test `.gitleaks.toml` with path rules

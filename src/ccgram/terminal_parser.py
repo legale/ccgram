@@ -1,4 +1,4 @@
-"""Terminal output parser — detects Claude Code UI elements in pane text.
+"""Terminal output parser — detects agent UI elements in pane text.
 
 Parses captured tmux pane content to detect:
   - Interactive UIs (AskUserQuestion, ExitPlanMode, Permission Prompt,
@@ -6,8 +6,8 @@ Parses captured tmux pane content to detect:
     delimiters.
   - Status line (spinner characters + working text) by scanning from bottom up.
 
-All Claude Code text patterns live here. To support a new UI type or
-a changed Claude Code version, edit UI_PATTERNS / STATUS_SPINNERS.
+All agent text patterns live here. To support a new UI type or
+a changed agent version, edit UI_PATTERNS / STATUS_SPINNERS.
 
 Key functions: extract_interactive_content(), parse_status_line(),
 strip_pane_chrome(), extract_bash_output().
@@ -39,7 +39,7 @@ class UIPattern:
     marks the end.  Both boundary lines are included in the extracted content.
 
     ``top`` and ``bottom`` are tuples of compiled regexes — any single match
-    is sufficient.  This accommodates wording changes across Claude Code
+    is sufficient.  This accommodates wording changes across the agent
     versions (e.g. a reworded confirmation prompt).
 
     When ``context_above`` > 0, the extracted block includes up to that many
@@ -152,7 +152,7 @@ _MIN_SEPARATOR_WIDTH = 20
 
 # Maximum length of a chrome line (prompt, status bar) between separators.
 # Lines longer than this are considered actual output content.
-# Set high enough to accommodate customized Claude Code status bars which
+# Set high enough to accommodate customized agent status bars which
 # can span the full terminal width (200+ columns).
 _MAX_CHROME_LINE_LENGTH = 250
 
@@ -215,7 +215,7 @@ def _try_extract(lines: list[str], pattern: UIPattern) -> InteractiveUIContent |
 
 # ── Bottom-up fallback ───────────────────────────────────────────────────
 
-# Action hints that reliably mark the bottom of any Claude Code interactive UI.
+# Action hints that reliably mark the bottom of any agent interactive UI.
 _ACTION_HINT_RE = re.compile(
     r"(?i)^\s*("
     r"Esc to (cancel|exit)"
@@ -316,7 +316,7 @@ def extract_interactive_content(
     ``pane_text`` can be a raw string (split on newlines) or a pre-split
     list of lines (e.g. from ScreenBuffer.display).
 
-    ``patterns`` defaults to ``UI_PATTERNS`` (Claude Code).  Providers with
+    ``patterns`` defaults to ``UI_PATTERNS`` (the default agent).  Providers with
     different terminal UIs pass their own pattern list.
     """
     if not pane_text:
@@ -394,7 +394,7 @@ def parse_status_block_from_screen(screen: ScreenBuffer) -> str | None:
 
 # ── Status line parsing ─────────────────────────────────────────────────
 
-# Spinner characters Claude Code uses in its status line (fast-path lookup)
+# Spinner characters the default agent uses in its status line (fast-path lookup)
 STATUS_SPINNERS = frozenset(["·", "✻", "✽", "✶", "✳", "✢"])
 
 # Box-drawing range U+2500–U+257F and other known non-spinner symbols
@@ -439,7 +439,7 @@ def is_likely_spinner(char: str) -> bool:
 
 
 def parse_status_line(pane_text: str, *, pane_rows: int | None = None) -> str | None:
-    """Extract the Claude Code status line from terminal output.
+    """Extract the agent status line from terminal output.
 
     The status line sits above a chrome separator (a line of ``─`` characters).
     Scans from the bottom up for separators, then checks the lines immediately
@@ -611,7 +611,7 @@ def status_emoji_prefix(raw_status: str) -> str:
 
 
 def format_status_display(raw_status: str) -> str:
-    """Convert raw Claude Code status text to a short display label.
+    """Convert raw agent status text to a short display label.
 
     Matches the first word first (so "Writing tests" → "writing…", not "testing…"),
     then falls back to scanning the full string. Returns "working…" if nothing matches.
@@ -630,7 +630,7 @@ def _is_separator(line: str) -> bool:
 
 
 def find_chrome_boundary(lines: list[str]) -> int | None:
-    """Find the topmost separator row of Claude Code's bottom chrome.
+    """Find the topmost separator row of the agent's bottom chrome.
 
     Scans from the bottom upward (limited to last 20 lines), looking for the
     first separator that has only chrome content below it (more separators,
@@ -682,7 +682,7 @@ def find_chrome_boundary(lines: list[str]) -> int | None:
 
 
 def strip_pane_chrome(lines: list[str]) -> list[str]:
-    """Strip Claude Code's bottom chrome (prompt area + status bar).
+    """Strip the agent's bottom chrome (prompt area + status bar).
 
     The bottom of the pane looks like::
 

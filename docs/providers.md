@@ -6,7 +6,7 @@ CCGram supports multiple agent CLI backends. Each Telegram topic can use a diffe
 
 | Provider    | CLI Command | Hook Events | Resume | Continue | Transcript | Status Detection                                          |
 | ----------- | ----------- | ----------- | ------ | -------- | ---------- | --------------------------------------------------------- |
-| Claude Code | `claude`    | Yes         | Yes    | Yes      | JSONL      | Hook events + pyte VT100 + spinner                        |
+| Claude | `claude`    | Yes         | Yes    | Yes      | JSONL      | Hook events + pyte VT100 + spinner                        |
 | Codex CLI   | `codex`     | No          | Yes    | Yes      | JSONL      | pyte VT100 interactive UI + transcript activity heuristic |
 | Gemini CLI  | `gemini`    | No          | Yes    | Yes      | JSONL      | Pane title + interactive UI + `/status` snapshot          |
 | Pi          | `pi`        | No          | Yes    | Yes      | JSONL (v3) | Transcript activity heuristic                             |
@@ -67,9 +67,9 @@ Each provider exposes its own slash commands to the Telegram menu. Examples:
 
 ---
 
-## Claude Code
+## Claude
 
-Claude Code has the richest integration — hook events (SessionStart, Notification, Stop, StopFailure, SessionEnd, SubagentStart, SubagentStop, TeammateIdle, TaskCompleted) provide instant session tracking, interactive UI detection, done/idle detection, API error alerting, session lifecycle cleanup, subagent activity monitoring, and agent team notifications.
+Claude has the richest integration — hook events (SessionStart, Notification, Stop, StopFailure, SessionEnd, SubagentStart, SubagentStop, TeammateIdle, TaskCompleted) provide instant session tracking, interactive UI detection, done/idle detection, API error alerting, session lifecycle cleanup, subagent activity monitoring, and agent team notifications.
 
 The bot also detects Remote Control mode (📡 topic badge + one-tap activation button) and uses a pyte VT100 screen buffer as fallback for terminal status parsing. Multi-pane windows (e.g. from agent teams) are automatically scanned for blocked panes and surfaced as inline keyboard alerts.
 

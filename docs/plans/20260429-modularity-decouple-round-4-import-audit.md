@@ -102,7 +102,7 @@ import get_foreground_args` inside `_is_interactive_shell`. Same
 ### B4. Hook subprocess script (2 sites — keep)
 
 `src/ccgram/hook.py:492,600` — `from .utils import ccgram_dir,
-atomic_write_json`. The hook module is invoked as a Claude Code
+atomic_write_json`. The hook module is invoked as an agent
 subprocess (`python -m ccgram.hook` style). Keeping these inside the
 write-event functions limits import cost on the (frequent, latency-
 sensitive) hook fast path. Keep.

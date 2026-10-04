@@ -166,7 +166,7 @@ BUILTIN_ACTIONS: dict[str, ToolbarAction] = {
             literal=True,
             read_state=True,
         ),
-        # Claude Code uses Meta+T (Alt+T) to toggle extended thinking.
+        # The default agent uses Meta+T (Alt+T) to toggle extended thinking.
         # Thinking has no persistent chrome indicator, so no read_state.
         _b("think", "Think", "Think", "key", "M-t"),
         _b("yolo", "YOLO", "YOLO", "key", "C-y", read_state=True),

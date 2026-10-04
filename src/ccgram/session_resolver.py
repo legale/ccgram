@@ -1,6 +1,6 @@
 """JSONL session resolution — window-to-session lookup and message history.
 
-Resolves tmux windows to Claude Code session files on disk, reading JSONL
+Resolves tmux windows to agent session files on disk, reading JSONL
 transcripts to extract session summaries and message history.
 
 Key class: SessionResolver (singleton instantiated as ``session_resolver``).
@@ -33,7 +33,7 @@ _CLAUDE_PROJECTS_PATH = Path.home() / ".claude" / "projects"
 
 @dataclass
 class ClaudeSession:
-    """Information about a Claude Code session."""
+    """Information about an agent session."""
 
     session_id: str
     summary: str

@@ -216,7 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Telegram notifications for inter-agent messaging
 - Add Mailbox.broadcast() method for filtered broadcast messaging
 - Add agent spawning with Telegram approval flow
-- Add messaging skill auto-installation for Claude Code agents
+- Add messaging skill auto-installation for Claude agents
 - Add window self-identification via CCGRAM_WINDOW_ID env var
 - Verify acceptance criteria and add deadlock prevention for --wait
 - Add inter-agent messaging documentation
@@ -675,7 +675,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0] - 2026-02-25
 
 ### Added
-- Expand hook system to 5 Claude Code event types
+- Expand hook system to 5 Claude event types
 
 ## [1.2.1] - 2026-02-25
 
@@ -785,7 +785,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.7] - 2026-02-19
 
 ### Fixed
-- Parse status line with Claude Code 4.6 two-separator layout
+- Parse status line with Claude 4.6 two-separator layout
 
 ## [0.3.6] - 2026-02-19
 
@@ -795,7 +795,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.5] - 2026-02-19
 
 ### Added
-- Show typing indicator while Claude Code is active
+- Show typing indicator while Claude is active
 
 ## [0.3.4] - 2026-02-19
 
@@ -1008,5 +1008,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Address code review findings
 - Address code review findings
 - Address code review findings
-
 

@@ -286,7 +286,7 @@ Note: using the queue (not direct edit) keeps `_status_msg_info` in sync with th
 
 **Manual verification:**
 
-- Start a Claude Code session via Telegram, run a multi-step task
+- Start an agent session via Telegram, run a multi-step task
 - Verify status text shows full context during execution
 - Verify completion shows task checklist + turn count
 - Verify LLM summary appears after ~1-2s (when configured)

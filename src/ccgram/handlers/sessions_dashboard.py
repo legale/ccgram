@@ -188,7 +188,7 @@ async def handle_sessions_kill(
     )
     await safe_edit(
         query,
-        f"Kill session '{display}'?\n\nThis will terminate the Claude Code process.",
+        f"Kill session '{display}'?",
         reply_markup=keyboard,
     )
 

@@ -1,4 +1,4 @@
-"""Claude Code session management — the core state hub.
+"""Agent session management — the core state hub.
 
 Manages the key mappings:
   Window→Session (window_states): which Claude session_id a window holds (keyed by window_id).
@@ -107,7 +107,7 @@ def _migrate_mailbox_ids(
 
 @dataclass
 class SessionManager:
-    """Manages session state for Claude Code.
+    """Manages session state for the agent.
 
     All internal keys use window_id (e.g. '@0', '@12') for uniqueness.
     Display names (window_name) are stored separately for UI presentation.

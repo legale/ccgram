@@ -226,7 +226,7 @@ ccgram hook --install       # re-install hooks
 
 ## Acknowledgments
 
-Inspired by [ccbot](https://github.com/six-ddc/ccbot) by [six-ddc](https://github.com/six-ddc), the original Telegram-to-Claude-Code bridge. Thanks for the spark.
+Inspired by [ccbot](https://github.com/six-ddc) by [six-ddc](https://github.com/six-ddc), the original Telegram-to-agent bridge. Thanks for the spark.
 
 ## License
 

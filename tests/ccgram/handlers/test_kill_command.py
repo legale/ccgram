@@ -1,6 +1,6 @@
 """Tests for session kill via sessions dashboard (two-step confirmation)."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -40,7 +40,7 @@ class TestHandleSessionsKill:
             await handle_sessions_kill(query, 100, "@5")
             mock_edit.assert_called_once()
             text = mock_edit.call_args[0][1]
-            assert "Kill session" in text
+            assert text == "Kill session 'myproj'?"
             assert "myproj" in text
             keyboard = mock_edit.call_args.kwargs["reply_markup"]
             data = [

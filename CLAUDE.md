@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-ccgram (Command & Control Bot) — manage AI coding agents from Telegram via tmux. Each Telegram Forum topic is bound to one tmux window running one agent CLI instance (Claude Code, Codex, Gemini, Pi, or a plain shell).
+ccgram (Command & Control Bot) — manage AI coding agents from Telegram via tmux. Each Telegram Forum topic is bound to one tmux window running one agent CLI instance (Claude, Codex, Gemini, Pi, or a plain shell).
 
 Tech stack: Python, python-telegram-bot, tmux, uv.
 
@@ -22,7 +22,7 @@ make test-all                         # All tests except e2e
 ccgram status                          # Show running state (no token needed)
 ccgram doctor                          # Validate setup and diagnose issues
 ccgram doctor --fix                    # Auto-fix issues (install hook, kill orphans)
-ccgram hook --install                  # Auto-install Claude Code hooks (all supported event types)
+ccgram hook --install                  # Auto-install Claude hooks (all supported event types)
 ccgram hook --uninstall                # Remove hook from ~/.claude/settings.json
 ccgram hook --status                   # Check if hook is installed
 ccgram --version                       # Show version
@@ -54,7 +54,7 @@ Bot commands (in Telegram topics):
 - **Topic-only** — no backward-compat for non-topic mode. No `active_sessions`, no `/list`, no General topic routing.
 - **No message truncation** at parse layer — splitting only at send layer (`split_message`, 4096 char limit).
 - **Entity-based formatting** — use `safe_reply`/`safe_edit`/`safe_send` helpers which convert markdown to plain text + MessageEntity offsets (no parse errors possible, auto fallback to plain text). Internal queue/UI code calls bot API directly with its own fallback.
-- **Hook-based session tracking** — Claude Code hooks (SessionStart, Notification, Stop, StopFailure, SessionEnd, SubagentStart, SubagentStop, TeammateIdle, TaskCompleted) write to `session_map.json` and `events.jsonl`; monitor polls both to detect session changes, refresh Claude task lists in Telegram, and deliver instant event notifications. Missing hooks are detected at startup with an actionable warning.
+- **Hook-based session tracking** — Claude hooks (SessionStart, Notification, Stop, StopFailure, SessionEnd, SubagentStart, SubagentStop, TeammateIdle, TaskCompleted) write to `session_map.json` and `events.jsonl`; monitor polls both to detect session changes, refresh Claude task lists in Telegram, and deliver instant event notifications. Missing hooks are detected at startup with an actionable warning.
 - **Shell provider chat-first design** — text sent to a shell topic goes through the LLM for NL→command generation by default; prefix with `!` to send a raw command directly. When no LLM is configured, all text is forwarded as raw commands. Two prompt modes for output isolation and exit code detection: **wrap** (default) appends a small `⌘N⌘` marker after the user's existing prompt, preserving Tide/Starship/Powerlevel10k/etc.; **replace** replaces the entire prompt with `{prefix}:N❯` (legacy, opt-in via `CCGRAM_PROMPT_MODE=replace`). Two setup paths: **Auto-setup** (explicit shell topic creation via directory browser) configures the marker immediately without asking. **Ask flow** (external window bind or runtime provider switch to shell) shows an inline keyboard [Set up] / [Skip]; Skip is respected for the session (lazy recovery won't override). On provider switch away from shell and back, a fresh offer is shown. If marker is lost mid-session (`exec bash`, profile reload), it is lazily restored on the next command send (unless user chose Skip). Marker setup is session-scoped (PS1/PROMPT override) — never modifies shell config files.
 - **Message queue per user** — FIFO ordering, message merging (3800 char limit), tool_use/tool_result pairing.
 - **Rate limiting** — 0.5s minimum interval between messages per user via `rate_limit_send()`. PTB's AIORateLimiter provides additional flood protection.
@@ -295,7 +295,7 @@ When emdash creates a tmux session (e.g. `emdash-claude-main-abc123`), ccgram's 
 - **Window IDs**: Foreign windows use qualified IDs like `emdash-claude-main-abc123:@0` — these are valid tmux target strings
 - **Lifecycle**: ccgram never kills emdash windows. They are marked `external=True` in `WindowState`
 - **Provider detection**: Parsed from session name (`emdash-{provider}-main-{id}`)
-- **Hook coexistence**: ccgram hooks are in `~/.claude/settings.json` (global), emdash hooks are in `.claude/settings.local.json` (per-project). Claude Code merges both
+- **Hook coexistence**: ccgram hooks are in `~/.claude/settings.json` (global), emdash hooks are in `.claude/settings.local.json` (per-project). Claude merges both
 
 ### Architecture
 
@@ -313,7 +313,7 @@ emdash kills session ──────────────► Dead window d
 
 ## Hook Configuration
 
-Auto-install: `ccgram hook --install` — installs hooks for these Claude Code event types:
+Auto-install: `ccgram hook --install` — installs hooks for these Claude event types:
 
 | Event         | Purpose                               | Async |
 | ------------- | ------------------------------------- | ----- |

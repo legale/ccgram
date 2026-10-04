@@ -15,7 +15,7 @@ ccgram                        # Start the bot
 ccgram status                 # Show running state (no token needed)
 ccgram doctor                 # Validate setup and diagnose issues
 ccgram doctor --fix           # Auto-fix issues (install hook, kill orphans)
-ccgram hook --install         # Install Claude Code hooks
+ccgram hook --install         # Install agent hooks
 ccgram hook --uninstall       # Remove all hooks
 ccgram hook --status          # Check per-event hook installation status
 ccgram --version              # Show version
@@ -473,7 +473,7 @@ Peer IDs use the qualified format `session:@N` (e.g., `ccgram:@0`, `ccgram:@3`).
 
 ## Providers
 
-CCGram supports Claude Code, Codex CLI, Gemini CLI, Pi, and Shell. Each topic can use a different provider. See **[docs/providers.md](providers.md)** for full details on each provider, session modes, custom launch commands, LLM configuration, and provider-specific behavior.
+CCGram supports Claude, Codex CLI, Gemini CLI, Pi, and Shell. Each topic can use a different provider. See **[docs/providers.md](providers.md)** for full details on each provider, session modes, custom launch commands, LLM configuration, and provider-specific behavior.
 
 ## Data Storage
 

@@ -1,4 +1,4 @@
-"""Photo and document message handlers for forwarding files to Claude Code.
+"""Photo and document message handlers for forwarding files to the agent.
 
 Saves uploaded files to `.ccgram-uploads/` in the session's cwd, then sends
 Claude a natural-language message with the relative path so it can read the

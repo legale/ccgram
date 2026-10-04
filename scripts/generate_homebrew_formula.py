@@ -27,7 +27,7 @@ FORMULA_TEMPLATE = """\
 class Ccgram < Formula
   include Language::Python::Virtualenv
 
-  desc "Control Claude Code sessions remotely via Telegram"
+  desc "Control Claude sessions remotely via Telegram"
   homepage "https://github.com/alexei-led/ccgram"
   url "{sdist_url}"
   sha256 "{sha256}"
@@ -44,7 +44,7 @@ class Ccgram < Formula
 
   def caveats
     <<~EOS
-      To enable Claude Code hook notifications (done detection, interactive
+      To enable Claude hook notifications (done detection, interactive
       prompts, subagent tracking), run:
         ccgram hook --install
 

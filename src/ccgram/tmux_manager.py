@@ -1,13 +1,13 @@
 """Tmux session/window management via libtmux.
 
 Wraps libtmux to provide async-friendly operations on a single tmux session:
-  - list_windows / find_window_by_name: discover Claude Code windows.
+  - list_windows / find_window_by_name: discover agent windows.
   - capture_pane: read terminal content (plain or with ANSI colors).
   - send_keys: forward user input or control keys to a window.
   - create_window / kill_window: lifecycle management.
   - list_panes / capture_pane_by_id / send_keys_to_pane: pane-level ops.
   - Vim mode detection: auto-enter INSERT mode before sending text when
-    Claude Code's /vim mode is active and the TUI is in NORMAL mode.
+    The agent's /vim mode is active and the TUI is in NORMAL mode.
 
 All blocking libtmux calls are wrapped in asyncio.to_thread().
 
@@ -55,7 +55,7 @@ def has_insert_indicator(pane_text: str) -> bool:
     """Check if vim's ``-- INSERT --`` appears in the last 3 lines of pane text.
 
     Only matches lines where ``-- INSERT --`` is the sole content (with optional
-    whitespace), avoiding false positives from Claude Code's own status bar which
+    whitespace), avoiding false positives from the agent's own status bar which
     renders ``-- INSERT -- ⏸ plan mode on ...`` with trailing text.
     """
     return any(
@@ -129,7 +129,7 @@ TmuxSes = TmuxWindow
 
 
 class TmuxManager:
-    """Manages tmux windows for Claude Code sessions."""
+    """Manages tmux windows for agent sessions."""
 
     def __init__(self, session_name: str | None = None):
         """Initialize tmux manager.
@@ -783,7 +783,7 @@ class TmuxManager:
     async def _send_literal_then_enter(self, window_id: str, text: str) -> bool:
         """Send literal text followed by Enter with a delay.
 
-        Claude Code's TUI sometimes interprets a rapid-fire Enter
+        The agent's TUI sometimes interprets a rapid-fire Enter
         (arriving in the same input batch as the text) as a newline
         rather than submit.  A 500ms gap lets the TUI process the
         text before receiving Enter.

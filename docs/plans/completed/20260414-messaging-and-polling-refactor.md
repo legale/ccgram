@@ -414,7 +414,7 @@ _Items requiring manual intervention or external systems — no checkboxes, info
 
 **Manual verification** after Phase 1 lands and after Phase 2 lands:
 
-- Smoke test with a real Claude Code session: send a message, observe tool_use → tool_result edit-in-place; observe status bubble transitions; observe topic emoji updates.
+- Smoke test with a real agent session: send a message, observe tool_use → tool_result edit-in-place; observe status bubble transitions; observe topic emoji updates.
 - Smoke test with a real Codex session: send a message, observe status bubble transitions (no tool batching expected).
 - Smoke test with a real shell session: send a command, observe passive output relay, observe `!` raw command path.
 - Smoke test multi-pane window: open a Claude agent team window, observe interactive prompts surfaced from non-active panes.

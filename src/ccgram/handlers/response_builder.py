@@ -1,6 +1,6 @@
 """Response message building for Telegram delivery.
 
-Builds paginated response messages from Claude Code output:
+Builds paginated response messages from agent output:
   - Handles different content types (text, thinking, tool_use, tool_result)
   - Returns raw markdown strings (entity conversion happens at send time)
   - Splits long messages into pages within Telegram's 4096 char limit

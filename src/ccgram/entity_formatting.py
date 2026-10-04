@@ -41,7 +41,7 @@ _INDENTED_LINE_RE = re.compile(r"^    ", re.MULTILINE)
 def _strip_indented_code_blocks(text: str) -> str:
     """Strip 4-space indentation that CommonMark treats as code blocks.
 
-    Claude Code uses fenced ``` blocks for code; indented blocks in its
+    The agent uses fenced ``` blocks for code; indented blocks in its
     output are typically continuation text, not code.  Pyromark (CommonMark)
     converts 4-space-indented paragraphs into code blocks, so we strip
     the leading spaces before conversion.
