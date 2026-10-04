@@ -29,9 +29,7 @@ def _patch_deps():
         router.get_display_name.side_effect = lambda wid: wid
         router.iter_thread_bindings.return_value = []
         tmux.list_sessions = AsyncMock(return_value=[])
-        tmux.topic_name_from_session_name.side_effect = lambda name: name.removeprefix(
-            "cc_"
-        )
+        tmux.topic_name_from_session_name.side_effect = lambda name: name
         tmux.topic_session_name.side_effect = lambda name: f"cc_{name}"
         config.tmux_session_prefix = "cc_"
         config.is_user_allowed.return_value = True
@@ -70,8 +68,8 @@ class TestBuildDashboard:
 
         text, keyboard = await _build_dashboard(100)
 
-        assert "+ foo /work/foo" in text
-        assert "o bar /work/bar" in text
+        assert "+ cc_foo /work/foo" in text
+        assert "o cc_bar /work/bar" in text
         assert "other" not in text
         assert len(keyboard.inline_keyboard) == 4
 
@@ -83,7 +81,7 @@ class TestBuildDashboard:
         _text, keyboard = await _build_dashboard(100)
         name_row, actions_row = keyboard.inline_keyboard
 
-        assert name_row[0].text == "+ foo"
+        assert name_row[0].text == "+ cc_foo"
         assert name_row[0].callback_data == f"{CB_SESSIONS_RENAME}cc_foo:@7"
         assert actions_row[0].callback_data == f"{CB_SESSIONS_SCREENSHOT}cc_foo:@7"
         assert actions_row[1].callback_data == "sess:kill:cc_foo:@7"
@@ -224,9 +222,7 @@ class TestRename:
     async def test_apply_rename_only_renames_tmux(self, _patch_deps) -> None:
         _router, tmux, _config = _patch_deps
         tmux.rename_session = AsyncMock(return_value=True)
-        tmux.topic_name_from_session_name.side_effect = lambda name: name.removeprefix(
-            "cc_"
-        )
+        tmux.topic_name_from_session_name.side_effect = lambda name: name
         user_data = {
             "_session_rename_window_id": "cc_foo:@7",
             "_session_rename_thread_id": 42,
@@ -239,4 +235,4 @@ class TestRename:
             handled = await apply_session_rename(user_data, 42, "bar", message)
 
         assert handled is True
-        tmux.rename_session.assert_awaited_once_with("cc_foo", "cc_bar")
+        tmux.rename_session.assert_awaited_once_with("cc_foo", "bar")

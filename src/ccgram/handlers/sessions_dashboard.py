@@ -313,7 +313,7 @@ async def _execute_session_rename(window_id: str, name: str) -> str | None:
     if not session_name.startswith(config.tmux_session_prefix):
         return None
 
-    new_session_name = tmux_manager.topic_session_name(name)
+    new_session_name = name
     if not await tmux_manager.rename_session(session_name, new_session_name):
         return None
 
