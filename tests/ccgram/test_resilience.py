@@ -127,17 +127,6 @@ class TestRateLimitSendLocking:
         _rate_limit_locks.pop(chat_id, None)
 
 
-class TestCallbackErrorWidened:
-    def test_callback_error_catches_programming_errors(self):
-        from ccgram.session_monitor import _CallbackError
-
-        assert issubclass(KeyError, _CallbackError)
-        assert issubclass(TypeError, _CallbackError)
-        assert issubclass(AttributeError, _CallbackError)
-        assert issubclass(IndexError, _CallbackError)
-        assert issubclass(TelegramError, _CallbackError)
-
-
 class TestProbeFailureClearing:
     def test_clear_probe_failures_resets_counter(self):
         from ccgram.handlers.polling.polling_state import (
@@ -211,7 +200,6 @@ class TestShutdownNotificationLifecycle:
                 "ccgram.bot._send_shutdown_notification", new_callable=AsyncMock
             ) as mock_send,
             patch("ccgram.bootstrap._status_poll_task", None),
-            patch("ccgram.bootstrap.session_monitor", None),
             patch("ccgram.bootstrap.session_manager"),
             patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
         ):

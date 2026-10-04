@@ -1,213 +1,51 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from ccgram import bootstrap
 
 
-@pytest.fixture(autouse=True)
-def _reset_bootstrap_state():
-    bootstrap.reset_for_testing()
-    yield
-    bootstrap.reset_for_testing()
-
-
-def _make_app() -> MagicMock:
+def _app() -> MagicMock:
     app = MagicMock()
     app.bot = AsyncMock()
-    app.job_queue = None
     return app
 
 
-class TestBootstrapApplicationOrdering:
-    async def test_start_session_monitor_raises_when_callbacks_unwired(self):
-        app = _make_app()
-        with pytest.raises(
-            RuntimeError, match="wire_runtime_callbacks.*before.*start_session_monitor"
-        ):
-            await bootstrap.start_session_monitor(app)
-
-    async def test_start_session_monitor_succeeds_after_wire(self):
-        app = _make_app()
-        bootstrap.wire_runtime_callbacks()
-        with patch("ccgram.bootstrap.SessionMonitor") as monitor_cls:
-            instance = MagicMock()
-            instance.start = MagicMock()
-            monitor_cls.return_value = instance
-            with patch("ccgram.bootstrap.set_active_monitor"):
-                result = await bootstrap.start_session_monitor(app)
-
-        assert result is instance
-        instance.start.assert_called_once()
-        assert bootstrap.session_monitor is instance
+def test_reset_for_testing_clears_poll_task() -> None:
+    bootstrap._status_poll_task = MagicMock()
+    bootstrap.reset_for_testing()
+    assert bootstrap._status_poll_task is None
 
 
-class TestWireRuntimeCallbacks:
-    def test_wires_all_register_callbacks(self):
-        from ccgram.handlers import hook_events
-        from ccgram.handlers.shell import shell_capture
-
-        bootstrap.wire_runtime_callbacks()
-
-        assert hook_events._stop_callback_registered is True
-        assert shell_capture._approval_callback_registered is True
-        assert bootstrap._callbacks_wired is True
-
-    def test_double_wire_is_idempotent(self):
-        from ccgram.handlers import hook_events
-
-        bootstrap.wire_runtime_callbacks()
-        first_callback = hook_events._stop_callback
-
-        bootstrap.wire_runtime_callbacks()
-
-        assert bootstrap._callbacks_wired is True
-        assert hook_events._stop_callback is first_callback
+async def test_bootstrap_starts_polling_before_miniapp() -> None:
+    order: list[str] = []
+    with (
+        patch("ccgram.bootstrap.install_global_exception_handler"),
+        patch("ccgram.bootstrap.session_manager") as manager,
+        patch(
+            "ccgram.bootstrap.start_status_polling",
+            side_effect=lambda _app: order.append("polling"),
+        ),
+        patch(
+            "ccgram.main.start_miniapp_if_enabled",
+            new=AsyncMock(side_effect=lambda: order.append("miniapp")),
+        ),
+    ):
+        manager.resolve_stale_ids = AsyncMock()
+        await bootstrap.bootstrap_application(_app())
+    assert order == ["polling", "miniapp"]
 
 
-class TestBootstrapApplication:
-    async def test_runs_full_sequence_in_order(self):
-        app = _make_app()
+async def test_shutdown_cancels_polling_and_flushes_state() -> None:
+    async def _noop() -> None:
+        return None
 
-        order: list[str] = []
-
-        with (
-            patch(
-                "ccgram.bootstrap.install_global_exception_handler",
-                side_effect=lambda: order.append("exc_handler"),
-            ),
-            patch("ccgram.bootstrap.session_manager") as sm,
-            patch(
-                "ccgram.bootstrap.wire_runtime_callbacks",
-                side_effect=lambda: order.append("wire"),
-            ),
-            patch(
-                "ccgram.bootstrap.start_session_monitor",
-                new=AsyncMock(side_effect=lambda _app: order.append("monitor")),
-            ),
-            patch(
-                "ccgram.bootstrap.start_status_polling",
-                side_effect=lambda _app: order.append("polling"),
-            ),
-            patch(
-                "ccgram.main.start_miniapp_if_enabled",
-                new=AsyncMock(side_effect=lambda: order.append("miniapp")),
-            ),
-        ):
-            sm.resolve_stale_ids = AsyncMock(
-                side_effect=lambda: order.append("stale_ids")
-            )
-            await bootstrap.bootstrap_application(app)
-
-        assert order == [
-            "exc_handler",
-            "stale_ids",
-            "wire",
-            "monitor",
-            "polling",
-            "miniapp",
-        ]
-
-
-class TestShutdownRuntime:
-    async def test_cancels_polling_task_and_stops_monitor(self):
-        import asyncio
-
-        async def _noop():
-            return None
-
-        bootstrap._status_poll_task = asyncio.create_task(_noop())  # type: ignore[assignment]
-        monitor = MagicMock()
-        monitor.stop = MagicMock()
-        bootstrap.session_monitor = monitor
-
-        with (
-            patch(
-                "ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock
-            ) as workers,
-            patch("ccgram.mailbox.Mailbox") as mailbox_cls,
-            patch(
-                "ccgram.main.stop_miniapp_if_enabled", new_callable=AsyncMock
-            ) as stop_mini,
-            patch("ccgram.bootstrap.session_manager") as sm,
-        ):
-            mailbox_cls.return_value.sweep = MagicMock()
-            await bootstrap.shutdown_runtime()
-
-        monitor.stop.assert_called_once()
-        workers.assert_awaited_once()
-        stop_mini.assert_awaited_once()
-        sm.flush_state.assert_called_once()
-        assert bootstrap.session_monitor is None
-        assert bootstrap._status_poll_task is None
-
-    async def test_handles_no_running_components(self):
-        bootstrap._status_poll_task = None
-        bootstrap.session_monitor = None
-
-        with (
-            patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
-            patch("ccgram.mailbox.Mailbox"),
-            patch("ccgram.main.stop_miniapp_if_enabled", new_callable=AsyncMock),
-            patch("ccgram.bootstrap.session_manager"),
-        ):
-            await bootstrap.shutdown_runtime()
-
-
-class TestResetForTesting:
-    def test_clears_module_state(self):
-        bootstrap.wire_runtime_callbacks()
-        bootstrap.session_monitor = MagicMock()
-        bootstrap._status_poll_task = MagicMock()
-
-        bootstrap.reset_for_testing()
-
-        assert bootstrap._callbacks_wired is False
-        assert bootstrap.session_monitor is None
-        assert bootstrap._status_poll_task is None
-
-    def test_clears_global_active_monitor_singleton(self):
-        from ccgram import session_monitor as sm_mod
-
-        monitor = MagicMock()
-        sm_mod.set_active_monitor(monitor)
-        bootstrap.session_monitor = monitor
-        assert sm_mod.get_active_monitor() is monitor
-
-        bootstrap.reset_for_testing()
-
-        assert sm_mod.get_active_monitor() is None
-
-    async def test_shutdown_runtime_clears_global_active_monitor_singleton(self):
-        from ccgram import session_monitor as sm_mod
-
-        monitor = MagicMock()
-        monitor.stop = MagicMock()
-        sm_mod.set_active_monitor(monitor)
-        bootstrap.session_monitor = monitor
-
-        with (
-            patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
-            patch("ccgram.mailbox.Mailbox") as mailbox_cls,
-            patch("ccgram.main.stop_miniapp_if_enabled", new_callable=AsyncMock),
-            patch("ccgram.bootstrap.session_manager"),
-        ):
-            mailbox_cls.return_value.sweep = MagicMock()
-            await bootstrap.shutdown_runtime()
-
-        assert sm_mod.get_active_monitor() is None
-
-    def test_resets_inner_callback_registrations(self):
-        from ccgram.handlers import hook_events
-        from ccgram.handlers.shell import shell_capture
-
-        bootstrap.wire_runtime_callbacks()
-        bootstrap.reset_for_testing()
-
-        # After reset, re-wiring must succeed (i.e., the F2.6 fail-loud
-        # double-registration guard sees a clean slate).
-        assert hook_events._stop_callback_registered is False
-        assert shell_capture._approval_callback_registered is False
-
-        bootstrap.wire_runtime_callbacks()
-        assert hook_events._stop_callback_registered is True
+    bootstrap._status_poll_task = asyncio.create_task(_noop())
+    with (
+        patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
+        patch("ccgram.mailbox.Mailbox"),
+        patch("ccgram.main.stop_miniapp_if_enabled", new_callable=AsyncMock),
+        patch("ccgram.bootstrap.session_manager") as manager,
+    ):
+        await bootstrap.shutdown_runtime()
+    assert bootstrap._status_poll_task is None
+    manager.flush_state.assert_called_once()

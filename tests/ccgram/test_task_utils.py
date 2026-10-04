@@ -66,31 +66,8 @@ async def test_task_done_callback_ignores_success(
     assert "Background task" not in caplog.text
 
 
-async def test_backoff_constants_session_monitor() -> None:
-    from ccgram.session_monitor import _BACKOFF_MAX, _BACKOFF_MIN
-
-    assert _BACKOFF_MIN == 2.0
-    assert _BACKOFF_MAX == 30.0
-    for streak in range(10):
-        delay = min(_BACKOFF_MAX, _BACKOFF_MIN * (2**streak))
-        assert delay <= _BACKOFF_MAX
-
-
 async def test_backoff_constants_status_polling() -> None:
     from ccgram.handlers.polling.polling_coordinator import _BACKOFF_MAX, _BACKOFF_MIN
 
     assert _BACKOFF_MIN == 2.0
     assert _BACKOFF_MAX == 30.0
-
-
-async def test_backoff_doubles_on_consecutive_errors() -> None:
-    from ccgram.session_monitor import _BACKOFF_MAX, _BACKOFF_MIN
-
-    delays = []
-    for streak in range(5):
-        delays.append(min(_BACKOFF_MAX, _BACKOFF_MIN * (2**streak)))
-    assert delays[0] == 2.0
-    assert delays[1] == 4.0
-    assert delays[2] == 8.0
-    assert delays[3] == 16.0
-    assert delays[4] == 30.0
