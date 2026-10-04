@@ -3,7 +3,7 @@
 Orchestrates topic teardown: dispatches registered cleanups via
 TopicStateRegistry, then handles infrastructure and bot-specific async
 cleanup that cannot be registered (log throttle, mailbox I/O, status
-messages, interactive UI, user_data).
+messages and user_data).
 
 Functions:
   - clear_topic_state: Clean up all memory state for a specific topic
@@ -26,7 +26,6 @@ from ..topic_state_registry import topic_state
 from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
 from ..window_resolver import is_foreign_window
 from .callback_helpers import get_thread_id
-from .interactive import clear_interactive_msg
 from .messaging_pipeline.message_queue import enqueue_status_update
 from .messaging_pipeline.message_sender import safe_reply
 from .status.status_bubble import clear_status_msg_info
@@ -104,8 +103,6 @@ async def clear_topic_state(
         mb = Mailbox(config.mailbox_dir)
         if qualified_id is not None:
             mb.clear_inbox(qualified_id)
-
-    await clear_interactive_msg(user_id, client, thread_id)
 
     # user_data cleanup
     if user_data is not None and user_data.get(PENDING_THREAD_ID) == thread_id:

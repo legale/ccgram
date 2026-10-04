@@ -31,13 +31,6 @@ from ....tmux_manager import tmux_manager
 from ....window_state_store import window_store
 from ....claude_task_state import IDLE_STATUS_TEXT
 from ...cleanup import clear_topic_state
-from ...interactive import (
-    clear_interactive_mode,
-    clear_interactive_msg,
-    get_interactive_window,
-    handle_interactive_ui,
-    set_interactive_mode,
-)
 from ...messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
     enqueue_status_update,
@@ -124,8 +117,7 @@ async def _transition_to_idle(
 async def _surface_pane_alert(
     bot: "Bot", user_id: int, window_id: str, thread_id: int, pane_id: str
 ) -> None:
-    client = PTBTelegramClient(bot)
-    await handle_interactive_ui(client, user_id, window_id, thread_id, pane_id=pane_id)
+    return
 
 
 _PANE_OUTPUT_PREVIEW_LINES = 12
@@ -225,38 +217,6 @@ async def _notify_pane_lifecycle(
                 pane_id=t.pane_id,
                 error=str(exc),
             )
-
-
-# ── Interactive-only check ───────────────────────────────────────────────
-
-
-async def _check_interactive_only(
-    bot: "Bot",
-    user_id: int,
-    window_id: str,
-    thread_id: int,
-    *,
-    _window: "TmuxWindow | None" = None,
-) -> None:
-    w = _window or await tmux_manager.find_window_by_id(window_id)
-    if not w:
-        return
-
-    if get_interactive_window(user_id, thread_id) == window_id:
-        return
-
-    pane_text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
-    if not pane_text:
-        return
-
-    status = await _resolve_status(window_id, pane_text, w)
-
-    if status is not None and status.is_interactive:
-        set_interactive_mode(user_id, window_id, thread_id)
-        client = PTBTelegramClient(bot)
-        handled = await handle_interactive_ui(client, user_id, window_id, thread_id)
-        if not handled:
-            clear_interactive_mode(user_id, thread_id)
 
 
 # ── Passive shell relay ──────────────────────────────────────────────────
@@ -478,21 +438,6 @@ async def _update_status(
     _check_vim_insert(window_id, pane_text, w)
     status = await _resolve_status(window_id, pane_text, w)
 
-    interactive_window = get_interactive_window(user_id, thread_id)
-    should_check_new_ui = True
-
-    if interactive_window == window_id:
-        if status is not None and status.is_interactive:
-            return
-        await clear_interactive_msg(user_id, client, thread_id)
-        should_check_new_ui = False
-    elif interactive_window is not None:
-        await clear_interactive_msg(user_id, client, thread_id)
-
-    if should_check_new_ui and status is not None and status.is_interactive:
-        await handle_interactive_ui(client, user_id, window_id, thread_id)
-        return
-
     notification_mode = window_query.get_notification_mode(window_id)
     ctx = build_context(window_id, w, status, notification_mode=notification_mode)
     decision = decide_tick(ctx)
@@ -516,7 +461,6 @@ __all__ = [
     "_apply_done_transition",
     "_apply_starting_transition",
     "_apply_tick_decision",
-    "_check_interactive_only",
     "_forward_pane_output",
     "_handle_dead_window_notification",
     "_maybe_check_passive_shell",

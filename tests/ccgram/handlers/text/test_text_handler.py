@@ -531,8 +531,7 @@ class TestForwardMessage:
         bot = AsyncMock()
         message = AsyncMock()
 
-        with patch(f"{_TH}.get_interactive_window", return_value=None):
-            await _forward_message("@0", 100, 42, "hello", bot, message)
+        await _forward_message("@0", 100, 42, "hello", bot, message)
 
         mock_send.assert_called_once_with("@0", "hello")
 
@@ -554,7 +553,6 @@ class TestForwardMessage:
         mock_reply.assert_called_once()
         assert "Window not found" in mock_reply.call_args.args[1]
 
-    @patch(f"{_TH}.get_interactive_window", return_value=None)
     @patch(f"{_TH}._capture_bash_output")
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
     @patch(f"{_TH}.window_query")
@@ -563,7 +561,6 @@ class TestForwardMessage:
         mock_sm: MagicMock,
         _mock_send: AsyncMock,
         mock_capture: MagicMock,
-        _mock_interactive: MagicMock,
     ) -> None:
         bot = AsyncMock()
         message = AsyncMock()
@@ -579,11 +576,10 @@ class TestForwardMessage:
         with pytest.raises(asyncio.CancelledError):
             await task
 
-    @patch(f"{_TH}.get_interactive_window", return_value=None)
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
     @patch(f"{_TH}.window_query")
     async def test_cancels_existing_bash_capture(
-        self, mock_sm: MagicMock, _mock_send: AsyncMock, _mock_interactive: MagicMock
+        self, mock_sm: MagicMock, _mock_send: AsyncMock
     ) -> None:
         bot = AsyncMock()
         message = AsyncMock()
@@ -599,26 +595,6 @@ class TestForwardMessage:
         dummy_task.cancel.assert_called_once()
         assert (100, 42) not in _bash_capture_tasks
 
-    @patch(f"{_TH}.handle_interactive_ui", new_callable=AsyncMock)
-    @patch(f"{_TH}.get_interactive_window", return_value="@0")
-    @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
-    @patch(f"{_TH}.window_query")
-    async def test_refreshes_interactive_ui(
-        self,
-        mock_sm: MagicMock,
-        _mock_send: AsyncMock,
-        _mock_get_iw: MagicMock,
-        mock_handle_ui: AsyncMock,
-    ) -> None:
-        bot = AsyncMock()
-        message = AsyncMock()
-
-        await _forward_message("@0", 100, 42, "hello", bot, message)
-
-        mock_handle_ui.assert_called_once()
-        assert mock_handle_ui.call_args.args[0] is bot
-        assert mock_handle_ui.call_args.args[1:] == (100, "@0", 42)
-
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
     @patch(f"{_TH}.window_query")
     async def test_sends_typing_chat_action(
@@ -630,8 +606,7 @@ class TestForwardMessage:
         message = AsyncMock()
         message.chat.send_action = AsyncMock()
 
-        with patch(f"{_TH}.get_interactive_window", return_value=None):
-            await _forward_message("@0", 100, 42, "hello", bot, message)
+        await _forward_message("@0", 100, 42, "hello", bot, message)
 
         message.chat.send_action.assert_awaited_once_with(ChatAction.TYPING)
 

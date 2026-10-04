@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ...messaging_pipeline.message_queue import get_message_queue
 from ..polling_state import (
     lifecycle_strategy,
     pane_status_strategy,
@@ -31,7 +30,6 @@ from .apply import (
     _apply_done_transition,
     _apply_starting_transition,
     _apply_tick_decision,
-    _check_interactive_only,
     _forward_pane_output,
     _handle_dead_window_notification,
     _maybe_check_passive_shell,
@@ -73,15 +71,6 @@ async def tick_window(
         await _handle_dead_window_notification(bot, user_id, thread_id, window_id)
         return
 
-    queue = get_message_queue(user_id)
-    if queue and not queue.empty():
-        await _check_interactive_only(
-            bot, user_id, window_id, thread_id, _window=window
-        )
-        await _scan_window_panes(bot, user_id, window_id, thread_id)
-        await _maybe_check_passive_shell(bot, user_id, window_id, thread_id)
-        return
-
     await _update_status(bot, user_id, window_id, thread_id=thread_id, _window=window)
     await _scan_window_panes(bot, user_id, window_id, thread_id)
     await _maybe_check_passive_shell(bot, user_id, window_id, thread_id)
@@ -94,7 +83,6 @@ __all__ = [
     "_apply_done_transition",
     "_apply_starting_transition",
     "_apply_tick_decision",
-    "_check_interactive_only",
     "_check_vim_insert",
     "_forward_pane_output",
     "_get_last_activity_ts",

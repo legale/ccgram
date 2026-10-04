@@ -32,7 +32,6 @@ from ..topics.directory_browser import (
     clear_browse_state,
     clear_window_picker_state,
 )
-from ..interactive import get_interactive_window, handle_interactive_ui
 from ..messaging_pipeline.message_queue import enqueue_status_update
 from ..live.pane_callbacks import apply_pane_rename
 from ..sessions_dashboard import apply_session_rename
@@ -558,12 +557,6 @@ async def _forward_message(
         )
         task.add_done_callback(task_done_callback)
         _bash_capture_tasks[(user_id, thread_id)] = task
-
-    # If in interactive mode, refresh the UI after sending text
-    interactive_window = get_interactive_window(user_id, thread_id)
-    if interactive_window and interactive_window == window_id:
-        await asyncio.sleep(0.2)
-        await handle_interactive_ui(client, user_id, window_id, thread_id)
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

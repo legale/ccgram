@@ -14,7 +14,6 @@ from ccgram.handlers.polling.polling_state import (
 )
 from ccgram.handlers.polling.polling_types import TickContext, TickDecision
 from ccgram.handlers.polling.window_tick import (
-    _check_interactive_only,
     _handle_dead_window_notification,
     _maybe_check_passive_shell,
     _scan_window_panes,
@@ -95,44 +94,11 @@ class TestTickWindowDeadWindow:
             mock_dead.assert_not_called()
 
 
-class TestTickWindowPendingQueue:
-    async def test_pending_queue_skips_status_update(self):
-        bot = AsyncMock(spec=Bot)
-        w = _make_window()
-        mock_queue = MagicMock()
-        mock_queue.empty.return_value = False
-
-        with (
-            patch.object(window_tick, "get_message_queue", return_value=mock_queue),
-            patch.object(
-                window_tick, "_check_interactive_only", new_callable=AsyncMock
-            ) as mock_interactive,
-            patch.object(
-                window_tick, "_update_status", new_callable=AsyncMock
-            ) as mock_status,
-            patch.object(
-                window_tick, "_scan_window_panes", new_callable=AsyncMock
-            ) as mock_scan,
-            patch.object(
-                window_tick, "_maybe_check_passive_shell", new_callable=AsyncMock
-            ) as mock_shell,
-        ):
-            await tick_window(bot, 1, 100, "@0", w)
-            mock_interactive.assert_called_once()
-            mock_status.assert_not_called()
-            mock_scan.assert_called_once()
-            mock_shell.assert_called_once()
-
-
 class TestTickWindowEmptyQueue:
     async def test_empty_queue_runs_status_update(self):
         bot = AsyncMock(spec=Bot)
         w = _make_window()
-        mock_queue = MagicMock()
-        mock_queue.empty.return_value = True
-
         with (
-            patch.object(window_tick, "get_message_queue", return_value=mock_queue),
             patch.object(
                 window_tick, "_update_status", new_callable=AsyncMock
             ) as mock_status,
@@ -153,7 +119,6 @@ class TestTickWindowEmptyQueue:
         w = _make_window()
 
         with (
-            patch.object(window_tick, "get_message_queue", return_value=None),
             patch.object(
                 window_tick, "_update_status", new_callable=AsyncMock
             ) as mock_status,
@@ -164,44 +129,6 @@ class TestTickWindowEmptyQueue:
         ):
             await tick_window(bot, 1, 100, "@0", w)
             mock_status.assert_called_once()
-
-
-class TestUpdateStatusInteractive:
-    async def test_interactive_ui_wins_over_status(self):
-        bot = AsyncMock(spec=Bot)
-        w = _make_window()
-        interactive_status = _make_status(raw_text="Accept?", is_interactive=True)
-
-        with (
-            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
-            patch("ccgram.handlers.polling.window_tick.apply.window_query"),
-            patch("ccgram.handlers.polling.window_tick.apply.thread_router"),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value=None,
-            ),
-            patch(
-                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
-                return_value=interactive_status,
-            ),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.handle_interactive_ui",
-                new_callable=AsyncMock,
-            ) as mock_handle,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.enqueue_status_update",
-                new_callable=AsyncMock,
-            ) as mock_enqueue,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
-                new_callable=AsyncMock,
-            ),
-        ):
-            mock_tm.find_window_by_id = AsyncMock(return_value=w)
-            mock_tm.capture_pane = AsyncMock(return_value="pane text")
-            await _update_status(bot, 1, "@0", thread_id=100, _window=w)
-            mock_handle.assert_called_once()
-            mock_enqueue.assert_not_called()
 
 
 class TestUpdateStatusTopicDiff:
@@ -295,10 +222,6 @@ class TestUpdateStatusActiveLine:
             patch("ccgram.handlers.polling.window_tick.apply.window_query") as mock_sm,
             patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
             patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value=None,
-            ),
-            patch(
                 "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
                 return_value=status,
             ),
@@ -340,10 +263,6 @@ class TestUpdateStatusActiveLine:
             patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
             patch("ccgram.handlers.polling.window_tick.apply.window_query") as mock_sm,
             patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value=None,
-            ),
             patch(
                 "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
                 return_value=status,
@@ -393,10 +312,6 @@ class TestUpdateStatusActiveLine:
             patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
             patch("ccgram.handlers.polling.window_tick.apply.window_query") as mock_sm,
             patch("ccgram.handlers.polling.window_tick.apply.thread_router"),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value=None,
-            ),
             patch(
                 "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
                 return_value=status,
@@ -485,29 +400,6 @@ class TestScanPanes:
             await _scan_window_panes(bot, 1, "@0", 100)
             mock_tm.list_panes.assert_not_called()
 
-    async def test_surfaces_interactive_alert(self):
-        bot = AsyncMock(spec=Bot)
-        pane_active = MagicMock(pane_id="%0", active=True, command="claude")
-        pane_blocked = MagicMock(pane_id="%1", active=False, command="claude")
-        interactive_status = _make_status(raw_text="Permission?", is_interactive=True)
-
-        with (
-            patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window") as mock_prov,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.handle_interactive_ui",
-                new_callable=AsyncMock,
-            ) as mock_ui,
-        ):
-            mock_tm.list_panes = AsyncMock(return_value=[pane_active, pane_blocked])
-            mock_tm.capture_pane_by_id = AsyncMock(return_value="pane text")
-            mock_prov.return_value.parse_terminal_status.return_value = (
-                interactive_status
-            )
-            await _scan_window_panes(bot, 1, "@0", 100)
-            mock_ui.assert_called_once()
-            assert mock_ui.call_args.kwargs.get("pane_id") == "%1"
-
 
 class TestMaybeCheckPassiveShell:
     async def test_non_shell_noop(self):
@@ -541,24 +433,6 @@ class TestMaybeCheckPassiveShell:
             mock_tm.capture_pane = AsyncMock(return_value="$ output here")
             await _maybe_check_passive_shell(bot, 1, "@0", 100)
             mock_check.assert_called_once()
-
-
-class TestCheckInteractiveOnly:
-    async def test_already_interactive_returns_early(self):
-        bot = AsyncMock(spec=Bot)
-        w = _make_window()
-
-        with (
-            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value="@0",
-            ),
-        ):
-            mock_tm.find_window_by_id = AsyncMock(return_value=w)
-            mock_tm.capture_pane = AsyncMock()
-            await _check_interactive_only(bot, 1, "@0", 100, _window=w)
-            mock_tm.capture_pane.assert_not_called()
 
 
 class TestDeadWindowNotification:
