@@ -68,12 +68,12 @@ async def _remember_forum_chat(update: object, _context: ContextTypes.DEFAULT_TY
         return
     if not config.is_user_allowed(effective_user.id):
         return
-    if effective_chat.type not in ("group", "supergroup"):
+    message = getattr(update, "effective_message", None)
+    thread_id = getattr(message, "message_thread_id", None)
+    if thread_id is None or thread_id == 1:
         return
-    # Some Telegram updates do not populate Chat.is_forum even when the
-    # message belongs to a forum topic.  The authorized user's group chat is
-    # the authoritative discovery signal; topic routing records the exact
-    # thread separately when one is present.
+    # A named message_thread_id is the reliable forum signal; Chat.is_forum
+    # and Chat.type are absent or inconsistent in some incoming updates.
     thread_router.remember_forum_chat_id(effective_user.id, effective_chat.id)
 
 
