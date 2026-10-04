@@ -132,31 +132,21 @@ async def _forward_pending_text(
     *,
     is_existing_window: bool = False,
 ) -> None:
-    """Forward pending text to a newly bound window, routing shell via LLM.
+    """Forward pending text to a newly bound shell window.
 
     Args:
-        is_existing_window: True when binding an existing window (not a fresh
-            one from directory browser).  For shell, skips handle_shell_message
-            to avoid _ensure_prompt_marker racing with the offer keyboard.
+        ``_is_existing_window`` is retained for callback compatibility.
     """
-    if not is_existing_window:
-        # Lazy: shell ↔ topics cycle.
-        from ..shell.shell_commands import handle_shell_message
-
-        await handle_shell_message(client, user_id, thread_id, window_id, text)
-    else:
-        # For non-shell providers or existing shell windows, send raw text.
-        # Existing shell windows skip handle_shell_message to avoid
-        # _ensure_prompt_marker racing with the offer keyboard just shown.
-        send_ok, send_msg = await send_to_window(window_id, text)
-        if not send_ok:
-            logger.warning("Failed to forward pending text: %s", send_msg)
-            await safe_send(
-                client,
-                thread_router.resolve_chat_id(user_id, thread_id),
-                f"❌ Failed to send pending message: {send_msg}",
-                message_thread_id=thread_id,
-            )
+    _ = is_existing_window
+    send_ok, send_msg = await send_to_window(window_id, text, raw=True)
+    if not send_ok:
+        logger.warning("Failed to forward pending text: %s", send_msg)
+        await safe_send(
+            client,
+            thread_router.resolve_chat_id(user_id, thread_id),
+            f"❌ Failed to send pending message: {send_msg}",
+            message_thread_id=thread_id,
+        )
 
 
 async def _handle_bind(

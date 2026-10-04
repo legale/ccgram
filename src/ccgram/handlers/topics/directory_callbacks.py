@@ -30,7 +30,7 @@ from ...telegram_client import PTBTelegramClient
 from ...user_preferences import user_preferences
 from ...window_state_store import CCGRAM_CREATED_WINDOW_ORIGIN
 from ...thread_router import thread_router
-from ...tmux_manager import tmux_manager
+from ...tmux_manager import send_to_window, tmux_manager
 from ..callback_data import (
     CB_DIR_CANCEL,
     CB_DIR_CONFIRM,
@@ -593,16 +593,9 @@ async def _create_window_and_bind(
             context.user_data.pop(PENDING_THREAD_ID, None)
             context.user_data.pop(PENDING_TOPIC_NAME, None)
 
-        # Lazy: shell.shell_commands ↔ topics cycle through approval wiring.
-        from ..shell.shell_commands import handle_shell_message
-
-        await handle_shell_message(
-            PTBTelegramClient(context.bot),
-            user_id,
-            pending_thread_id,
-            created_wid,
-            pending_text,
-        )
+        send_ok, send_msg = await send_to_window(created_wid, pending_text, raw=True)
+        if not send_ok:
+            await safe_edit(query, f"{message}\n\n❌ {send_msg}")
     elif context.user_data is not None:
         context.user_data.pop(PENDING_THREAD_ID, None)
         context.user_data.pop(PENDING_TOPIC_NAME, None)

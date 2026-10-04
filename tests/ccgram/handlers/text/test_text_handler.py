@@ -1,4 +1,3 @@
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -489,10 +488,8 @@ class TestShellProviderRouting:
     @patch(f"{_TH}._handle_dead_window", new_callable=AsyncMock, return_value=False)
     @patch(f"{_TH}.thread_router")
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
-    @patch("ccgram.handlers.shell.shell_capture.mark_telegram_command")
     async def test_bound_topic_routes_directly_to_tmux(
         self,
-        mock_mark: MagicMock,
         _mock_send: AsyncMock,
         mock_tr: MagicMock,
         _mock_dead: AsyncMock,
@@ -518,8 +515,7 @@ class TestShellProviderRouting:
 
         await handle_text_message(update, context)
 
-        _mock_send.assert_awaited_once_with("@0", "list files")
-        mock_mark.assert_called_once_with("@0", "list files", 100, 42, 7)
+        _mock_send.assert_awaited_once_with("@0", "list files", raw=True)
 
 
 class TestForwardMessage:
@@ -533,7 +529,7 @@ class TestForwardMessage:
 
         await _forward_message("@0", 100, 42, "hello", bot, message)
 
-        mock_send.assert_called_once_with("@0", "hello")
+        mock_send.assert_called_once_with("@0", "hello", raw=True)
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(
@@ -553,48 +549,6 @@ class TestForwardMessage:
         mock_reply.assert_called_once()
         assert "Window not found" in mock_reply.call_args.args[1]
 
-    @patch(f"{_TH}._capture_bash_output")
-    @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
-    @patch(f"{_TH}.window_query")
-    async def test_bash_capture_for_bang_command(
-        self,
-        mock_sm: MagicMock,
-        _mock_send: AsyncMock,
-        mock_capture: MagicMock,
-    ) -> None:
-        bot = AsyncMock()
-        message = AsyncMock()
-
-        await _forward_message("@0", 100, 42, "!ls -la", bot, message)
-
-        from ccgram.handlers.text.text_handler import _bash_capture_tasks
-
-        key = (100, 42)
-        assert key in _bash_capture_tasks
-        task = _bash_capture_tasks.pop(key)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-
-    @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
-    @patch(f"{_TH}.window_query")
-    async def test_cancels_existing_bash_capture(
-        self, mock_sm: MagicMock, _mock_send: AsyncMock
-    ) -> None:
-        bot = AsyncMock()
-        message = AsyncMock()
-
-        from ccgram.handlers.text.text_handler import _bash_capture_tasks
-
-        dummy_task = AsyncMock(spec=asyncio.Task)
-        dummy_task.done.return_value = False
-        _bash_capture_tasks[(100, 42)] = dummy_task
-
-        await _forward_message("@0", 100, 42, "hello", bot, message)
-
-        dummy_task.cancel.assert_called_once()
-        assert (100, 42) not in _bash_capture_tasks
-
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
     @patch(f"{_TH}.window_query")
     async def test_sends_typing_chat_action(
@@ -609,91 +563,3 @@ class TestForwardMessage:
         await _forward_message("@0", 100, 42, "hello", bot, message)
 
         message.chat.send_action.assert_awaited_once_with(ChatAction.TYPING)
-
-
-class TestBashCaptureCleanup:
-    @pytest.fixture(autouse=True)
-    def _clear_bash_tasks(self):
-        from ccgram.handlers.text.text_handler import _bash_capture_tasks
-
-        _bash_capture_tasks.clear()
-        yield
-        _bash_capture_tasks.clear()
-
-    async def test_cleanup_on_early_return(self, monkeypatch) -> None:
-        from ccgram.handlers.text.text_handler import (
-            _bash_capture_tasks,
-            _capture_bash_output,
-        )
-
-        key = (999, 888)
-
-        monkeypatch.setattr(f"{_TH}.asyncio.sleep", AsyncMock())
-        with (
-            patch(f"{_TH}.tmux_manager") as mock_tm,
-            patch(f"{_TH}.thread_router") as mock_tr,
-        ):
-            mock_tr.resolve_chat_id.return_value = 999
-            mock_tm.capture_pane = AsyncMock(return_value=None)
-
-            task = asyncio.create_task(
-                _capture_bash_output(AsyncMock(), 999, 888, "@0", "ls")
-            )
-            _bash_capture_tasks[key] = task
-            await task
-
-        assert key not in _bash_capture_tasks
-
-    async def test_cleanup_on_cancel(self) -> None:
-        from ccgram.handlers.text.text_handler import (
-            _bash_capture_tasks,
-            _capture_bash_output,
-        )
-
-        key = (777, 666)
-
-        with (
-            patch(f"{_TH}.tmux_manager") as mock_tm,
-            patch(f"{_TH}.thread_router") as mock_tr,
-        ):
-            mock_tr.resolve_chat_id.return_value = 777
-            mock_tm.capture_pane = AsyncMock(return_value=None)
-
-            task = asyncio.create_task(
-                _capture_bash_output(AsyncMock(), 777, 666, "@0", "ls")
-            )
-            _bash_capture_tasks[key] = task
-            await asyncio.sleep(0)
-            task.cancel()
-            await task
-
-        assert key not in _bash_capture_tasks
-
-    async def test_identity_check_preserves_replacement_task(self) -> None:
-        from ccgram.handlers.text.text_handler import (
-            _bash_capture_tasks,
-            _capture_bash_output,
-        )
-
-        key = (555, 444)
-        sentinel = AsyncMock(spec=asyncio.Task)
-
-        with (
-            patch(f"{_TH}.tmux_manager") as mock_tm,
-            patch(f"{_TH}.thread_router") as mock_tr,
-        ):
-            mock_tr.resolve_chat_id.return_value = 555
-            mock_tm.capture_pane = AsyncMock(return_value=None)
-
-            task_a = asyncio.create_task(
-                _capture_bash_output(AsyncMock(), 555, 444, "@0", "ls")
-            )
-            _bash_capture_tasks[key] = task_a
-            await asyncio.sleep(0)
-
-            task_a.cancel()
-            _bash_capture_tasks[key] = sentinel  # Task B
-
-            await task_a  # A's finally runs
-
-        assert _bash_capture_tasks.get(key) is sentinel

@@ -10,14 +10,13 @@ The orchestrator (handle_text_message) calls steps in sequence.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-import asyncio
 from pathlib import Path
 
 import structlog
 from telegram import Message, Update
 from telegram.constants import ChatAction
 from ...config import config
-from ...telegram_client import PTBTelegramClient, TelegramClient
+from ...telegram_client import PTBTelegramClient
 from ..callback_helpers import get_thread_id as _get_thread_id
 from ..topics.directory_browser import (
     BROWSE_DIRS_KEY,
@@ -32,17 +31,10 @@ from ..topics.directory_browser import (
     clear_browse_state,
     clear_window_picker_state,
 )
-from ..messaging_pipeline.message_queue import enqueue_status_update
 from ..live.pane_callbacks import apply_pane_rename
 from ..sessions_dashboard import apply_session_rename
-from ..messaging_pipeline.message_sender import (
-    ack_reaction,
-    edit_with_fallback,
-    rate_limit_send_message,
-    safe_reply,
-)
+from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..polling.polling_state import lifecycle_strategy
-from ...topic_state_registry import topic_state
 from ..user_state import PENDING_THREAD_ID, PENDING_THREAD_TEXT
 from ..user_state import PENDING_TOPIC_NAME
 from ... import window_query
@@ -51,21 +43,16 @@ from ...session import session_manager
 from ...user_preferences import user_preferences
 from ...window_state_store import CCGRAM_CREATED_WINDOW_ORIGIN
 from ...tmux_manager import send_to_window, tmux_manager
-from ...utils import handle_general_topic_message, is_general_topic, task_done_callback
+from ...utils import handle_general_topic_message, is_general_topic
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat
     from telegram.ext import ContextTypes
+    from ...telegram_client import TelegramClient
 
 logger = structlog.get_logger()
 
-# Maximum characters for bash output before truncation (fits Telegram 4096-char limit)
-_BASH_OUTPUT_LIMIT = 3800
-
 PENDING_DELIVERY_NOTICE = "\U0001f4ac Will deliver once the agent starts."
-
-# Active bash capture tasks: (user_id, thread_id) -> asyncio.Task
-_bash_capture_tasks: dict[tuple[int, int], asyncio.Task[None]] = {}
 
 _DIR_INPUT_PREFIXES = ("cd ", "dir ", "path ")
 
@@ -245,81 +232,6 @@ async def _handle_session_start_directory_input(
         user_data.get(PENDING_THREAD_TEXT, "") if user_data else "",
     )
     return True
-
-
-@topic_state.register("topic")
-def cancel_bash_capture(user_id: int, thread_id: int) -> None:
-    """Cancel any running bash capture for this topic."""
-    key = (user_id, thread_id)
-    task = _bash_capture_tasks.pop(key, None)
-    if task and not task.done():
-        task.cancel()
-
-
-async def _edit_bash_message(
-    client: TelegramClient, chat_id: int, msg_id: int, output: str
-) -> None:
-    """Edit an existing bash-output message with entity-based formatting fallback."""
-    await edit_with_fallback(client, chat_id, msg_id, output)
-
-
-async def _capture_bash_output(
-    client: TelegramClient,
-    user_id: int,
-    thread_id: int,
-    window_id: str,
-    _command: str,
-) -> None:
-    """Background task: capture ``!`` bash command output from tmux pane.
-
-    Sends the first captured output as a new message, then edits it
-    in-place as more output appears.  Stops after 30 s or when cancelled
-    (e.g. user sends a new message, which pushes content down).
-    """
-    try:
-        # Wait for the command to start producing output
-        await asyncio.sleep(2.0)
-
-        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-        msg_id: int | None = None
-        last_output: str = ""
-
-        for _ in range(30):
-            raw = await tmux_manager.capture_pane(window_id)
-            if raw is None:
-                return
-
-            output = None
-            if not output or output == last_output:
-                await asyncio.sleep(1.0)
-                continue
-
-            last_output = output
-
-            # Truncate to fit Telegram's 4096-char limit
-            if len(output) > _BASH_OUTPUT_LIMIT:
-                output = "\u2026 " + output[-_BASH_OUTPUT_LIMIT:]
-
-            if msg_id is None:
-                # First capture — send a new message
-                sent = await rate_limit_send_message(
-                    client,
-                    chat_id,
-                    output,
-                    message_thread_id=thread_id,
-                )
-                if sent:
-                    msg_id = sent.message_id
-            else:
-                await _edit_bash_message(client, chat_id, msg_id, output)
-
-            await asyncio.sleep(1.0)
-    except asyncio.CancelledError:
-        return
-    finally:
-        key = (user_id, thread_id)
-        if _bash_capture_tasks.get(key) is asyncio.current_task():
-            _bash_capture_tasks.pop(key, None)
 
 
 async def _check_ui_guards(
@@ -514,49 +426,20 @@ async def _handle_dead_window(
 
 async def _forward_message(
     window_id: str,
-    user_id: int,
-    thread_id: int,
+    _user_id: int,
+    _thread_id: int,
     text: str,
     client: TelegramClient,
     message: Message,
 ) -> None:
     """Forward a text message to the bound tmux window."""
     await message.chat.send_action(ChatAction.TYPING)  # type: ignore[union-attr]
-    # Enqueue a status clear to actually delete the Telegram message
-    # (clear_status_msg_info only clears the tracking dict, leaving a ghost)
-    await enqueue_status_update(client, user_id, window_id, None, thread_id)
-
-    # Cancel any running bash capture — new message pushes pane content down
-    cancel_bash_capture(user_id, thread_id)
-
-    lifecycle_strategy.clear_probe_failures(window_id)
-
-    success, err_message = await send_to_window(window_id, text)
+    success, err_message = await send_to_window(window_id, text, raw=True)
     if not success:
         await safe_reply(message, f"\u274c {err_message}")
         return
 
-    # Let the existing tmux polling/capture path associate the next output
-    # diff with this Telegram command.
-    from ..shell.shell_capture import mark_telegram_command
-
-    mark_telegram_command(window_id, text, user_id, thread_id, message.message_id)
-
     await ack_reaction(client, message.chat.id, message.message_id)
-
-    # Lazy: command_history cycle — same as status_bar_actions sites.
-    from ..command_history import record_command
-
-    record_command(user_id, thread_id, text)
-
-    # Start background capture for ! bash command output
-    if text.startswith("!") and len(text) > 1:
-        bash_cmd = text[1:]  # strip leading "!"
-        task = asyncio.create_task(
-            _capture_bash_output(client, user_id, thread_id, window_id, bash_cmd)
-        )
-        task.add_done_callback(task_done_callback)
-        _bash_capture_tasks[(user_id, thread_id)] = task
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

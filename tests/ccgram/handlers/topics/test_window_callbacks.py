@@ -136,7 +136,7 @@ class TestBindWindowCallback:
             mock_sm.get_approval_mode.return_value = "normal"
             await handle_window_callback(query, 100, f"{CB_WIN_BIND}0", update, context)
 
-            mock_send.assert_called_once_with("@5", "hello agent")
+            mock_send.assert_called_once_with("@5", "hello agent", raw=True)
             assert PENDING_THREAD_TEXT not in context.user_data
 
 
@@ -293,7 +293,7 @@ class TestBindProviderDetection:
         call_args = mock_ensure.call_args
         assert call_args[0] == ("@5", "auto")
 
-    async def test_bind_shell_pending_text_routes_through_shell_handler(self) -> None:
+    async def test_bind_shell_pending_text_sends_literal_command(self) -> None:
         user_data = {
             UNBOUND_WINDOWS_KEY: ["@5"],
             PENDING_THREAD_ID: 42,
@@ -361,21 +361,19 @@ class TestForwardPendingText:
             )
 
         mock_shell.assert_not_awaited()
-        mock_send.assert_called_once_with("@5", "list files")
+        mock_send.assert_called_once_with("@5", "list files", raw=True)
 
-    async def test_new_shell_window_routes_through_handler(self) -> None:
+    async def test_new_shell_window_sends_literal_text(self) -> None:
         from ccgram.handlers.topics.window_callbacks import _forward_pending_text
 
         bot = AsyncMock(spec=Bot)
         with patch(
-            "ccgram.handlers.shell.shell_commands.handle_shell_message",
+            "ccgram.handlers.topics.window_callbacks.send_to_window",
             new_callable=AsyncMock,
-        ) as mock_shell:
+            return_value=(True, ""),
+        ) as mock_send:
             await _forward_pending_text(
                 bot, 1, 42, "@5", "list files", "shell", is_existing_window=False
             )
 
-        mock_shell.assert_awaited_once()
-        args = mock_shell.call_args.args
-        assert args[1:] == (1, 42, "@5", "list files")
-        assert args[0] is bot
+        mock_send.assert_awaited_once_with("@5", "list files", raw=True)
