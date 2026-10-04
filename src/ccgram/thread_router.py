@@ -108,13 +108,8 @@ class ThreadRouter:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize routing state for state.json persistence."""
+        """Serialize non-lifecycle routing state for state.json persistence."""
         return {
-            "thread_bindings": {
-                str(uid): {str(tid): wid for tid, wid in bindings.items()}
-                for uid, bindings in self.thread_bindings.items()
-            },
-            "group_chat_ids": self.group_chat_ids,
             "forum_chat_ids": {
                 str(user_id): chat_id
                 for user_id, chat_id in self.forum_chat_ids.items()
@@ -128,17 +123,15 @@ class ThreadRouter:
         Does NOT call ``_schedule_save`` — loading from disk must not
         trigger a write.
         """
-        self.thread_bindings = {
-            int(uid): {int(tid): wid for tid, wid in bindings.items()}
-            for uid, bindings in data.get("thread_bindings", {}).items()
-        }
-        self.group_chat_ids = data.get("group_chat_ids", {})
+        # tmux session options are authoritative for topic bindings.  Never
+        # resurrect runtime routes from stale state.json data.
+        self.thread_bindings = {}
+        self.group_chat_ids = {}
         self.forum_chat_ids = {
             int(user_id): int(chat_id)
             for user_id, chat_id in data.get("forum_chat_ids", {}).items()
         }
         self.window_display_names = data.get("window_display_names", {})
-        self._dedup_thread_bindings()
         self._rebuild_reverse_index()
 
     # ------------------------------------------------------------------

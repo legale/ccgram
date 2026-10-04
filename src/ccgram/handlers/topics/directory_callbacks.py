@@ -551,7 +551,7 @@ async def _create_window_and_bind(
     await ensure_setup(created_wid, "auto")
 
     if pending_thread_id is not None:
-        bind_topic_to_window(
+        await bind_topic_to_window(
             query,
             user_id,
             pending_thread_id,

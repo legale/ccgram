@@ -1346,13 +1346,21 @@ class TmuxManager:
 
         # Create window in thread
         def _create_and_start() -> tuple[bool, str, str, str]:
-            session = self.get_or_create_session(session_name)
             try:
-                # Create new window
-                window = session.new_window(
-                    window_name=final_window_name,
-                    start_directory=str(path),
-                )
+                session = self.get_session(session_name) if session_name else None
+                if session is None and session_name:
+                    session = self.server.new_session(
+                        session_name=session_name,
+                        start_directory=str(path),
+                    )
+                    window = session.windows[0]
+                    window.rename_window(final_window_name)
+                else:
+                    session = session or self.get_or_create_session()
+                    window = session.new_window(
+                        window_name=final_window_name,
+                        start_directory=str(path),
+                    )
 
                 new_window_id = window.window_id or ""
                 pane = window.active_pane

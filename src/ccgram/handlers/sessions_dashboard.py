@@ -159,7 +159,7 @@ async def _create_session_for_topic(
         return
 
     display = created_name
-    bind_topic_to_window(
+    await bind_topic_to_window(
         query,
         user_id,
         thread_id,
