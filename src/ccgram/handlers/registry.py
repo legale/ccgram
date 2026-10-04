@@ -13,7 +13,7 @@ Command dispatch uses iproute2-style prefix matching via
 ``^//`` regex replaces the old per-name PrefixHandler soup:
 
   ``//sc``   → screenshot_command   (prefix match of "screenshot")
-  ``//det``  → detach_command        (prefix match of "detach")
+  ``//unb``  → unbind_command        (prefix match of "unbind")
   ``//ses``  → sessions_command      (prefix match of "sessions")
   ``//bind`` → bind_command          (bind current topic to cc_<name>)
 
@@ -37,7 +37,7 @@ from telegram.ext._utils.types import HandlerCallback
 from .arg_parser import ArgIter, matches
 from .callback_registry import dispatch as _dispatch_callback
 from .callback_registry import load_handlers as _load_callback_handlers
-from .cleanup import detach_command
+from .cleanup import unbind_command
 from .commands import commands_command
 from .file_handler import handle_document_message, handle_photo_message
 from .live import live_command, screenshot_command
@@ -75,7 +75,7 @@ _DISPATCH_TABLE: list[tuple[str, HandlerFn]] = [
     ("sessions", sessions_command),
     ("ses", sessions_command),
     ("bind", bind_command),
-    ("detach", detach_command),
+    ("unbind", unbind_command),
     ("screenshot", screenshot_command),
     ("screen", screenshot_command),
     ("live", live_command),

@@ -2,7 +2,7 @@
 
 from ccgram.handlers.registry import COMMAND_NAMES
 
-MINIMAL_CONTRACT_COMMANDS = frozenset({"commands", "bind", "detach", "sessions", "ses"})
+MINIMAL_CONTRACT_COMMANDS = frozenset({"commands", "bind", "unbind", "sessions", "ses"})
 
 
 def test_minimal_contract_commands_are_registered() -> None:

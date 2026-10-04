@@ -32,7 +32,7 @@ def test_matches_full_name():
 
 def test_matches_prefix():
     assert matches("sc", "screenshot") is True
-    assert matches("det", "detach") is True
+    assert matches("unb", "unbind") is True
     assert matches("ses", "sessions") is True
     assert matches("li", "live") is True
 
@@ -78,10 +78,10 @@ def test_find_handler_screen_alias():
     assert _find_handler("screen") is screenshot_command
 
 
-def test_find_handler_prefix_det():
-    from ccgram.handlers.cleanup import detach_command
+def test_find_handler_prefix_unb():
+    from ccgram.handlers.cleanup import unbind_command
 
-    assert _find_handler("det") is detach_command
+    assert _find_handler("unb") is unbind_command
 
 
 def test_find_handler_ambiguous_returns_none():
@@ -132,7 +132,7 @@ def test_command_names_contains_minimal_contract():
         "help",
         "sessions",
         "ses",
-        "detach",
+        "unbind",
         "screenshot",
         "live",
         "send",

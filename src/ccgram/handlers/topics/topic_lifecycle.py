@@ -120,7 +120,7 @@ async def prune_stale_state(live_windows: "list[TmuxWindow]") -> None:
 async def topic_closed_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Reopen a managed topic; tmux owns its lifecycle."""
+    """Close the tmux session bound to a manually closed Telegram topic."""
     user = update.effective_user
     chat = update.effective_chat
     if not user or not config.is_user_allowed(user.id) or not chat:
@@ -135,13 +135,18 @@ async def topic_closed_handler(
     session = await find_topic_session(chat.id, thread_id)
     if session is None:
         return
-    try:
-        await PTBTelegramClient(context.bot).reopen_forum_topic(chat.id, thread_id)
-    except BadRequest as e:
-        if "topic_not_modified" not in e.message.lower():
-            logger.warning("Failed to reopen topic %d: %s", thread_id, e)
-    except TelegramError as e:
-        logger.warning("Failed to reopen topic %d: %s", thread_id, e)
+    if not await tmux_manager.kill_session(session.window_name):
+        logger.warning("Failed to close tmux session %s", session.window_name)
+        return
+    lifecycle_strategy.clear_autoclose_timer(user.id, thread_id)
+    await clear_topic_state(
+        user.id,
+        thread_id,
+        client=PTBTelegramClient(context.bot),
+        window_id=session.window_id,
+        window_dead=True,
+    )
+    thread_router.unbind_thread(user.id, thread_id)
 
 
 async def topic_created_handler(

@@ -51,7 +51,7 @@ async def clear_topic_state(
 
     Args:
         window_dead: When False, skip mailbox/qualified-scope cleanup because
-            the tmux window is still alive (e.g. topic close, //detach).
+            the tmux window is still alive (e.g. topic close, //unbind).
             Window-scope callbacks (toolbar labels, screen buffer, etc.) always
             run.  Shell prompt orchestrator state is cleared separately, only
             when the window is truly dead, to preserve skip/offer state for
@@ -107,10 +107,8 @@ async def clear_topic_state(
             mb.clear_inbox(qualified_id)
 
 
-async def detach_command(  # noqa: C901 - Telegram rollback flow is intentionally explicit
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
-    """Close a topic and preserve its session outside the managed prefix."""
+async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Close a topic without killing its tmux session."""
     user = update.effective_user
     if not user or not config.is_user_allowed(user.id):
         return
@@ -146,39 +144,11 @@ async def detach_command(  # noqa: C901 - Telegram rollback flow is intentionall
 
     window_id = session.window_id
     session_name = session.window_name
-    detached_name = tmux_manager.topic_name_from_session_name(session_name)
-    if not detached_name:
-        await safe_reply(update.message, "Cannot determine the session name.")
-        return
-    try:
-        await client.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
-    except TelegramError as e:
-        await safe_reply(update.message, f"Cannot close topic: {e}")
-        return
-
-    if not await tmux_manager.rename_session(session_name, detached_name):
-        try:  # noqa: SIM105 - rollback failure is intentionally ignored
-            await client.reopen_forum_topic(
-                chat_id=chat_id, message_thread_id=thread_id
-            )
-        except TelegramError:
-            pass
-        await safe_reply(
-            update.message,
-            f"Cannot detach session `{session_name}` (target `{detached_name}` may already exist).",
-        )
-        return
-    if not await tmux_manager.clear_session_topic(detached_name):
-        await tmux_manager.rename_session(detached_name, session_name)
-        try:  # noqa: SIM105 - rollback failure is intentionally ignored
-            await client.reopen_forum_topic(
-                chat_id=chat_id, message_thread_id=thread_id
-            )
-        except TelegramError:
-            pass
+    if not await tmux_manager.clear_session_topic(session_name):
         await safe_reply(update.message, "Cannot clear tmux topic metadata.")
         return
 
+    session.topic_ref = None
     await enqueue_status_update(client, user.id, window_id, None, thread_id)
     await clear_topic_state(
         user.id,
@@ -189,7 +159,17 @@ async def detach_command(  # noqa: C901 - Telegram rollback flow is intentionall
         window_dead=False,
     )
     thread_router.unbind_thread(user.id, thread_id)
+    try:
+        await client.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
+    except TelegramError as e:
+        await tmux_manager.set_session_topic(session_name, chat_id, thread_id)
+        session.topic_ref = (chat_id, thread_id)
+        # Lazy: topic binding imports the topic lifecycle graph.
+        from .topics.topic_binding import bind_runtime
+
+        bind_runtime(user.id, chat_id, thread_id, session)
+        await safe_reply(update.message, f"Cannot close topic: {e}")
+        return
     await safe_reply(
-        update.message,
-        f"Detached topic `{detached_name}`. The tmux session `{detached_name}` is still running.",
+        update.message, f"Unbound topic. Session `{session_name}` is still running."
     )
