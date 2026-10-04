@@ -65,15 +65,12 @@ _FLAG_TO_ENV: list[tuple[str, str]] = [
     ("config_dir", "CCGRAM_DIR"),
     ("allowed_users", "ALLOWED_USERS"),
     ("tmux_session", "TMUX_SESSION_NAME"),
-    ("monitor_interval", "MONITOR_POLL_INTERVAL"),
     ("group_id", "CCGRAM_GROUP_ID"),
     ("instance_name", "CCGRAM_INSTANCE_NAME"),
     ("autoclose_done", "AUTOCLOSE_DONE_MINUTES"),
     ("autoclose_dead", "AUTOCLOSE_DEAD_MINUTES"),
     ("provider", "CCGRAM_PROVIDER"),
     ("show_hidden_dirs", "CCGRAM_SHOW_HIDDEN_DIRS"),
-    ("claude_config_dir", "CLAUDE_CONFIG_DIR"),
-    ("whisper_provider", "CCGRAM_WHISPER_PROVIDER"),
     ("ack_reaction", "CCGRAM_ACK_REACTION"),
     ("hide_tool_calls", "CCGRAM_HIDE_TOOL_CALLS"),
 ]
@@ -131,14 +128,6 @@ def apply_args_to_env(**kwargs: object) -> None:
     help="Tmux session name (default: ccgram).",
 )
 @click.option(
-    "--monitor-interval",
-    type=float,
-    default=None,
-    callback=_validate_positive_float,
-    envvar="MONITOR_POLL_INTERVAL",
-    help="Poll interval in seconds (default: 2.0).",
-)
-@click.option(
     "--group-id",
     type=int,
     default=None,
@@ -179,19 +168,6 @@ def apply_args_to_env(**kwargs: object) -> None:
     default=None,
     envvar="CCGRAM_SHOW_HIDDEN_DIRS",
     help="Show hidden (dot) directories in directory browser.",
-)
-@click.option(
-    "--claude-config-dir",
-    type=click.Path(path_type=Path),
-    default=None,
-    envvar="CLAUDE_CONFIG_DIR",
-    help="Claude config directory (default: ~/.claude).",
-)
-@click.option(
-    "--whisper-provider",
-    default=None,
-    envvar="CCGRAM_WHISPER_PROVIDER",
-    help='Whisper transcription provider: "openai", "groq", or "" (disabled).',
 )
 @click.option(
     "--ack-reaction",

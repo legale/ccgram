@@ -236,11 +236,8 @@ class TestLoadHandlers:
         for expected in (
             "db:",
             "wb:",
-            "aq:",
-            "vc:",
             "sh:",
             "sess:",
-            "sync:",
         ):
             assert any(p.startswith(expected) for p in prefixes), (
                 f"expected prefix starting with {expected!r} in registry"
@@ -256,11 +253,8 @@ class TestLoadHandlers:
             "ccgram.handlers.topics.directory_callbacks",
             "ccgram.handlers.topics.window_callbacks",
             "ccgram.handlers.live.screenshot_callbacks",
-            "ccgram.handlers.interactive.interactive_callbacks",
-            "ccgram.handlers.voice.voice_callbacks",
             "ccgram.handlers.shell.shell_commands",
             "ccgram.handlers.sessions_dashboard",
-            "ccgram.handlers.sync_command",
         ]
         for mod in expected_modules:
             assert mod in sys.modules, f"{mod} not imported by load_handlers()"

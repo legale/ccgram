@@ -111,22 +111,7 @@ class Config:
         # All state files live under config_dir
         self.state_file = self.config_dir / "state.json"
         self.session_map_file = self.config_dir / "session_map.json"
-        self.monitor_state_file = self.config_dir / "monitor_state.json"
-        self.events_file = self.config_dir / "events.jsonl"
         self.mailbox_dir = self.config_dir / "mailbox"
-
-        # Claude Code session monitoring configuration
-        _claude_config_dir = os.getenv("CLAUDE_CONFIG_DIR")
-        self.claude_config_dir: Path = (
-            Path(_claude_config_dir).expanduser()
-            if _claude_config_dir
-            else Path.home() / ".claude"
-        )
-        self.claude_projects_path = self.claude_config_dir / "projects"
-
-        self.monitor_poll_interval = max(
-            0.5, float(os.getenv("MONITOR_POLL_INTERVAL", "1.0"))
-        )
         self.status_poll_interval = max(
             0.5, float(os.getenv("CCGRAM_STATUS_POLL_INTERVAL", "1.0"))
         )
@@ -155,32 +140,6 @@ class Config:
         self.ack_reaction: str = _env_with_fallback(
             "CCGRAM_ACK_REACTION", "CCBOT_ACK_REACTION"
         )
-
-        # Whisper transcription
-        self.whisper_provider: str = _env_with_fallback(
-            "CCGRAM_WHISPER_PROVIDER", "CCBOT_WHISPER_PROVIDER"
-        )
-        self.whisper_api_key: str = _env_with_fallback(
-            "CCGRAM_WHISPER_API_KEY", "CCBOT_WHISPER_API_KEY"
-        )
-        self.whisper_base_url: str = _env_with_fallback(
-            "CCGRAM_WHISPER_BASE_URL", "CCBOT_WHISPER_BASE_URL"
-        )
-        self.whisper_model: str = _env_with_fallback(
-            "CCGRAM_WHISPER_MODEL", "CCBOT_WHISPER_MODEL"
-        )
-        self.whisper_language: str = _env_with_fallback(
-            "CCGRAM_WHISPER_LANGUAGE", "CCBOT_WHISPER_LANGUAGE"
-        )
-
-        # Voice replies (text-to-speech)
-        # CCGRAM_TTS_PROVIDER: empty = disabled; "edge" = edge-tts; "openai" = OpenAI TTS
-        self.tts_provider: str = os.getenv("CCGRAM_TTS_PROVIDER", "")
-        self.tts_voice: str = os.getenv(
-            "CCGRAM_TTS_VOICE", "en-US-EmmaMultilingualNeural"
-        )
-        self.tts_model: str = os.getenv("CCGRAM_TTS_MODEL", "gpt-4o-mini-tts")
-        self.tts_api_key: str = os.getenv("CCGRAM_TTS_API_KEY", "")
 
         # LLM command generation (shell provider) and toolbar config path.
         # toolbar_config_path resolution: env var → ~/.ccgram/toolbar.toml → "".

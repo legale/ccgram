@@ -50,8 +50,6 @@ _PTB_BOT_ALLOWLIST = frozenset(
         "sync_command.py",
         "toolbar/toolbar_callbacks.py",
         "topics/directory_callbacks.py",
-        "voice/voice_callbacks.py",
-        "voice/voice_handler.py",
     }
 )
 
@@ -98,8 +96,6 @@ _SINGLETON_ALLOWLIST = frozenset(
         "topics/topic_lifecycle.py",
         "topics/topic_orchestration.py",
         "topics/window_callbacks.py",
-        "voice/voice_callbacks.py",
-        "voice/voice_handler.py",
     }
 )
 

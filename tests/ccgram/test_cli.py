@@ -58,16 +58,6 @@ class TestCliCommands:
 
 
 class TestRunValidation:
-    def test_zero_interval_rejected(self, runner):
-        result = runner.invoke(cli, ["run", "--monitor-interval", "0"])
-        assert result.exit_code != 0
-        assert "must be positive" in result.output
-
-    def test_negative_interval_rejected(self, runner):
-        result = runner.invoke(cli, ["run", "--monitor-interval", "-1"])
-        assert result.exit_code != 0
-        assert "must be positive" in result.output
-
     def test_negative_autoclose_done_rejected(self, runner):
         result = runner.invoke(cli, ["run", "--autoclose-done", "-5"])
         assert result.exit_code != 0
@@ -108,10 +98,6 @@ class TestApplyArgsToEnv:
         apply_args_to_env(group_id=789)
         assert os.environ["CCGRAM_GROUP_ID"] == "789"
 
-    def test_monitor_interval(self):
-        apply_args_to_env(monitor_interval=1.5)
-        assert os.environ["MONITOR_POLL_INTERVAL"] == "1.5"
-
     def test_none_flags_dont_overwrite_env(self, monkeypatch):
         monkeypatch.setenv("TMUX_SESSION_NAME", "from-env")
         apply_args_to_env()
@@ -127,7 +113,6 @@ class TestApplyArgsToEnv:
             config_dir="/tmp/cc",
             allowed_users="1,2",
             tmux_session="s",
-            monitor_interval=3.0,
             group_id=99,
             instance_name="n",
             autoclose_done=10,
@@ -136,7 +121,6 @@ class TestApplyArgsToEnv:
 
         assert os.environ["ALLOWED_USERS"] == "1,2"
         assert os.environ["TMUX_SESSION_NAME"] == "s"
-        assert os.environ["MONITOR_POLL_INTERVAL"] == "3.0"
         assert os.environ["CCGRAM_GROUP_ID"] == "99"
         assert os.environ["CCGRAM_INSTANCE_NAME"] == "n"
         assert os.environ["AUTOCLOSE_DONE_MINUTES"] == "10"

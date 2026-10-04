@@ -1,6 +1,4 @@
 import socket
-from pathlib import Path
-
 import pytest
 
 from ccgram.config import Config
@@ -15,7 +13,6 @@ def _base_env(monkeypatch, tmp_path):
         "CCGRAM_INSTANCE_NAME",
         "CCGRAM_PROVIDER",
         "CCGRAM_HIDE_TOOL_CALLS",
-        "MONITOR_POLL_INTERVAL",
         "CCGRAM_STATUS_POLL_INTERVAL",
     ):
         monkeypatch.delenv(name, raising=False)
@@ -32,11 +29,6 @@ class TestConfigValid:
         monkeypatch.setenv("TMUX_SESSION_NAME", "mysession")
         cfg = Config()
         assert cfg.tmux_session_name == "mysession"
-
-    def test_custom_monitor_poll_interval(self, monkeypatch):
-        monkeypatch.setenv("MONITOR_POLL_INTERVAL", "5.0")
-        cfg = Config()
-        assert cfg.monitor_poll_interval == 5.0
 
     def test_is_user_allowed_true(self):
         cfg = Config()
@@ -98,22 +90,6 @@ class TestConfigMissingEnv:
         monkeypatch.setenv("CCGRAM_GROUP_ID", "not-a-number")
         with pytest.raises(ValueError, match="CCGRAM_GROUP_ID must be a valid integer"):
             Config()
-
-
-@pytest.mark.usefixtures("_base_env")
-class TestClaudeConfigDir:
-    def test_claude_config_dir_default(self, monkeypatch):
-        monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
-        cfg = Config()
-        assert cfg.claude_config_dir == Path.home() / ".claude"
-        assert cfg.claude_projects_path == Path.home() / ".claude" / "projects"
-
-    def test_claude_config_dir_override(self, monkeypatch, tmp_path):
-        custom_dir = tmp_path / "custom-claude"
-        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom_dir))
-        cfg = Config()
-        assert cfg.claude_config_dir == custom_dir
-        assert cfg.claude_projects_path == custom_dir / "projects"
 
 
 @pytest.mark.usefixtures("_base_env")
@@ -253,15 +229,6 @@ class TestPollingConfig:
     @pytest.mark.parametrize(
         ("attr", "env_var", "default", "env_str", "expected", "clamp_str", "clamped"),
         [
-            (
-                "monitor_poll_interval",
-                "MONITOR_POLL_INTERVAL",
-                1.0,
-                "0.8",
-                0.8,
-                "0.1",
-                0.5,
-            ),
             (
                 "status_poll_interval",
                 "CCGRAM_STATUS_POLL_INTERVAL",
