@@ -18,6 +18,7 @@ from ccgram.handlers.polling.window_tick import (
     _maybe_check_passive_shell,
     _scan_window_panes,
     _apply_active_transition,
+    _transition_to_idle,
     _update_status,
     decide_tick,
     tick_window,
@@ -213,6 +214,25 @@ class TestUpdateStatusTopicDiff:
 
 
 class TestUpdateStatusActiveLine:
+    async def test_idle_transition_clears_status_without_sending_idle_bubble(self):
+        bot = AsyncMock(spec=Bot)
+        with (
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.enqueue_status_update",
+                new_callable=AsyncMock,
+            ) as mock_enqueue,
+            patch(
+                "ccgram.handlers.polling.window_tick.apply.thread_router"
+            ),
+        ):
+            await _transition_to_idle(bot, 1, "@0", 100, 42, "test")
+
+        assert mock_enqueue.await_args.args[3] is None
+
     async def test_idle_active_transition_does_not_send_typing(self):
         bot = AsyncMock(spec=Bot)
         decision = TickDecision(transition="active", send_status=False)

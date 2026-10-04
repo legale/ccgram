@@ -49,7 +49,6 @@ if TYPE_CHECKING:
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
-IDLE_STATUS_TEXT = "idle"
 
 
 def _get_provider(window_id: str) -> "AgentProvider":
@@ -89,21 +88,15 @@ async def _transition_to_idle(
     thread_id: int,
     chat_id: int,
     display: str,
-    notif_mode: str,
 ) -> None:
     terminal_poll_state.cancel_startup_timer(window_id)
     client = PTBTelegramClient(bot)
     await update_topic_emoji(client, chat_id, thread_id, "idle", display)
     lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
     lifecycle_strategy.clear_typing_state(user_id, thread_id)
-    if notif_mode not in ("muted", "errors_only"):
-        await enqueue_status_update(
-            client, user_id, window_id, IDLE_STATUS_TEXT, thread_id=thread_id
-        )
-    else:
-        await enqueue_status_update(
-            client, user_id, window_id, None, thread_id=thread_id
-        )
+    # Idle is represented by the topic emoji only. Do not create an idle
+    # status bubble with buttons; clear any previous transient status instead.
+    await enqueue_status_update(client, user_id, window_id, None, thread_id=thread_id)
 
 
 # ── Multi-pane scanning (agent teams) ─────────────────────────────────
@@ -390,7 +383,6 @@ async def _apply_tick_decision(
             thread_id,
             thread_router.resolve_chat_id(user_id, thread_id),
             thread_router.get_display_name(window_id),
-            notif_mode,
         )
     elif decision.transition == "done":
         await _apply_done_transition(bot, user_id, window_id, thread_id)

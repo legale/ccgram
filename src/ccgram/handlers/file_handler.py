@@ -1,8 +1,7 @@
 """Photo and document message handlers for forwarding files to the agent.
 
-Saves uploaded files to `.ccgram-uploads/` in the session's cwd, then sends
-Claude a natural-language message with the relative path so it can read the
-file via its Read tool.
+Saves uploaded files to `tmp/` in the session's cwd, then sends Claude a
+natural-language message with the absolute path so it can read the file.
 
 Key handlers:
   - handle_photo_message: handles filters.PHOTO
@@ -34,7 +33,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 # Upload directory name inside project cwd
-_UPLOAD_DIR = ".ccgram-uploads"
+_UPLOAD_DIR = "tmp"
 
 # Max filename length after sanitization
 _MAX_FILENAME_LEN = 200
@@ -140,7 +139,7 @@ async def _download_and_save(
     file_size: int | None,
     size_label: str,
 ) -> str | None:
-    """Download a Telegram file and save it to the upload directory.
+    """Download a Telegram file and save it to the session tmp directory.
 
     Returns the final filename on success, or None on failure (error already
     replied to the user).
@@ -216,7 +215,7 @@ async def _upload_and_notify(
 
     rel_path = f"{_UPLOAD_DIR}/{saved_name}"
     caption = message.caption or ""
-    claude_msg = claude_msg_tpl.format(name=saved_name, path=rel_path)
+    claude_msg = claude_msg_tpl.format(name=saved_name, path=upload_path / saved_name)
     if caption:
         claude_msg += f"\n\nUser note: {_sanitize_caption(caption)}"
 
@@ -235,7 +234,7 @@ async def _upload_and_notify(
 async def handle_photo_message(
     update: Update, _context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Handle photo uploads: save to .ccgram-uploads/ and notify Claude."""
+    """Handle photo uploads: save to the session tmp/ and notify Claude."""
     user = update.effective_user
     message = update.message
     if not user or not message or not message.photo:
@@ -261,7 +260,7 @@ async def handle_photo_message(
 async def handle_document_message(
     update: Update, _context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Handle document uploads: save to .ccgram-uploads/ and notify Claude."""
+    """Handle document uploads: save to the session tmp/ and notify Claude."""
     user = update.effective_user
     message = update.message
     if not user or not message or not message.document:

@@ -573,6 +573,40 @@ class TestPassiveEdgeCases:
         assert _shell_monitor_state["@0"].msg_id == 61
 
     @pytest.mark.asyncio()
+    async def test_new_user_message_starts_a_new_screen_diff_message(self) -> None:
+        from ccgram.handlers.shell.shell_capture import (
+            _shell_monitor_state,
+            check_passive_shell_output,
+            mark_telegram_command,
+        )
+
+        bot = AsyncMock(spec=Bot)
+        first = MagicMock(message_id=60)
+        second = MagicMock(message_id=62)
+        pane = "ccgram:0❯ ls\nfile.txt\nccgram:0❯"
+        changed_pane = "ccgram:0❯ ls\nfile.txt\nfile2.txt\nccgram:0❯"
+
+        with (
+            patch(
+                f"{_MOD}.rate_limit_send_message",
+                new_callable=AsyncMock,
+                side_effect=[first, second],
+            ) as mock_send,
+            patch(f"{_MOD}.thread_router") as mock_sm,
+            patch(
+                f"{_MOD}._capture_with_scrollback",
+                side_effect=[pane, changed_pane],
+            ),
+        ):
+            mock_sm.resolve_chat_id.return_value = -100
+            await check_passive_shell_output(bot, 1, 42, "@0", pane)
+            mark_telegram_command("@0", "ls", 1, 42, message_id=61)
+            await check_passive_shell_output(bot, 1, 42, "@0", changed_pane)
+
+        assert mock_send.await_count == 2
+        assert _shell_monitor_state["@0"].msg_id == 62
+
+    @pytest.mark.asyncio()
     async def test_scroll_out_preserves_in_progress(self) -> None:
         from ccgram.handlers.shell.shell_capture import (
             _ShellMonitorState,
