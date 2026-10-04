@@ -2,7 +2,6 @@
 
 Bundles the modules that drive Telegram-topic ↔ tmux-window binding:
 ``topic_orchestration`` (new-window flow, retries),
-``bind_command`` (/bind unbound-topic attach flow),
 ``topic_lifecycle`` (autoclose timers, unbound TTL, topic close/edit
 handlers), ``directory_browser`` (directory + window picker UI),
 ``directory_callbacks`` (browser callback dispatcher), and

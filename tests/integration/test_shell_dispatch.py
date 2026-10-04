@@ -64,10 +64,7 @@ async def app():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     application = Application.builder().token(token).build()
 
-    from ccgram.bot import (
-        bind_command,
-        text_handler,
-    )
+    from ccgram.bot import text_handler
     from ccgram.handlers.callback_registry import (
         dispatch as callback_handler,
         load_handlers,
@@ -83,7 +80,6 @@ async def app():
         filters,
     )
 
-    application.add_handler(CommandHandler("bind", bind_command))
     application.add_handler(CommandHandler("sessions", sessions_command))
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(

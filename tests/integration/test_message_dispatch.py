@@ -61,10 +61,7 @@ async def app():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     application = Application.builder().token(token).build()
 
-    from ccgram.bot import (
-        bind_command,
-        text_handler,
-    )
+    from ccgram.bot import text_handler
     from ccgram.handlers.callback_registry import (
         dispatch as callback_handler,
         load_handlers,
@@ -80,7 +77,6 @@ async def app():
         filters,
     )
 
-    application.add_handler(CommandHandler("bind", bind_command))
     application.add_handler(CommandHandler("sessions", sessions_command))
     application.add_handler(CallbackQueryHandler(callback_handler))
     application.add_handler(
@@ -136,42 +132,3 @@ async def test_unauthorized_user_rejected(app) -> None:
     ):
         await app.process_update(update)
         mock_handler.assert_not_awaited()
-
-
-async def test_bind_command_dispatched(app) -> None:
-    update = _make_update("/bind", bot=app.bot)
-
-    with (
-        patch(
-            "ccgram.handlers.text.text_handler._handle_unbound_topic",
-            new_callable=AsyncMock,
-        ) as mock_handle,
-        patch(
-            "ccgram.handlers.topics.bind_command.config.is_user_allowed",
-            return_value=True,
-        ),
-    ):
-        await app.process_update(update)
-        mock_handle.assert_awaited_once()
-
-
-async def test_command_priority_over_text(app) -> None:
-    """Commands like /bind should be handled by CommandHandler, not text_handler."""
-    update = _make_update("/bind", bot=app.bot)
-
-    with (
-        patch(
-            "ccgram.handlers.topics.bind_command.config.is_user_allowed",
-            return_value=True,
-        ),
-        patch(
-            "ccgram.handlers.text.text_handler.handle_text_message",
-            new_callable=AsyncMock,
-        ) as mock_text,
-        patch(
-            "ccgram.handlers.text.text_handler._handle_unbound_topic",
-            new_callable=AsyncMock,
-        ),
-    ):
-        await app.process_update(update)
-        mock_text.assert_not_awaited()
