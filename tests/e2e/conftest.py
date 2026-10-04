@@ -52,22 +52,12 @@ def e2e_state_dir(tmp_path, monkeypatch):
     state_dir.mkdir()
 
     state_file = state_dir / "state.json"
-    session_map = state_dir / "session_map.json"
-    events_file = state_dir / "events.jsonl"
-    monitor_state = state_dir / "monitor_state.json"
-
     state_file.write_text("{}")
-    session_map.write_text("{}")
-    events_file.write_text("")
-    monitor_state.write_text("{}")
 
     from ccgram.config import config
 
     monkeypatch.setattr(config, "config_dir", state_dir)
     monkeypatch.setattr(config, "state_file", state_file)
-    monkeypatch.setattr(config, "session_map_file", session_map)
-    monkeypatch.setattr(config, "events_file", events_file)
-    monkeypatch.setattr(config, "monitor_state_file", monitor_state)
 
     return state_dir
 

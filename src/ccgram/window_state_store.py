@@ -219,8 +219,7 @@ class WindowStateStore:
 
     * ``schedule_save``: triggers a debounced save after mutations.
     * ``on_hookless_provider_switch``: called when switching to a
-      hookless provider so session_map.json can be cleaned up without a
-      circular dependency.
+      provider-switch cleanup callback without a circular dependency.
     """
 
     def __init__(
@@ -418,8 +417,7 @@ class WindowStateStore:
         in the same write so provider/cwd updates stay atomic.
 
         When switching to a hookless provider (e.g. shell), invokes the
-        ``_on_hookless_provider_switch`` callback so the caller can clear the
-        stale session_map.json entry without a circular import.
+        cleanup callback without importing the session manager.
 
         ``new_provider_supports_hook`` must be resolved by the caller (e.g.
         via ``registry.get(provider_name).capabilities.supports_hook``) so
@@ -557,10 +555,9 @@ class WindowStateStore:
     def prune_stale_window_states(
         self,
         live_window_ids: set[str],
-        session_map_wids: set[str],
         bound_window_ids: set[str],
     ) -> bool:
-        """Remove window_states not in session_map, not bound, and not live.
+        """Remove window_states not bound and not live.
 
         Returns True if any changes were made.
         """
@@ -568,8 +565,7 @@ class WindowStateStore:
             wid
             for wid in self.window_states
             if (
-                wid not in session_map_wids
-                and wid not in bound_window_ids
+                wid not in bound_window_ids
                 and wid not in live_window_ids
             )
         ]

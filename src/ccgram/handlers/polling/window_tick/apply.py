@@ -110,7 +110,7 @@ async def _transition_to_idle(
 
 
 async def _surface_pane_alert(
-    bot: "Bot", user_id: int, window_id: str, thread_id: int, pane_id: str
+    _bot: "Bot", _user_id: int, _window_id: str, _thread_id: int, _pane_id: str
 ) -> None:
     return
 

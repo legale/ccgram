@@ -110,7 +110,6 @@ class Config:
 
         # All state files live under config_dir
         self.state_file = self.config_dir / "state.json"
-        self.session_map_file = self.config_dir / "session_map.json"
         self.mailbox_dir = self.config_dir / "mailbox"
         self.status_poll_interval = max(
             0.5, float(os.getenv("CCGRAM_STATUS_POLL_INTERVAL", "1.0"))

@@ -2,7 +2,7 @@
 
 Provides per-window inboxes with atomic writes, TTL-based expiration,
 and FIFO ordering via timestamp-prefixed filenames. Mailbox IDs use
-qualified window IDs (e.g. ``ccgram:@0``) matching session_map convention.
+qualified window IDs (e.g. ``ccgram:@0``).
 
 Key class: Mailbox.
 """

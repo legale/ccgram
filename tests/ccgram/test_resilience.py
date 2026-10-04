@@ -1,16 +1,14 @@
 """Tests for resilience and crash-prevention fixes.
 
-Covers: background loop catch-all, dead worker respawn, session_map corruption
-guard, pyte feed/resize guards, rate_limit_send locking, JSONL malformed entry
-handling, probe failure clearing, poll state cleanup, shutdown notification
-lifecycle.
+Covers: background loop catch-all, dead worker respawn, pyte feed/resize guards,
+rate_limit_send locking, JSONL malformed entry handling, probe failure clearing,
+poll state cleanup, shutdown notification lifecycle.
 """
 
 import asyncio
 import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from telegram.error import TelegramError
 
 
 class TestScreenBufferResilience:

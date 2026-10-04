@@ -26,9 +26,6 @@ def make_session_manager(tmp_path, monkeypatch):
     def _make(state_file: Path | None = None) -> SessionManager:
         sf = state_file or (tmp_path / "state.json")
         monkeypatch.setattr("ccgram.config.config.state_file", sf)
-        monkeypatch.setattr(
-            "ccgram.config.config.session_map_file", tmp_path / "session_map.json"
-        )
         return SessionManager()
 
     return _make
@@ -142,10 +139,6 @@ async def test_duplicate_bindings_deduped_on_load(tmp_path, monkeypatch) -> None
     sf = tmp_path / "state.json"
     sf.write_text(json.dumps(state))
     monkeypatch.setattr("ccgram.config.config.state_file", sf)
-    monkeypatch.setattr(
-        "ccgram.config.config.session_map_file", tmp_path / "session_map.json"
-    )
-
     SessionManager()
     assert thread_router.get_window_for_thread(1, 10) is None
     assert thread_router.get_window_for_thread(1, 20) == "@0"

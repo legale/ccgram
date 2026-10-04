@@ -26,7 +26,6 @@ from ..status.status_bubble import (
 )
 from .message_sender import (
     edit_with_fallback,
-    rate_limit_send,
     rate_limit_send_message,
     send_kwargs,
 )

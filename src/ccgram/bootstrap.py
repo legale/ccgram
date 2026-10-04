@@ -24,8 +24,6 @@ from .session import session_manager
 from .utils import task_done_callback
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from telegram.ext import Application
 
 logger = structlog.get_logger()

@@ -76,8 +76,6 @@ def status_main() -> None:
 
     # Read state files
     state = _read_json(config_dir / "state.json")
-    session_map = _read_json(config_dir / "session_map.json")
-
     # Get live tmux windows
     live_windows = _list_tmux_windows(session_name)
 
@@ -89,15 +87,10 @@ def status_main() -> None:
         for thread_id_str, window_id in bindings.items():
             bound_windows[window_id] = (int(thread_id_str), int(user_id_str))
 
-    # Count monitored sessions
-    prefix = f"{session_name}:"
-    monitored = sum(1 for k in session_map if k.startswith(prefix))
-
     # Output
     print(f"ccgram {__version__}")
     print(f"Provider: {provider_name} ({cap_flags})")
     print(f"Tmux session: {session_name} ({len(live_windows)} windows)")
-    print(f"Monitored sessions: {monitored}")
 
     if not live_windows and not bound_windows:
         return

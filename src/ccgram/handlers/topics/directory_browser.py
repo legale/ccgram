@@ -17,7 +17,6 @@ from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from ...session_map import parse_emdash_provider
 from ...user_preferences import user_preferences
 from ...window_resolver import is_foreign_window
 from ..callback_data import (
@@ -98,9 +97,7 @@ def _window_label(window_id: str, window_name: str) -> tuple[str, str]:
     Emdash windows get a distinct icon and provider suffix.
     """
     if is_foreign_window(window_id):
-        provider = parse_emdash_provider(window_id.rsplit(":", 1)[0])
-        suffix = f" ({provider})" if provider else ""
-        return "linked", f"{window_name}{suffix}"
+        return "linked", window_name
     return "local", window_name
 
 

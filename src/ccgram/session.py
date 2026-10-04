@@ -6,7 +6,6 @@ Manages the key mappings:
 
 Responsibilities:
   - Persist/load state to ~/.ccgram/state.json.
-  - Sync window↔session bindings from session_map.json (written by hook).
   - Resolve window IDs to ClaudeSession objects (JSONL file reading).
   - Delegate thread↔window routing to ThreadRouter.
   - Send keystrokes to tmux windows and retrieve message history.
@@ -16,7 +15,6 @@ Key class: SessionManager (singleton instantiated as `session_manager`).
 Thread routing: delegated to ThreadRouter (see thread_router.py) — no pass-throughs.
 """
 
-import json
 import structlog
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,11 +22,6 @@ from typing import Any
 
 from .config import config
 from .mailbox import Mailbox
-from .session_map import (
-    SessionMapSync,
-    install_session_map_sync,
-    session_map_sync,
-)
 from .state_persistence import StatePersistence
 from .tmux_manager import tmux_manager
 from .thread_router import ThreadRouter, install_thread_router, thread_router
@@ -37,7 +30,7 @@ from .user_preferences import (
     install_user_preferences,
     user_preferences,
 )
-from .window_resolver import EMDASH_SESSION_PREFIX, is_foreign_window, is_window_id
+from .window_resolver import is_foreign_window, is_window_id
 from .window_view import WindowView
 from .window_state_store import (
     APPROVAL_MODES,
@@ -152,7 +145,7 @@ class SessionManager:
         self._persistence = StatePersistence(config.state_file, self._serialize_state)
         self._window_store = WindowStateStore(
             schedule_save=self._save_state,
-            on_hookless_provider_switch=self._clear_session_map_entry,
+            on_hookless_provider_switch=lambda _window_id: None,
         )
         install_window_store(self._window_store)
         self._thread_router = ThreadRouter(
@@ -162,8 +155,6 @@ class SessionManager:
         install_thread_router(self._thread_router)
         self._user_preferences = UserPreferences(schedule_save=self._save_state)
         install_user_preferences(self._user_preferences)
-        self._session_map_sync = SessionMapSync(schedule_save=self._save_state)
-        install_session_map_sync(self._session_map_sync)
         self._load_state()
 
     def _serialize_state(self) -> dict[str, Any]:
@@ -266,9 +257,7 @@ class SessionManager:
             # Migrate mailbox directories for remapped window IDs
             _migrate_mailbox_ids(old_display, self.window_states, tmux_session)
 
-        # Prune session_map.json entries for dead windows
         live_ids = {w.window_id for w in live}
-        session_map_sync.prune_session_map(live_ids)
 
         # Sync display names from live tmux windows (detect external renames)
         live_pairs = [(w.window_id, w.window_name) for w in live]
@@ -366,32 +355,6 @@ class SessionManager:
         self._save_state()
         return True
 
-    def _get_session_map_window_ids(self) -> set[str]:
-        """Read session_map.json and return window IDs tracked by ccgram.
-
-        Includes native windows (stripped to @id) and emdash windows
-        (full qualified key like "emdash-claude-main-xxx:@0").
-        """
-        session_map_file = getattr(
-            config, "session_map_file", config.config_dir / "session_map.json"
-        )
-        if not session_map_file.exists():
-            return set()
-        try:
-            raw = json.loads(session_map_file.read_text())
-        except (json.JSONDecodeError, OSError):  # fmt: skip
-            return set()
-        prefix = f"{config.tmux_session_name}:"
-        result: set[str] = set()
-        for key in raw:
-            if key.startswith(prefix):
-                wid = key[len(prefix) :]
-                if self._is_window_id(wid):
-                    result.add(wid)
-            elif key.startswith(EMDASH_SESSION_PREFIX):
-                result.add(key)
-        return result
-
     def audit_state(
         self,
         live_window_ids: set[str],
@@ -418,8 +381,6 @@ class SessionManager:
                 bound_window_ids.add(wid)
                 if wid in live_window_ids:
                     live_binding_count += 1
-
-        session_map_wids = self._get_session_map_window_ids()
 
         # 1. Ghost bindings (thread → dead window) — fixable (close topic)
         for uid, bindings in thread_router.thread_bindings.items():
@@ -462,11 +423,10 @@ class SessionManager:
                     )
                 )
 
-        # 4. Stale window_states (not in session_map, not bound, not live)
+        # 4. Stale window_states (not bound and not live)
         for wid in self.window_states:
             if (
-                wid not in session_map_wids
-                and wid not in bound_window_ids
+                wid not in bound_window_ids
                 and wid not in live_window_ids
             ):
                 display = self.window_states[wid].window_name or wid
@@ -504,7 +464,7 @@ class SessionManager:
                 )
 
         # 7. Orphaned tmux windows (live, known to ccgram, but not bound to any topic)
-        known_wids = session_map_wids | set(self.window_states.keys())
+        known_wids = set(self.window_states.keys())
         for wid in live_window_ids:
             if wid not in bound_window_ids and wid in known_wids:
                 name = dict(live_windows).get(wid, wid)
@@ -523,11 +483,10 @@ class SessionManager:
         )
 
     def prune_stale_window_states(self, live_window_ids: set[str]) -> bool:
-        """Remove window_states not in session_map, not bound, and not live.
+        """Remove window_states not bound and not live.
 
         Returns True if any changes were made.
         """
-        session_map_wids = self._get_session_map_window_ids()
         bound_window_ids: set[str] = set()
         for bindings in thread_router.thread_bindings.values():
             bound_window_ids.update(bindings.values())
@@ -536,8 +495,7 @@ class SessionManager:
             wid
             for wid in self.window_states
             if (
-                wid not in session_map_wids
-                and wid not in bound_window_ids
+                wid not in bound_window_ids
                 and wid not in live_window_ids
             )
         ]
@@ -603,10 +561,6 @@ class SessionManager:
                 provider_name != "shell" and bool(provider_name)
             ),
         )
-
-    def _clear_session_map_entry(self, window_id: str) -> None:
-        """Delegate to session_map_sync — see session_map.py for implementation."""
-        session_map_sync.clear_session_map_entry(window_id)
 
     def set_window_cwd(self, window_id: str, cwd: str) -> None:
         """Set the working directory for a window and persist state."""

@@ -1,8 +1,8 @@
 """Tests for required _schedule_save callbacks on persistence singletons.
 
-All four state singletons — ``WindowStateStore`` (F2.1),
-``ThreadRouter`` (F2.2), ``UserPreferences`` (F2.3) and
-``SessionMapSync`` (F2.4) — are constructor-injected. Their
+The state singletons — ``WindowStateStore`` (F2.1),
+``ThreadRouter`` (F2.2) and ``UserPreferences`` (F2.3) — are
+constructor-injected. Their
 ``schedule_save`` callbacks are required arguments, so a singleton
 cannot be built without explicit wiring. The legacy ``unwired_save``
 fallback was removed in F2.5.
@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import pytest
 
-from ccgram.session_map import SessionMapSync
 from ccgram.thread_router import ThreadRouter
 from ccgram.user_preferences import UserPreferences
 from ccgram.window_state_store import WindowStateStore
@@ -131,18 +130,6 @@ class TestThreadRouterRequiresCallbacks:
         assert router.get_display_name("@1") == "@1"
 
 
-class TestSessionMapSyncRequiresCallback:
-    def test_constructor_requires_schedule_save(self) -> None:
-        with pytest.raises(TypeError, match="schedule_save"):
-            SessionMapSync()  # type: ignore[call-arg]
-
-    def test_constructor_wires_schedule_save(self) -> None:
-        calls: list[int] = []
-        sync = SessionMapSync(schedule_save=lambda: calls.append(1))
-        sync._schedule_save()
-        assert calls == [1]
-
-
 class TestSessionManagerWiresAllSingletons:
     def test_post_init_wires_all_schedule_save_callbacks(self) -> None:
         # SessionManager.__post_init__ wires every singleton's _schedule_save
@@ -151,7 +138,6 @@ class TestSessionManagerWiresAllSingletons:
         from ccgram.session import SessionManager
 
         sm = SessionManager()
-        from ccgram.session_map import session_map_sync
         from ccgram.thread_router import thread_router
         from ccgram.user_preferences import user_preferences
         from ccgram.window_state_store import get_window_store
@@ -160,7 +146,6 @@ class TestSessionManagerWiresAllSingletons:
             get_window_store(),
             thread_router,
             user_preferences,
-            session_map_sync,
         ):
             assert singleton._schedule_save is not None
             # _save_state may schedule via asyncio if a loop is running,
@@ -244,15 +229,4 @@ class TestGetUserPreferences:
         sm = SessionManager()
         prefs = get_user_preferences()
         assert prefs is sm._user_preferences
-        del sm
-
-
-class TestGetSessionMapSync:
-    def test_returns_installed_sync(self) -> None:
-        from ccgram.session import SessionManager
-        from ccgram.session_map import get_session_map_sync
-
-        sm = SessionManager()
-        sync = get_session_map_sync()
-        assert sync is sm._session_map_sync
         del sm

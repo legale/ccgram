@@ -470,7 +470,6 @@ class TestPruneStaleWindowStates:
         store.get_window_state("@3")
         changed = store.prune_stale_window_states(
             live_window_ids=set(),
-            session_map_wids=set(),
             bound_window_ids=set(),
         )
         assert changed is True
@@ -481,28 +480,16 @@ class TestPruneStaleWindowStates:
         store.get_window_state("@2")
         changed = store.prune_stale_window_states(
             live_window_ids={"@1"},
-            session_map_wids=set(),
             bound_window_ids=set(),
         )
         assert changed is True
         assert "@1" in store.window_states
         assert "@2" not in store.window_states
 
-    def test_keeps_session_map_windows(self, store: WindowStateStore) -> None:
-        store.get_window_state("@1")
-        changed = store.prune_stale_window_states(
-            live_window_ids=set(),
-            session_map_wids={"@1"},
-            bound_window_ids=set(),
-        )
-        assert changed is False
-        assert "@1" in store.window_states
-
     def test_keeps_bound_windows(self, store: WindowStateStore) -> None:
         store.get_window_state("@1")
         changed = store.prune_stale_window_states(
             live_window_ids=set(),
-            session_map_wids=set(),
             bound_window_ids={"@1"},
         )
         assert changed is False
@@ -511,7 +498,6 @@ class TestPruneStaleWindowStates:
     def test_no_stale_returns_false(self, store: WindowStateStore) -> None:
         changed = store.prune_stale_window_states(
             live_window_ids=set(),
-            session_map_wids=set(),
             bound_window_ids=set(),
         )
         assert changed is False

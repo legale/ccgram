@@ -33,7 +33,6 @@ class TestStatusMain:
         captured = capsys.readouterr()
         assert "ccgram" in captured.out
         assert "test-session (0 windows)" in captured.out
-        assert "Monitored sessions: 0" in captured.out
 
     def test_with_bound_window(self, tmp_path, monkeypatch, capsys) -> None:
         monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
@@ -45,11 +44,6 @@ class TestStatusMain:
         }
         (tmp_path / "state.json").write_text(json.dumps(state))
 
-        session_map = {
-            "ccgram:@5": {"session_id": "abc-123", "cwd": "/tmp"},
-        }
-        (tmp_path / "session_map.json").write_text(json.dumps(session_map))
-
         monkeypatch.setattr(
             "ccgram.status_cmd._list_tmux_windows",
             lambda _: [{"id": "@5", "name": "my-project"}],
@@ -60,7 +54,6 @@ class TestStatusMain:
 
         captured = capsys.readouterr()
         assert "1 windows" in captured.out
-        assert "Monitored sessions: 1" in captured.out
         assert "@5" in captured.out
         assert "my-project" in captured.out
         assert "topic 42" in captured.out

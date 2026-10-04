@@ -198,8 +198,8 @@ def _list_live_windows(session_name: str) -> dict[str, str]:
     return windows
 
 
-def _get_known_window_ids(config_dir: Path, session_name: str) -> set[str]:
-    """Get window IDs known from state.json bindings and session_map.json."""
+def _get_known_window_ids(config_dir: Path, _session_name: str) -> set[str]:
+    """Get window IDs known from state.json bindings."""
     known: set[str] = set()
 
     state_file = config_dir / "state.json"
@@ -211,22 +211,11 @@ def _get_known_window_ids(config_dir: Path, session_name: str) -> set[str]:
         except (json.JSONDecodeError, OSError):  # fmt: skip
             pass
 
-    session_map_file = config_dir / "session_map.json"
-    prefix = f"{session_name}:"
-    if session_map_file.exists():
-        try:
-            session_map = json.loads(session_map_file.read_text())
-            for key in session_map:
-                if key.startswith(prefix):
-                    known.add(key[len(prefix) :])
-        except (json.JSONDecodeError, OSError):  # fmt: skip
-            pass
-
     return known
 
 
 def _find_orphaned_windows() -> list[tuple[str, str]]:
-    """Find tmux windows not bound to any topic and not in session_map."""
+    """Find tmux windows not bound to any topic."""
     session_name = tmux_session_name()
     live_windows = _list_live_windows(session_name)
     if not live_windows:

@@ -15,7 +15,6 @@ from ccgram.handlers.status.status_bubble import (
     clear_status_message,
     clear_status_msg_info,
     convert_status_to_content,
-    format_claude_task_status,
     format_pane_block,
     process_status_clear,
     process_status_update,

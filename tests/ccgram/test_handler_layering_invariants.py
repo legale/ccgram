@@ -13,7 +13,7 @@ substores has to update the allow-list — which forces a deliberate
 * :func:`test_no_new_lower_level_singleton_access` — F2 / Round-5 F2.
   The query layer is the documented read seam. Handlers may still touch
   the stateful singletons (``window_store`` / ``thread_router`` /
-  ``user_preferences`` / ``session_map_sync``) for legacy reasons;
+  ``user_preferences``) for legacy reasons;
   this test snapshots the file-level coupling so a new handler can't
   silently grow a dependency.
 """
@@ -59,7 +59,7 @@ _PTB_BOT_ALLOWLIST = frozenset(
 # either go through ``window_query`` / ``session_query`` instead, or
 # justify the direct access in the diff.
 _SINGLETON_ATTRS = frozenset(
-    {"window_store", "thread_router", "user_preferences", "session_map_sync"}
+    {"window_store", "thread_router", "user_preferences"}
 )
 _SINGLETON_ALLOWLIST = frozenset(
     {
