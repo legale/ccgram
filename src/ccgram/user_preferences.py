@@ -68,7 +68,7 @@ class UserPreferences:
         def _parse_uid(uid: Any) -> int | None:
             try:
                 return int(uid)
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return None
 
         self.user_window_offsets = {

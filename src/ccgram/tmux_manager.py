@@ -209,7 +209,7 @@ class TmuxManager:
                     text=True,
                     timeout=5,
                 )
-            except FileNotFoundError, subprocess.TimeoutExpired:
+            except (FileNotFoundError, subprocess.TimeoutExpired):
                 return windows
             if result.returncode != 0:
                 return windows
@@ -797,7 +797,7 @@ class TmuxManager:
                     check=False,
                 )
             return True
-        except subprocess.TimeoutExpired, OSError:
+        except (subprocess.TimeoutExpired, OSError):
             logger.exception("Failed to send keys to foreign window %s", target)
             return False
 
@@ -1142,7 +1142,7 @@ class TmuxManager:
                     text=True,
                     timeout=5,
                 )
-            except FileNotFoundError, subprocess.TimeoutExpired:
+            except (FileNotFoundError, subprocess.TimeoutExpired):
                 return False
             if proc.returncode != 0:
                 logger.debug(

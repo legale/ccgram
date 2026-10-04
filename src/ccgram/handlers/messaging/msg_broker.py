@@ -294,7 +294,7 @@ async def _notify_delivered(
 
     try:
         await notify_messages_delivered(client, to_window, messages)
-    except OSError, TelegramError:
+    except (OSError, TelegramError):
         logger.debug("Failed to send delivery notification", window=to_window)
 
     if mailbox is not None:
@@ -304,7 +304,7 @@ async def _notify_delivered(
                     original = mailbox.get(msg.reply_to, msg.from_id)
                     if original is not None:
                         await notify_reply_received(client, original, msg)
-                except OSError, TelegramError:
+                except (OSError, TelegramError):
                     logger.debug("Failed to send reply notification", msg_id=msg.id)
 
 
@@ -320,7 +320,7 @@ async def _notify_senders(
     for msg in messages:
         try:
             await notify_message_sent(client, msg.from_id, to_window, msg)
-        except OSError, TelegramError:
+        except (OSError, TelegramError):
             logger.debug("Failed to send sender notification", from_id=msg.from_id)
 
 
@@ -333,7 +333,7 @@ async def _notify_loop(
 
     try:
         await notify_loop_detected(client, window_a, window_b)
-    except OSError, TelegramError:
+    except (OSError, TelegramError):
         logger.debug("Failed to send loop alert", window_a=window_a, window_b=window_b)
 
 
@@ -357,7 +357,7 @@ async def _deliver_to_shell_topic(
                 await notify_pending_shell(client, qualified_id, msg)
                 state.notified_shell_ids.add(msg.id)
                 mailbox.mark_delivered(msg.id, qualified_id)
-            except OSError, TelegramError:
+            except (OSError, TelegramError):
                 logger.debug(
                     "Failed to send shell pending notification", window=qualified_id
                 )

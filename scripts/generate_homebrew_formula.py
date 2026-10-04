@@ -33,7 +33,7 @@ class Ccgram < Formula
   sha256 "{sha256}"
   license "MIT"
 
-  depends_on "python@3.14"
+  depends_on "python@3.13"
   depends_on "tmux"
 
 {resources}
