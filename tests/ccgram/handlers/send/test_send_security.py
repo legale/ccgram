@@ -272,7 +272,8 @@ class TestValidateSendable:
     def test_outside_cwd_denied(self, tmp_path: Path) -> None:
         outside = tmp_path.parent / "secret.txt"
         assert (
-            validate_sendable(outside, tmp_path) == "File is outside project directory"
+            validate_sendable(outside, tmp_path)
+            == "File is outside tmux session directory"
         )
 
     def test_hidden_file_denied(self, tmp_path: Path) -> None:

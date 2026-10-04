@@ -59,6 +59,7 @@ _EXCLUDED_DIRS: frozenset[str] = frozenset(
     }
 )
 
+
 def is_path_contained(path: Path, root: Path) -> bool:
     """Return True if *path* resolves to a location within *root*."""
     try:
@@ -203,7 +204,9 @@ def _check_size_and_type(path: Path) -> str | None:
         return "Not a regular file"
     if st.st_size > config.file_size_limit_mb * 1024 * 1024:
         size_mb = st.st_size / (1024 * 1024)
-        return f"File too large: {size_mb:.0f} MB (limit: {config.file_size_limit_mb} MB)"
+        return (
+            f"File too large: {size_mb:.0f} MB (limit: {config.file_size_limit_mb} MB)"
+        )
     return None
 
 
@@ -223,7 +226,7 @@ def validate_sendable(path: Path, cwd: Path) -> str | None:
     7. Gitignore check (subprocess — most expensive, last)
     """
     if not is_path_contained(path, cwd):
-        return "File is outside project directory"
+        return "File is outside tmux session directory"
 
     if is_hidden(path, cwd):
         return "Hidden files cannot be sent"

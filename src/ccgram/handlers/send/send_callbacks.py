@@ -198,7 +198,9 @@ async def _handle_dir(
     cwd = Path(cwd_str) if cwd_str else target_dir.parent
 
     if not is_path_contained(target_dir, cwd):
-        await query.answer("Directory is outside project root", show_alert=True)
+        await query.answer(
+            "Directory is outside tmux session directory", show_alert=True
+        )
         return
 
     display_text, markup, new_items = build_file_browser(target_dir, cwd, 0)

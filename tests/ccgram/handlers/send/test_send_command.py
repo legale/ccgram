@@ -498,6 +498,7 @@ import pytest  # noqa: E402
 from telegram.error import TelegramError  # noqa: E402
 
 from ccgram.handlers.send.send_command import upload_file, send_command  # noqa: E402
+from ccgram.tmux_manager import TmuxWindow  # noqa: E402
 from ccgram.handlers.user_state import (  # noqa: E402
     SEND_CWD_KEY,
     SEND_ITEMS_KEY,
@@ -572,16 +573,18 @@ class TestSendCommand:
         with (
             patch("ccgram.config.Config.is_user_allowed", return_value=True),
             patch("ccgram.handlers.send.send_command.thread_router") as mock_tr,
-            patch("ccgram.handlers.send.send_command.view_window") as mock_view,
+            patch("ccgram.handlers.send.send_command.tmux_manager") as mock_tmux,
         ):
             self.mock_tr = mock_tr
-            self.mock_view = mock_view
+            self.mock_tmux = mock_tmux
             mock_tr.resolve_window_for_thread.return_value = "@1"
             mock_tr.resolve_chat_id.return_value = -100123
-            ws = MagicMock()
-            ws.cwd = None  # overridden per test
-            mock_view.return_value = ws
-            self.ws = ws
+            self.window = TmuxWindow(
+                window_id="@1",
+                window_name="test",
+                cwd="",
+            )
+            mock_tmux.find_window_by_id = AsyncMock(return_value=self.window)
             yield
 
     async def test_no_message_returns_early(self) -> None:
@@ -610,23 +613,19 @@ class TestSendCommand:
         await send_command(update, ctx)
 
     async def test_cwd_unavailable(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path / "nonexistent")
+        self.window.cwd = str(tmp_path / "nonexistent")
         update = _make_update()
         ctx = _make_context()
         await send_command(update, ctx)
 
-    async def test_view_window_returns_none_handled_gracefully(self) -> None:
-        # Window is bound (resolve_window_for_thread succeeds), but
-        # view_window returns None (window state was wiped after binding).
-        # The new None guard at send_command.py should reject cleanly
-        # instead of raising AttributeError.
-        self.mock_view.return_value = None
+    async def test_tmux_window_returns_none_handled_gracefully(self) -> None:
+        self.mock_tmux.find_window_by_id.return_value = None
         update = _make_update()
         ctx = _make_context()
         await send_command(update, ctx)
 
     async def test_no_args_builds_browser(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         (tmp_path / "file.txt").write_bytes(b"x")
         update = _make_update(text="/send")
         ctx = _make_context()
@@ -641,7 +640,7 @@ class TestSendCommand:
         assert isinstance(ctx.user_data[SEND_ITEMS_KEY], list)
 
     async def test_glob_single_match_uploads(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         f = tmp_path / "report.txt"
         f.write_bytes(b"data")
         update = _make_update(text="/send *.txt")
@@ -661,7 +660,7 @@ class TestSendCommand:
         assert call_args[0][0].bot is ctx.bot
 
     async def test_glob_multiple_matches_shows_keyboard(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         for i in range(3):
             (tmp_path / f"file{i}.txt").write_bytes(b"x")
         update = _make_update(text="/send *.txt")
@@ -674,7 +673,7 @@ class TestSendCommand:
         assert len(ctx.user_data[SEND_ITEMS_KEY]) == 3
 
     async def test_glob_no_match_sends_error(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         update = _make_update(text="/send *.xyz")
         ctx = _make_context()
         with patch(
@@ -683,7 +682,7 @@ class TestSendCommand:
             await send_command(update, ctx)
 
     async def test_exact_path_uploads(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         f = tmp_path / "exact.txt"
         f.write_bytes(b"data")
         update = _make_update(text="/send exact.txt")
@@ -703,7 +702,7 @@ class TestSendCommand:
         assert call_args[0][0].bot is ctx.bot
 
     async def test_exact_path_denied_by_security(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         f = tmp_path / "secret.key"
         f.write_bytes(b"key")
         update = _make_update(text="/send secret.key")
@@ -721,7 +720,7 @@ class TestSendCommand:
         mock_up.assert_not_awaited()
 
     async def test_text_pattern_falls_back_to_find_files(self, tmp_path: Path) -> None:
-        self.ws.cwd = str(tmp_path)
+        self.window.cwd = str(tmp_path)
         f = tmp_path / "my_report_2024.txt"
         f.write_bytes(b"data")
         update = _make_update(text="/send report")

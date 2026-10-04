@@ -27,7 +27,7 @@ from telegram.error import TelegramError
 from ...telegram_client import PTBTelegramClient, TelegramClient
 
 from ...config import config
-from ...window_query import view_window
+from ...tmux_manager import tmux_manager
 from ...thread_router import thread_router
 from ..callback_data import (
     CB_SEND_CANCEL,
@@ -405,7 +405,7 @@ async def _dispatch_search(
             except ValueError:
                 await safe_reply(
                     update.message,  # type: ignore[arg-type]
-                    "Cannot send: file is outside project directory",
+                    "Cannot send: file is outside tmux session directory",
                 )
                 return
             if any(is_excluded_dir(part) for part in rel.parts[:-1]):
@@ -461,8 +461,8 @@ async def send_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(update.message, "No session bound to this topic.")
         return
 
-    view = view_window(window_id)
-    cwd = Path(view.cwd) if view and view.cwd else None
+    window = await tmux_manager.find_window_by_id(window_id)
+    cwd = Path(window.cwd) if window and window.cwd else None
     if not cwd or not cwd.is_dir():
         await safe_reply(update.message, "Working directory not available.")
         return

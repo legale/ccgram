@@ -359,7 +359,7 @@ class TestHandleDir:
             await _dispatch(update, ctx)
 
         query.answer.assert_awaited_once_with(
-            "Directory is outside project root", show_alert=True
+            "Directory is outside tmux session directory", show_alert=True
         )
 
     async def test_out_of_bounds_dir_index_shows_error(self, tmp_path: Path) -> None:
