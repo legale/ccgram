@@ -585,32 +585,3 @@ class TestToolCallsGate:
         ct = _content_task("tool", content_type="tool_use", tool_use_id="t-xyz")
         await _handle_content_task(bot, 1, ct, queue, lock)
         assert not mq._tool_msg_ids
-
-
-class TestTruncateCaption:
-    def test_short_text_unchanged(self):
-        from ccgram.handlers.messaging_pipeline.message_queue import _truncate_caption
-
-        assert _truncate_caption("hello world") == "hello world"
-
-    def test_truncates_at_whitespace(self):
-        from ccgram.handlers.messaging_pipeline.message_queue import _truncate_caption
-
-        text = ("word " * 220).rstrip()  # > 1024 chars
-        result = _truncate_caption(text)
-        assert len(result) <= 1024
-        assert result.endswith("…")
-        assert not result[:-1].endswith(" ")
-
-    def test_no_whitespace_still_within_limit(self):
-        from ccgram.handlers.messaging_pipeline.message_queue import _truncate_caption
-
-        text = "x" * 1100  # no spaces
-        result = _truncate_caption(text)
-        assert len(result) <= 1024  # must not exceed limit
-
-    def test_exact_limit_unchanged(self):
-        from ccgram.handlers.messaging_pipeline.message_queue import _truncate_caption
-
-        text = "a" * 1024
-        assert _truncate_caption(text) == text

@@ -348,7 +348,6 @@ class TestPollingAndCleanupIntegration:
         _vim_state["@7"] = True
         with (
             patch("ccgram.handlers.cleanup.enqueue_status_update"),
-            patch("ccgram.handlers.cleanup.clear_interactive_msg"),
             patch("ccgram.thread_router.thread_router") as mock_tr,
         ):
             mock_tr.resolve_chat_id.return_value = -100
@@ -362,7 +361,6 @@ class TestPollingAndCleanupIntegration:
         _vim_state["@7"] = True
         with (
             patch("ccgram.handlers.cleanup.enqueue_status_update"),
-            patch("ccgram.handlers.cleanup.clear_interactive_msg"),
             patch("ccgram.thread_router.thread_router") as mock_tr,
         ):
             mock_tr.resolve_chat_id.return_value = -100
@@ -393,10 +391,6 @@ class TestPollingAndCleanupIntegration:
             patch(
                 "ccgram.handlers.polling.window_tick.apply.get_provider_for_window"
             ) as mock_gpw,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value=None,
-            ),
             patch(
                 "ccgram.handlers.polling.window_tick.apply._apply_tick_decision",
                 new_callable=AsyncMock,
@@ -443,10 +437,6 @@ class TestPollingAndCleanupIntegration:
             patch(
                 "ccgram.handlers.polling.window_tick.apply.get_provider_for_window"
             ) as mock_gpw,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_interactive_window",
-                return_value=None,
-            ),
             patch(
                 "ccgram.handlers.polling.window_tick.apply._apply_tick_decision",
                 new_callable=AsyncMock,
