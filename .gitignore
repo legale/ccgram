@@ -69,3 +69,6 @@ progress*.txt
 
 # Runtime uploads
 .ccgram-uploads/
+
+# Local temporary archives and extraction trees
+tmp/
