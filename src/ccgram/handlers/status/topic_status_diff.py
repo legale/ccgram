@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 import time
+import asyncio
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+import structlog
 
 from telegram.error import RetryAfter, TelegramError
 
@@ -27,6 +29,7 @@ _RE_ANSI = re.compile(
     r"\x1b[@-_]",
 )
 _RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -35,6 +38,9 @@ class _DiffState:
     prev_lines: list[str] = field(default_factory=list)
     message_id: int = 0
     last_edit_ts: float = 0.0
+    last_msg_ts: int = 0
+    diff_ts: int = 0
+    edit_task: asyncio.Task[bool] | None = None
 
 
 _diff_states: dict[tuple[int, int], _DiffState] = {}
@@ -88,6 +94,25 @@ def _get_state(chat_id: int, thread_id: int, window_id: str) -> _DiffState:
     return state
 
 
+def mark_topic_status_activity(
+    chat_id: int, thread_id: int, window_id: str, message_id: int
+) -> None:
+    """Record a Telegram message before the rest of its handler awaits."""
+    if not isinstance(message_id, int) or not message_id:
+        return
+    state = _get_state(chat_id, thread_id, window_id)
+    state.last_msg_ts = max(time.time_ns(), state.last_msg_ts + 1)
+    if state.edit_task is not None and not state.edit_task.done():
+        state.edit_task.cancel()
+    logger.info(
+        "topic_screen_diff_message_activity",
+        chat_id=chat_id,
+        thread_id=thread_id,
+        window_id=window_id,
+        last_msg_ts=state.last_msg_ts,
+    )
+
+
 async def _send_new(
     client: TelegramClient,
     chat_id: int,
@@ -105,6 +130,7 @@ async def _send_new(
     if message_id is None:
         return False
     state.message_id = int(message_id)
+    state.diff_ts = state.last_msg_ts
     return True
 
 
@@ -115,16 +141,51 @@ async def _edit_or_send(
     state: _DiffState,
     text: str,
 ) -> bool:
-    if state.message_id <= 0 or not is_last(chat_id, thread_id, state.message_id):
+    diff_ts = state.last_msg_ts
+    action = "edit"
+    if state.message_id <= 0 or state.diff_ts < diff_ts:
+        action = "send"
+        state.message_id = 0
+    elif not is_last(chat_id, thread_id, state.message_id):
+        action = "send"
+    logger.info(
+        "topic_screen_diff_decision",
+        chat_id=chat_id,
+        thread_id=thread_id,
+        window_id=state.window_id,
+        diff_ts=state.diff_ts,
+        last_msg_ts=diff_ts,
+        action=action,
+        message_id=state.message_id,
+    )
+    if action == "send":
         return await _send_new(client, chat_id, thread_id, state, text)
 
     try:
-        ok = await edit_with_fallback(client, chat_id, state.message_id, text)
+        state.edit_task = asyncio.create_task(
+            edit_with_fallback(client, chat_id, state.message_id, text)
+        )
+        ok = await state.edit_task
+    except asyncio.CancelledError:
+        logger.info(
+            "topic_screen_diff_edit_cancelled",
+            chat_id=chat_id,
+            thread_id=thread_id,
+            window_id=state.window_id,
+            diff_ts=diff_ts,
+            last_msg_ts=state.last_msg_ts,
+        )
+        return False
     except RetryAfter:
         raise
     except TelegramError:
         ok = False
+    finally:
+        state.edit_task = None
     if ok:
+        if state.last_msg_ts != diff_ts:
+            return await _send_new(client, chat_id, thread_id, state, text)
+        state.diff_ts = diff_ts
         return True
     return await _send_new(client, chat_id, thread_id, state, text)
 

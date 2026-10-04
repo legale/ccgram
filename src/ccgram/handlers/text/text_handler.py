@@ -608,8 +608,17 @@ async def handle_text_message(
     assert user is not None  # guaranteed by caller
     assert message is not None and message.text  # guaranteed by caller
 
-    text = message.text
     thread_id = _get_thread_id(update)
+    window_id = thread_router.get_window_for_thread(user.id, thread_id)
+    if window_id:
+        from ..status.topic_status_diff import mark_topic_status_activity
+
+        if message.chat is not None and thread_id is not None:
+            mark_topic_status_activity(
+                message.chat.id, thread_id, window_id, message.message_id
+            )
+
+    text = message.text
 
     # Store group chat_id for forum topic message routing
     chat = message.chat

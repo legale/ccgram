@@ -577,7 +577,7 @@ class TestPassiveEdgeCases:
         from ccgram.handlers.shell.shell_capture import (
             _shell_monitor_state,
             check_passive_shell_output,
-            mark_telegram_command,
+            mark_telegram_activity,
         )
 
         bot = AsyncMock(spec=Bot)
@@ -600,11 +600,25 @@ class TestPassiveEdgeCases:
         ):
             mock_sm.resolve_chat_id.return_value = -100
             await check_passive_shell_output(bot, 1, 42, "@0", pane)
-            mark_telegram_command("@0", "ls", 1, 42, message_id=61)
+            mark_telegram_activity("@0", 61)
             await check_passive_shell_output(bot, 1, 42, "@0", changed_pane)
 
         assert mock_send.await_count == 2
         assert _shell_monitor_state["@0"].msg_id == 62
+
+    def test_any_telegram_activity_advances_screen_diff_boundary(self) -> None:
+        from ccgram.handlers.shell.shell_capture import (
+            _ShellMonitorState,
+            _shell_monitor_state,
+            mark_telegram_activity,
+        )
+
+        _shell_monitor_state["@0"] = _ShellMonitorState(msg_id=60)
+        mark_telegram_activity("@0", 61)
+
+        state = _shell_monitor_state["@0"]
+        assert state.last_msg_ts > 0
+        assert state.diff_ts == 0
 
     @pytest.mark.asyncio()
     async def test_scroll_out_preserves_in_progress(self) -> None:

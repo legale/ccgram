@@ -4,7 +4,7 @@ All Telegram, tmux, and singleton mutations live here. Functions accept
 the inputs gathered by ``observe`` and the decision returned by
 ``decide``, and apply the resulting effects: emoji updates, status
 enqueuing, typing indicators, autoclose timers, dead-window
-notifications, multi-pane scans, passive shell relay.
+notifications and multi-pane scans.
 """
 
 from __future__ import annotations
@@ -205,31 +205,6 @@ async def _notify_pane_lifecycle(
                 pane_id=t.pane_id,
                 error=str(exc),
             )
-
-
-# ── Passive shell relay ──────────────────────────────────────────────────
-
-
-async def _maybe_check_passive_shell(
-    bot: "Bot", user_id: int, window_id: str, thread_id: int
-) -> None:
-    if not _get_provider(window_id).capabilities.chat_first_command_path:
-        return
-    ws = terminal_poll_state.get_state(window_id)
-    rendered = ws.last_rendered_text
-    if rendered is None:
-        raw = await tmux_manager.capture_pane(window_id)
-        if not raw:
-            return
-        rendered = raw
-    # Lazy: shell_capture is registered via callback_registry; importing
-    # at top forms apply → shell_capture → polling cycle through the
-    # shell prompt approval keyboard.
-    # Lazy: shell.shell_capture imports apply indirectly through the broker
-    from ...shell.shell_capture import check_passive_shell_output
-
-    client = PTBTelegramClient(bot)
-    await check_passive_shell_output(client, user_id, thread_id, window_id, rendered)
 
 
 # ── Dead window notification ─────────────────────────────────────────────
@@ -441,7 +416,6 @@ __all__ = [
     "_apply_tick_decision",
     "_forward_pane_output",
     "_handle_dead_window_notification",
-    "_maybe_check_passive_shell",
     "_notify_pane_lifecycle",
     "_scan_window_panes",
     "_send_typing_throttled",

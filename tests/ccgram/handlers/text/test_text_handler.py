@@ -718,10 +718,12 @@ class TestForwardMessage:
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
     @patch(f"{_TH}.window_query")
     async def test_sends_to_window(
-        self, mock_sm: MagicMock, mock_send: AsyncMock
+        self,
+        mock_sm: MagicMock, mock_send: AsyncMock
     ) -> None:
         bot = AsyncMock()
         message = AsyncMock()
+        message.message_id = 123
 
         await _forward_message("@0", 100, 42, "hello", bot, message)
 

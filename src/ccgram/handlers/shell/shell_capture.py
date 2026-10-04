@@ -18,8 +18,10 @@ Key components:
   - strip_terminal_glyphs: Remove Nerd Font / PUA characters
 """
 
+import asyncio
 import re
 import structlog
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -156,7 +158,9 @@ class _ShellMonitorState:
     telegram_thread_id: int = 0
     telegram_message_id: int = 0  # original user msg id — target for ✅/❌ reaction
     telegram_generation: int = 0  # monotonic counter to discard stale fix suggestions
-    latest_message_id: int = 0  # newest Telegram message observed for this window
+    last_msg_ts: int = 0  # timestamp of the last incoming Telegram message
+    diff_ts: int = 0  # timestamp of the message used for the current diff
+    edit_task: asyncio.Task[int | None] | None = None
 
 
 _shell_monitor_state: dict[str, _ShellMonitorState] = {}
@@ -297,8 +301,23 @@ def mark_telegram_command(
     state.telegram_thread_id = thread_id
     state.telegram_message_id = message_id
     state.telegram_generation = _fix_generation
-    if message_id > state.latest_message_id:
-        state.latest_message_id = message_id
+def mark_telegram_activity(window_id: str, message_id: int) -> None:
+    """Record any incoming Telegram message for the shell window.
+
+    The screen-diff poller compares this timestamp with ``diff_ts``.  Telegram
+    message IDs are intentionally not used for ordering.
+    """
+    if not isinstance(message_id, int) or not message_id:
+        return
+    state = _shell_monitor_state.setdefault(window_id, _ShellMonitorState())
+    state.last_msg_ts = max(time.time_ns(), state.last_msg_ts + 1)
+    if state.edit_task is not None and not state.edit_task.done():
+        state.edit_task.cancel()
+    logger.info(
+        "screen_diff_message_activity",
+        window_id=window_id,
+        last_msg_ts=state.last_msg_ts,
+    )
 
 
 async def _relay_output(
@@ -535,15 +554,40 @@ async def _relay_passive_output(
         state.last_output = passive.text
         cmd = _command_from_echo(passive.command_echo)
         combined = f"❯ {cmd}\n{passive.text}" if cmd else passive.text
-        if state.msg_id is not None and state.latest_message_id > state.msg_id:
+        diff_ts = state.last_msg_ts
+        action = "edit"
+        if state.msg_id is not None and state.diff_ts < diff_ts:
             # A newer Telegram message appeared after the screen diff we were
             # editing. Keep that older message immutable and start a new diff.
             state.msg_id = None
-        state.msg_id = await _relay_output(
-            client, chat_id, thread_id, combined, msg_id=state.msg_id
+            action = "send"
+        elif state.msg_id is None:
+            action = "send"
+        logger.info(
+            "screen_diff_decision",
+            window_id=window_id,
+            diff_ts=state.diff_ts,
+            last_msg_ts=diff_ts,
+            action=action,
+            msg_id=state.msg_id,
         )
+        state.edit_task = asyncio.create_task(
+            _relay_output(client, chat_id, thread_id, combined, msg_id=state.msg_id)
+        )
+        try:
+            state.msg_id = await state.edit_task
+        except asyncio.CancelledError:
+            logger.info(
+                "screen_diff_edit_cancelled",
+                window_id=window_id,
+                diff_ts=diff_ts,
+                last_msg_ts=state.last_msg_ts,
+            )
+            return
+        finally:
+            state.edit_task = None
         if state.msg_id is not None:
-            state.latest_message_id = max(state.latest_message_id, state.msg_id)
+            state.diff_ts = diff_ts
 
     if (
         passive.exit_code is not None

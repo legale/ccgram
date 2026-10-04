@@ -205,6 +205,8 @@ async def handle_shell_message(
     message: Message | None = None,
 ) -> None:
     """Route shell provider messages: ``!`` prefix = raw, else = NL via LLM."""
+    msg_id = message.message_id if message is not None else 0
+
     await enqueue_status_update(client, user_id, window_id, None, thread_id)
     lifecycle_strategy.clear_probe_failures(window_id)
 
@@ -216,8 +218,6 @@ async def handle_shell_message(
     # before any reply lands. Self-expires after ~5s; pulse() refreshes it
     # for the duration of the LLM call below.
     await _send_typing(client, chat_id, thread_id)
-
-    msg_id = message.message_id if message is not None else 0
 
     # Persistent ack so the user sees the bot is working before
     # tmux/LLM round-trip completes; replaced once exit is known.

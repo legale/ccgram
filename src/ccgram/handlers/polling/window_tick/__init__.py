@@ -7,8 +7,8 @@ Splits the per-window cycle into three layers:
 * ``observe`` — I/O readers that build the ``TickContext`` from tmux,
   the screen buffer, and the session monitor.
 * ``apply`` — every Telegram, tmux, and singleton mutation lives here:
-  emoji updates, status enqueuing, dead-window notifications, multi-pane
-  scans, passive shell relay.
+  emoji updates, status enqueuing, dead-window notifications, and multi-pane
+  scans.
 
 The package's public entry point is ``tick_window``; the polling
 coordinator imports nothing else.
@@ -32,7 +32,6 @@ from .apply import (
     _apply_tick_decision,
     _forward_pane_output,
     _handle_dead_window_notification,
-    _maybe_check_passive_shell,
     _notify_pane_lifecycle,
     _scan_window_panes,
     _send_typing_throttled,
@@ -73,7 +72,6 @@ async def tick_window(
 
     await _update_status(bot, user_id, window_id, thread_id=thread_id, _window=window)
     await _scan_window_panes(bot, user_id, window_id, thread_id)
-    await _maybe_check_passive_shell(bot, user_id, window_id, thread_id)
 
 
 __all__ = [
@@ -88,7 +86,6 @@ __all__ = [
     "_get_last_activity_ts",
     "_get_provider",
     "_handle_dead_window_notification",
-    "_maybe_check_passive_shell",
     "_notify_pane_lifecycle",
     "_parse_with_pyte",
     "_resolve_status",

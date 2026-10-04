@@ -199,6 +199,36 @@ async def test_changed_after_interval_edits_when_last(monkeypatch) -> None:
     send.assert_not_called()
 
 
+async def test_new_message_timestamp_forces_new_diff_message(monkeypatch) -> None:
+    client = AsyncMock()
+    sent1 = SimpleNamespace(message_id=10)
+    sent2 = SimpleNamespace(message_id=11)
+    send = AsyncMock(side_effect=[sent1, sent2])
+    edit = AsyncMock(return_value=True)
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", edit)
+    monkeypatch.setattr(topic_status_diff, "is_last", lambda *_args, **_kw: True)
+
+    monotonic = SimpleNamespace(v=0.0)
+    monkeypatch.setattr(
+        topic_status_diff.time,
+        "monotonic",
+        lambda: float(monotonic.v),
+    )
+
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "a\n", active=True
+    )
+    topic_status_diff.mark_topic_status_activity(1, 2, "@7", 99)
+    monotonic.v = 11.0
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "b\n", active=True
+    )
+
+    assert send.await_count == 2
+    edit.assert_not_called()
+
+
 async def test_changed_after_interval_sends_new_when_not_last(monkeypatch) -> None:
     client = AsyncMock()
     sent1 = SimpleNamespace(message_id=10)

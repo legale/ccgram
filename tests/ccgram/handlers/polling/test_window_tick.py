@@ -15,7 +15,6 @@ from ccgram.handlers.polling.polling_state import (
 from ccgram.handlers.polling.polling_types import TickContext, TickDecision
 from ccgram.handlers.polling.window_tick import (
     _handle_dead_window_notification,
-    _maybe_check_passive_shell,
     _scan_window_panes,
     _apply_active_transition,
     _transition_to_idle,
@@ -107,14 +106,10 @@ class TestTickWindowEmptyQueue:
             patch.object(
                 window_tick, "_scan_window_panes", new_callable=AsyncMock
             ) as mock_scan,
-            patch.object(
-                window_tick, "_maybe_check_passive_shell", new_callable=AsyncMock
-            ) as mock_shell,
         ):
             await tick_window(bot, 1, 100, "@0", w)
             mock_status.assert_called_once()
             mock_scan.assert_called_once()
-            mock_shell.assert_called_once()
 
     async def test_no_queue_runs_status_update(self):
         bot = AsyncMock(spec=Bot)
@@ -125,9 +120,6 @@ class TestTickWindowEmptyQueue:
                 window_tick, "_update_status", new_callable=AsyncMock
             ) as mock_status,
             patch.object(window_tick, "_scan_window_panes", new_callable=AsyncMock),
-            patch.object(
-                window_tick, "_maybe_check_passive_shell", new_callable=AsyncMock
-            ),
         ):
             await tick_window(bot, 1, 100, "@0", w)
             mock_status.assert_called_once()
@@ -385,40 +377,6 @@ class TestScanPanes:
         with patch("ccgram.tmux_manager.tmux_manager") as mock_tm:
             await _scan_window_panes(bot, 1, "@0", 100)
             mock_tm.list_panes.assert_not_called()
-
-
-class TestMaybeCheckPassiveShell:
-    async def test_non_shell_noop(self):
-        bot = AsyncMock(spec=Bot)
-        mock_prov = MagicMock()
-        mock_prov.capabilities.chat_first_command_path = False
-        with (
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_provider_for_window",
-                return_value=mock_prov,
-            ),
-            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager"),
-        ):
-            await _maybe_check_passive_shell(bot, 1, "@0", 100)
-
-    async def test_shell_provider_calls_passive_check(self):
-        bot = AsyncMock(spec=Bot)
-        with (
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.get_provider_for_window"
-            ) as mock_prov,
-            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
-            patch(
-                "ccgram.handlers.shell.shell_capture.check_passive_shell_output",
-                new_callable=AsyncMock,
-            ) as mock_check,
-        ):
-            mock_prov.return_value.capabilities.chat_first_command_path = True
-            ws = terminal_poll_state.get_state("@0")
-            ws.last_rendered_text = "$ output here"
-            mock_tm.capture_pane = AsyncMock(return_value="$ output here")
-            await _maybe_check_passive_shell(bot, 1, "@0", 100)
-            mock_check.assert_called_once()
 
 
 class TestDeadWindowNotification:
