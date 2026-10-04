@@ -45,7 +45,6 @@ from .topic_orchestration import (
     create_topic_in_chat,
     handle_new_window,
 )
-from .bind_command import bind_command
 from .window_callbacks import handle_window_callback
 
 __all__ = [
@@ -67,7 +66,6 @@ __all__ = [
     "clear_browse_state",
     "clear_topic_create_retry",
     "clear_window_picker_state",
-    "bind_command",
     "collect_target_chats",
     "create_topic_in_chat",
     "get_favorites",
