@@ -17,7 +17,6 @@ import structlog
 from .... import window_query
 from ....providers import get_provider_for_window
 from ..polling_types import StatusUpdate
-from ....session_monitor import get_active_monitor
 from ....tmux_manager import has_insert_indicator, notify_vim_insert_seen, tmux_manager
 from ..polling_state import terminal_poll_state, terminal_screen_buffer
 from ..polling_types import TickContext, is_shell_prompt
@@ -52,12 +51,9 @@ def _check_vim_insert(window_id: str, pane_text: str, w: "TmuxWindow") -> None:
 
 
 def _get_last_activity_ts(window_id: str) -> float | None:
-    """Read last transcript activity timestamp from the session monitor."""
-    session_id = window_query.get_session_id_for_window(window_id)
-    if not session_id:
-        return None
-    mon = get_active_monitor()
-    return mon.get_last_activity(session_id) if mon else None
+    """Return no transcript activity; tmux polling owns activity detection."""
+    _ = window_id
+    return None
 
 
 async def _resolve_status(
