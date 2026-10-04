@@ -24,7 +24,7 @@
 ### Что осталось
 - **Единственный провайдер**: `shell` — чистый мост к tmux
 - **Команды бота** (префикс `//`):
-  - `//sessions` / `//ses` — дашборд сессий (kill, rename, screenshot, esc)
+  - `//sessions` / `//ses` — дашборд сессий: кнопки `<статус> <имя>` (rename), `scr` (screenshot), `kill`
   - `//bind` — привязать существующее tmux-окно к топику
   - `//unbind` — отвязать топик от сессии (сессия продолжает жить)
   - `//screenshot` / `//screen` — скриншот терминала (PNG с ANSI-цветами)
@@ -47,7 +47,7 @@
 | `tmux_manager.py` | Управление tmux-сессиями (create/kill/rename window/session, send-keys, capture-pane) |
 | `thread_router.py` | Привязка user+thread → window_id, display names, group_chat_ids |
 | `session_manager.py` (`session.py`) | Абстракция сессий, display names |
-| `handlers/sessions_dashboard.py` | Дашборд `//ses`: список, kill, rename с edit_forum_topic |
+| `handlers/sessions_dashboard.py` | Дашборд `//ses`: список, rename, screenshot и kill с edit_forum_topic |
 | `handlers/text/text_handler.py` | Маршрутизация текстовых сообщений (send-keys в tmux, rename captures, directory browser) |
 | `handlers/polling/` | Фоновый опрос tmux-окон: diff экрана, статус, dead detection |
 | `handlers/topics/` | Topic lifecycle, directory browser, bind/window callbacks |
@@ -148,4 +148,3 @@ fd4ee5d refactor(providers): remove external agent providers, retain shell only
 - **Layering tests**: `test_handler_layering_invariants.py` — PTB bot escapes allowlist + singleton access allowlist
 - **Никаких эмодзи**: ни в коде, ни в коммитах, ни в ответах ассистента, ни в документах/планах
 - **Отметки в плане**: `[x]` - done, `[/]` - in progress, `[ ]` - not done
-

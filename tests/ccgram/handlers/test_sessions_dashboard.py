@@ -8,7 +8,6 @@ from ccgram.handlers.callback_data import (
     CB_SESSIONS_NEW,
     CB_SESSIONS_REFRESH,
     CB_SESSIONS_RENAME,
-    CB_STATUS_ESC,
     CB_STATUS_SCREENSHOT,
 )
 from ccgram.handlers.sessions_dashboard import (
@@ -60,7 +59,7 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert "[alive] myproject" in text
+        assert "+ myproject" in text
 
     async def test_alive_session_shows_cwd(self, _patch_deps) -> None:
         mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -89,7 +88,7 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[])
 
         text, _kb = await _build_dashboard(100)
-        assert "[dead] oldproject" in text
+        assert "- oldproject" in text
 
     async def test_multiple_sessions(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -101,8 +100,8 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert "[alive] alive" in text
-        assert "[dead] dead" in text
+        assert "+ alive" in text
+        assert "- dead" in text
 
     async def test_unbound_windows_displayed(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -116,8 +115,8 @@ class TestBuildDashboard:
         )
 
         text, _kb = await _build_dashboard(100)
-        assert "[alive] bound-session" in text
-        assert "[unbound] other-session" in text
+        assert "+ bound-session" in text
+        assert "o other-session" in text
         assert "/home/user" in text
 
     async def test_refresh_and_new_buttons(self, _patch_deps) -> None:
@@ -138,33 +137,19 @@ class TestBuildDashboard:
         assert CB_SESSIONS_REFRESH in data
         assert CB_SESSIONS_NEW in data
 
-    async def test_alive_session_has_esc_button(self, _patch_deps) -> None:
+    async def test_alive_session_has_rename_screenshot_and_kill_buttons(
+        self, _patch_deps
+    ) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
         mock_tr.get_all_thread_windows.return_value = {42: "@0"}
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         _text, keyboard = await _build_dashboard(100)
-        data = [
-            btn.callback_data
-            for row in keyboard.inline_keyboard
-            for btn in row
-            if isinstance(btn.callback_data, str)
-        ]
-        assert any(d.startswith(CB_STATUS_ESC) for d in data)
-
-    async def test_alive_session_has_screenshot_button(self, _patch_deps) -> None:
-        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
-        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
-        mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
-
-        _text, keyboard = await _build_dashboard(100)
-        data = [
-            btn.callback_data
-            for row in keyboard.inline_keyboard
-            for btn in row
-            if isinstance(btn.callback_data, str)
-        ]
-        assert any(d.startswith(CB_STATUS_SCREENSHOT) for d in data)
+        row = keyboard.inline_keyboard[0]
+        assert [button.text for button in row] == ["+ @0", "scr", "kill"]
+        assert row[0].callback_data.startswith(CB_SESSIONS_RENAME)
+        assert row[1].callback_data.startswith(CB_STATUS_SCREENSHOT)
+        assert row[2].callback_data.startswith("sess:kill:")
 
     async def test_alive_session_shows_provider(self, _patch_deps) -> None:
         mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -188,7 +173,7 @@ class TestBuildDashboard:
         mock_tm.list_windows = AsyncMock(return_value=[MagicMock(window_id="@0")])
 
         text, _kb = await _build_dashboard(100)
-        assert text.startswith("Sessions\n\n```\n[alive] myproject\n")
+        assert text.startswith("Sessions\n\n```\n+ myproject\n")
 
     async def test_yolo_mode_shows_tag(self, _patch_deps) -> None:
         mock_sm, mock_tr, mock_tm, _ = _patch_deps
@@ -217,7 +202,6 @@ class TestBuildDashboard:
             for btn in row
             if isinstance(btn.callback_data, str)
         ]
-        assert not any(d.startswith(CB_STATUS_ESC) for d in data)
         assert not any(d.startswith(CB_STATUS_SCREENSHOT) for d in data)
 
 

@@ -39,7 +39,6 @@ from .callback_data import (
     CB_SESSIONS_NEW,
     CB_SESSIONS_REFRESH,
     CB_SESSIONS_RENAME,
-    CB_STATUS_ESC,
     CB_STATUS_SCREENSHOT,
 )
 from .callback_helpers import user_owns_window
@@ -88,7 +87,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         view = view_window(window_id)
         alive = window_id in live_ids
         is_external = view.external if view else False
-        status = "[alive]" if alive else "[dead]"
+        status = "+" if alive else "-"
 
         # Session line with provider + mode tags and cwd detail
         provider_tag = f" [{view.provider_name}]" if view and view.provider_name else ""
@@ -101,28 +100,18 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         if alive:
             row: list[InlineKeyboardButton] = [
                 InlineKeyboardButton(
-                    "Esc",
-                    callback_data=f"{CB_STATUS_ESC}{window_id}"[:64],
+                    f"{status} {display_name}",
+                    callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
                 ),
                 InlineKeyboardButton(
-                    "Screenshot",
+                    "scr",
                     callback_data=f"{CB_STATUS_SCREENSHOT}{window_id}"[:64],
                 ),
+                InlineKeyboardButton(
+                    "kill",
+                    callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
+                ),
             ]
-            # External windows (emdash) are never killed — only unbind
-            if not is_external:
-                row.append(
-                    InlineKeyboardButton(
-                        "Rename",
-                        callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
-                    ),
-                )
-                row.append(
-                    InlineKeyboardButton(
-                        f"Kill {display_name}",
-                        callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
-                    ),
-                )
             action_rows.append(row)
 
     # Show unbound live tmux windows
@@ -131,7 +120,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         if w.window_id in bound_ids or w.window_id in seen_unbound:
             continue
         seen_unbound.add(w.window_id)
-        line = f"[unbound] {w.window_name}"
+        line = f"o {w.window_name}"
         if w.cwd:
             line += f"\n    {w.cwd}"
         lines.append(line)
