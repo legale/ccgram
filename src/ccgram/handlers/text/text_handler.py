@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 from pathlib import Path
+import re
 
 import structlog
 from telegram import Message, Update
@@ -55,6 +56,12 @@ logger = structlog.get_logger()
 PENDING_DELIVERY_NOTICE = "\U0001f4ac Will deliver once the agent starts."
 
 _DIR_INPUT_PREFIXES = ("cd ", "dir ", "path ")
+_SESSION_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,31}\Z")
+
+
+def _is_named_session_request(text: str) -> bool:
+    """Return whether an unbound-topic message is a tmux session name."""
+    return bool(_SESSION_NAME_RE.fullmatch(text.strip()))
 
 
 def _extract_directory_input(text: str, allow_bare: bool = False) -> str:
@@ -165,7 +172,8 @@ async def _create_shell_session_for_directory(
 
     await safe_reply(
         message,
-        f"Session `{created_wname}` created at `{selected_path}`.\nBound to this topic. Send commands here.",
+        f"Session `{created_wname}` (tmux `{tmux_manager.topic_session_name(created_wname)}`) "
+        f"created at `{selected_path}`.\nBound to this topic. Send commands here.",
     )
     if pending_text and bot is not None:
         await _forward_message(
@@ -275,6 +283,49 @@ async def _check_ui_guards(
     return False
 
 
+async def _handle_named_session_request(
+    message: Message,
+    user_data: dict | None,
+    user_id: int,
+    thread_id: int,
+    requested_name: str,
+) -> None:
+    """Attach an existing named session or create it in the configured directory."""
+    target_session = tmux_manager.topic_session_name(requested_name)
+    sessions = await tmux_manager.list_sessions()
+    existing = next(
+        (session for session in sessions if session.window_name == target_session),
+        None,
+    )
+    if existing is None:
+        await _create_shell_session_for_directory(
+            message,
+            user_data,
+            user_id,
+            thread_id,
+            config.session_working_directory,
+            requested_name,
+        )
+        return
+
+    if user_data is not None:
+        clear_browse_state(user_data)
+        clear_window_picker_state(user_data)
+    thread_router.bind_thread(
+        user_id,
+        thread_id,
+        existing.window_id,
+        window_name=requested_name,
+    )
+    chat = message.chat
+    if chat and chat.type in ("group", "supergroup"):
+        thread_router.set_group_chat_id(user_id, thread_id, chat.id)
+    await safe_reply(
+        message,
+        f"Attached session `{requested_name}` (tmux `{target_session}`) to this topic.",
+    )
+
+
 async def _handle_unbound_topic(
     user_id: int,
     thread_id: int,
@@ -303,6 +354,13 @@ async def _handle_unbound_topic(
         topic_name = message.reply_to_message.forum_topic_edited.name or ""
     if not topic_name:
         topic_name = message.chat.title or message.chat.username or "topic"
+
+    requested_name = text.strip()
+    if _is_named_session_request(requested_name):
+        await _handle_named_session_request(
+            message, user_data, user_id, thread_id, requested_name
+        )
+        return True
 
     selected_path = _resolve_directory_input(text)
     if selected_path:

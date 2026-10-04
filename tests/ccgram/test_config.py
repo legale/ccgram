@@ -30,6 +30,15 @@ class TestConfigValid:
         cfg = Config()
         assert cfg.tmux_session_name == "mysession"
 
+    def test_session_working_directory_defaults_to_home(self):
+        cfg = Config()
+        assert cfg.session_working_directory == "~"
+
+    def test_custom_session_working_directory(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_SESSION_WORKING_DIRECTORY", "/tmp/work")
+        cfg = Config()
+        assert cfg.session_working_directory == "/tmp/work"
+
     def test_is_user_allowed_true(self):
         cfg = Config()
         assert cfg.is_user_allowed(12345) is True

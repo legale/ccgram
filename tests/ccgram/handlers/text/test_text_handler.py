@@ -109,13 +109,13 @@ class TestHandleUnboundTopic:
         user_data: dict = {}
         message = MagicMock()
 
-        result = await _handle_unbound_topic(100, 42, "hello", user_data, message)
+        result = await _handle_unbound_topic(100, 42, "hello world", user_data, message)
 
         assert result is True
         mock_picker.assert_called_once()
         assert mock_reply.call_count == 2
         assert user_data[STATE_KEY] == STATE_SELECTING_WINDOW
-        assert user_data[PENDING_THREAD_TEXT] == "hello"
+        assert user_data[PENDING_THREAD_TEXT] == "hello world"
 
     @patch(
         "ccgram.handlers.topics.directory_callbacks._wait_for_shell_ready",
@@ -162,6 +162,60 @@ class TestHandleUnboundTopic:
         assert "created" in mock_reply.call_args.args[1]
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    @patch(f"{_TH}._create_shell_session_for_directory", new_callable=AsyncMock)
+    @patch(f"{_TH}.tmux_manager")
+    @patch(f"{_TH}.thread_router")
+    async def test_bare_name_creates_named_tmux_session(
+        self,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        mock_create: AsyncMock,
+        _mock_reply: AsyncMock,
+    ) -> None:
+        mock_tr.get_window_for_thread.return_value = None
+        mock_tm.list_sessions = AsyncMock(return_value=[])
+        mock_tm.list_windows = AsyncMock(return_value=[])
+        mock_tm.discover_external_sessions = AsyncMock(return_value=[])
+        message = MagicMock()
+        message.chat.title = "all"
+        message.chat.type = "supergroup"
+        message.reply_to_message = None
+        user_data: dict = {}
+
+        result = await _handle_unbound_topic(100, 42, "mmm", user_data, message)
+
+        assert result is True
+        mock_create.assert_awaited_once()
+        assert mock_create.call_args.args[5] == "mmm"
+
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    @patch(f"{_TH}.tmux_manager")
+    @patch(f"{_TH}.thread_router")
+    async def test_bare_name_attaches_existing_tmux_session(
+        self,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        mock_reply: AsyncMock,
+    ) -> None:
+        mock_tr.get_window_for_thread.return_value = None
+        mock_tm.topic_session_name.side_effect = lambda name: f"cc_{name}"
+        existing = MagicMock(window_name="cc_mmm", window_id="cc_mmm:@1")
+        mock_tm.list_sessions = AsyncMock(return_value=[existing])
+        message = MagicMock()
+        message.chat.type = "supergroup"
+        message.chat.id = -100123
+        message.chat.title = "all"
+        message.reply_to_message = None
+
+        result = await _handle_unbound_topic(100, 42, "mmm", {}, message)
+
+        assert result is True
+        mock_tr.bind_thread.assert_called_once_with(
+            100, 42, "cc_mmm:@1", window_name="mmm"
+        )
+        assert "Attached session" in mock_reply.call_args.args[1]
+
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.build_directory_browser")
     @patch(f"{_TH}.tmux_manager")
     @patch(f"{_TH}.thread_router")
@@ -181,7 +235,7 @@ class TestHandleUnboundTopic:
         user_data: dict = {}
         message = AsyncMock()
 
-        result = await _handle_unbound_topic(100, 42, "hello", user_data, message)
+        result = await _handle_unbound_topic(100, 42, "hello world", user_data, message)
 
         assert result is True
         mock_browser.assert_called_once()
@@ -235,7 +289,7 @@ class TestHandleUnboundTopic:
         user_data: dict = {}
         message = AsyncMock()
 
-        await _handle_unbound_topic(100, 42, "hello", user_data, message)
+        await _handle_unbound_topic(100, 42, "hello world", user_data, message)
 
         from ccgram.handlers.text.text_handler import PENDING_DELIVERY_NOTICE
 
@@ -262,7 +316,7 @@ class TestHandleUnboundTopic:
         user_data: dict = {}
         message = AsyncMock()
 
-        await _handle_unbound_topic(100, 42, "hello", user_data, message)
+        await _handle_unbound_topic(100, 42, "hello world", user_data, message)
 
         from ccgram.handlers.text.text_handler import PENDING_DELIVERY_NOTICE
 
