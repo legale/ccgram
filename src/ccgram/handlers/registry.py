@@ -7,20 +7,33 @@ point; ``bot.py`` is a factory + lifecycle hooks only.
 Every handler called below lives in a feature subpackage under
 ``handlers/`` — this module only assembles them in the order PTB
 requires.
+
+Command dispatch uses iproute2-style prefix matching via
+``handlers.arg_parser.matches()``.  A single MessageHandler on the
+``^//`` regex replaces the old per-name PrefixHandler soup:
+
+  ``//sc``   → screenshot_command   (prefix match of "screenshot")
+  ``//det``  → detach_command        (prefix match of "detach")
+  ``//ses``  → sessions_command      (prefix match of "sessions")
+
+Full names are always valid; the shortest unambiguous prefix works too.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TypeAlias
 
+from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     MessageHandler,
-    PrefixHandler,
     filters,
 )
 from telegram.ext._utils.types import HandlerCallback
 
+from .arg_parser import ArgIter, matches
 from .callback_registry import dispatch as _dispatch_callback
 from .callback_registry import load_handlers as _load_callback_handlers
 from .cleanup import detach_command
@@ -51,14 +64,78 @@ class CommandSpec:
     handler: HandlerFn
 
 
-async def _unknown_double_slash_handler(update, _context) -> None:
-    message = getattr(update, "effective_message", None)
-    if message and getattr(message, "text", None):
-        cmd = message.text.split()[0]
+# Ordered list: first match wins.  Each entry is (canonical_name, handler).
+# Multiple names for one handler are listed as separate rows so that
+# matches() can distinguish them from each other without ambiguity checks.
+_DISPATCH_TABLE: list[tuple[str, HandlerFn]] = [
+    ("commands", commands_command),
+    ("help", commands_command),
+    ("sessions", sessions_command),
+    ("ses", sessions_command),
+    ("detach", detach_command),
+    ("screenshot", screenshot_command),
+    ("screen", screenshot_command),
+    ("live", live_command),
+    ("send", send_command),
+]
+
+
+def _find_handler(token: str) -> HandlerFn | None:
+    """Return the handler for *token*, or None if unknown/ambiguous.
+
+    Resolution order:
+    1. Exact match against any entry in _DISPATCH_TABLE — returned immediately.
+    2. Prefix match (matches(token, canonical)) — returns the handler only when
+       exactly one canonical name matches; returns None if ambiguous.
+
+    Exact-match priority lets aliases like ``screen``, ``ses``, ``help``
+    work even though they are also prefixes of longer canonical names.
+    """
+    # 1. exact match — fast path
+    for canonical, handler in _DISPATCH_TABLE:
+        if token == canonical:
+            return handler
+
+    # 2. prefix match with ambiguity check
+    found: HandlerFn | None = None
+    for canonical, handler in _DISPATCH_TABLE:
+        if matches(token, canonical):
+            if found is not None:
+                return None  # ambiguous
+            found = handler
+    return found
+
+
+async def _dispatch_double_slash(update: Update, context) -> None:  # type: ignore[type-arg]
+    """Single entry-point for all ``//``-prefixed bot commands."""
+    message = update.effective_message
+    if not message or not message.text:
+        return
+
+    text = message.text.strip()
+    # Strip the "//" prefix and split into tokens
+    body = text[len(COMMAND_PREFIX):]
+    tokens = body.split()
+    if not tokens:
+        await safe_reply(message, f"Empty command. Use `{COMMAND_PREFIX}commands` for help.")
+        return
+
+    it = ArgIter(tokens)
+    cmd_token = it.next_arg()  # consume the command name
+
+    handler = _find_handler(cmd_token)
+    if handler is None:
         await safe_reply(
             message,
-            f"Unknown command `{cmd}`. Use `{COMMAND_PREFIX}commands` for the list of commands.",
+            f"Unknown command `{COMMAND_PREFIX}{cmd_token}`. "
+            f"Use `{COMMAND_PREFIX}commands` for the list of commands.",
         )
+        return
+
+    # Re-inject remaining args into the update so individual handlers can
+    # read them from update.message.text as usual (send_command does
+    # `text.split(maxsplit=1)` — that still works with the original text).
+    await handler(update, context)
 
 
 def register_all(
@@ -69,27 +146,14 @@ def register_all(
 
     Bot commands use the // prefix so shell paths and unix commands starting
     with / can pass through directly to tmux without being intercepted.
+
+    A single MessageHandler on ``^//`` dispatches all bot commands via
+    iproute2-style prefix matching instead of per-name PrefixHandlers.
     """
-    command_specs: list[CommandSpec] = [
-        CommandSpec(("commands", "help"), commands_command),
-        CommandSpec(("sessions", "ses"), sessions_command),
-        CommandSpec("detach", detach_command),
-        CommandSpec(("screenshot", "screen"), screenshot_command),
-        CommandSpec("live", live_command),
-        CommandSpec("send", send_command),
-    ]
-
-    for spec in command_specs:
-        names = (spec.name,) if isinstance(spec.name, str) else spec.name
-        for name in names:
-            application.add_handler(
-                PrefixHandler(COMMAND_PREFIX, name, spec.handler, filters=group_filter)
-            )
-
     application.add_handler(
         MessageHandler(
             filters.TEXT & filters.Regex(r"^//") & group_filter,
-            _unknown_double_slash_handler,
+            _dispatch_double_slash,
         )
     )
 
@@ -123,15 +187,5 @@ def register_all(
     )
 
 
-COMMAND_NAMES: tuple[str, ...] = (
-    "commands",
-    "help",
-    "sessions",
-    "ses",
-    "detach",
-    "screenshot",
-    "screen",
-    "live",
-    "send",
-)
-"""Sentinel for tests: the exact command names register_all installs, in order."""
+COMMAND_NAMES: tuple[str, ...] = tuple(name for name, _ in _DISPATCH_TABLE)
+"""Sentinel for tests: the exact command names in _DISPATCH_TABLE, in order."""
