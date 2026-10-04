@@ -23,7 +23,7 @@ from telegram.ext._utils.types import HandlerCallback
 
 from .callback_registry import dispatch as _dispatch_callback
 from .callback_registry import load_handlers as _load_callback_handlers
-from .cleanup import unbind_command
+from .cleanup import detach_command
 from .commands import commands_command
 from .file_handler import handle_document_message, handle_photo_message
 from .live import live_command, screenshot_command
@@ -69,7 +69,7 @@ def register_all(
     command_specs: list[CommandSpec] = [
         CommandSpec(("commands", "help"), commands_command),
         CommandSpec(("sessions", "ses"), sessions_command),
-        CommandSpec("unbind", unbind_command),
+        CommandSpec("detach", detach_command),
         CommandSpec(("screenshot", "screen"), screenshot_command),
         CommandSpec("live", live_command),
         CommandSpec("send", send_command),
@@ -118,7 +118,7 @@ COMMAND_NAMES: tuple[str, ...] = (
     "help",
     "sessions",
     "ses",
-    "unbind",
+    "detach",
     "screenshot",
     "screen",
     "live",

@@ -32,7 +32,7 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//screenshot` (или `//screen`) — скриншот терминала",
         "• `//live` — автообновляемый просмотр терминала",
         "• `//sessions` — дашборд сессий",
-        "• `//unbind` — отвязать топик",
+        "• `//detach` — закрыть топик, сохранив tmux-сессию",
         "• `//send` — отправить файл в tmux",
         "",
         "_Команды и пути, начинающиеся с `/` (например `/bin/ls`), отправляются напрямую в tmux._",

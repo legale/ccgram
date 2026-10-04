@@ -255,6 +255,15 @@ async def topic_closed_handler(
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     if window_id:
         display = thread_router.get_display_name(window_id)
+        session_name = (
+            window_id.rsplit(":", 1)[0]
+            if ":" in window_id and not window_id.startswith("@")
+            else tmux_manager.session_name
+        )
+        if display and not display.startswith("@") and session_name.startswith(
+            config.tmux_session_prefix
+        ):
+            await tmux_manager.rename_session(session_name, display)
         await clear_topic_state(
             user.id,
             thread_id,
@@ -265,7 +274,7 @@ async def topic_closed_handler(
         )
         thread_router.unbind_thread(user.id, thread_id)
         logger.info(
-            "Topic closed: window %s unbound (kept alive for rebinding, user=%d, thread=%d)",
+            "Topic closed: detached session %s (user=%d, thread=%d)",
             display,
             user.id,
             thread_id,

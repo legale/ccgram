@@ -28,7 +28,6 @@ from ..live.live_view import tick_live_views
 from ..messaging.msg_broker import BROKER_CYCLE_INTERVAL, SWEEP_INTERVAL
 from ..topics.topic_lifecycle import (
     check_autoclose_timers,
-    check_unbound_window_ttl,
     probe_topic_existence,
     prune_stale_state,
 )
@@ -341,6 +340,5 @@ async def run_periodic_tasks(
 async def run_lifecycle_tasks(
     client: TelegramClient, all_windows: list["TmuxWindow"]
 ) -> None:
-    """Run per-tick lifecycle tasks (autoclose timers, unbound window TTL)."""
+    """Run per-tick topic lifecycle tasks."""
     await check_autoclose_timers(client)
-    await check_unbound_window_ttl(all_windows)

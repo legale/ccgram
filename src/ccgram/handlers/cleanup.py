@@ -23,6 +23,7 @@ from ..config import config
 from ..mailbox import Mailbox
 from ..thread_router import thread_router
 from ..topic_state_registry import topic_state
+from ..tmux_manager import tmux_manager
 from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
 from ..window_resolver import is_foreign_window
 from .callback_helpers import get_thread_id
@@ -49,7 +50,7 @@ async def clear_topic_state(
 
     Args:
         window_dead: When False, skip mailbox/qualified-scope cleanup because
-            the tmux window is still alive (e.g. topic close, /unbind).
+            the tmux window is still alive (e.g. topic close, //detach).
             Window-scope callbacks (toolbar labels, screen buffer, etc.) always
             run.  Shell prompt orchestrator state is cleared separately, only
             when the window is truly dead, to preserve skip/offer state for
@@ -110,8 +111,8 @@ async def clear_topic_state(
         user_data.pop(PENDING_THREAD_TEXT, None)
 
 
-async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Disconnect a topic from its tmux window without killing the session."""
+async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Close a topic and preserve its session outside the managed prefix."""
     user = update.effective_user
     if not user or not config.is_user_allowed(user.id):
         return
@@ -137,8 +138,28 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await safe_reply(update.message, "This topic is not bound to any session.")
         return
 
-    display = thread_router.get_display_name(window_id)
     client = PTBTelegramClient(context.bot)
+    chat_id = thread_router.resolve_chat_id(user.id, thread_id)
+    display = thread_router.get_display_name(window_id).strip()
+    if not display or display.startswith("@"):
+        await safe_reply(update.message, "Cannot determine the topic session name.")
+        return
+
+    session_name = (
+        window_id.rsplit(":", 1)[0]
+        if ":" in window_id and not window_id.startswith("@")
+        else tmux_manager.session_name
+    )
+    detached_name = display
+    if session_name.startswith(config.tmux_session_prefix):
+        if not await tmux_manager.rename_session(session_name, detached_name):
+            await safe_reply(
+                update.message,
+                f"Cannot detach session `{session_name}` (target `{detached_name}` may already exist).",
+            )
+            return
+
+    await client.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
     await enqueue_status_update(client, user.id, window_id, None, thread_id)
     await clear_topic_state(
         user.id,
@@ -148,14 +169,8 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         window_id=window_id,
         window_dead=False,
     )
-    from .status.topic_emoji import get_stored_topic_name, update_stored_topic_name
-
-    topic_name = get_stored_topic_name(update.effective_chat.id, thread_id)
     thread_router.unbind_thread(user.id, thread_id)
-    if topic_name:
-        update_stored_topic_name(update.effective_chat.id, thread_id, topic_name)
     await safe_reply(
         update.message,
-        f"Unbound from window `{display}`. The session is still running.\n"
-        "Send a message in this topic to rebind or create a new session.",
+        f"Detached topic `{display}`. The tmux session `{detached_name}` is still running.",
     )
