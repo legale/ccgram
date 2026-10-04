@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -516,6 +517,77 @@ class TestShellProviderRouting:
         await handle_text_message(update, context)
 
         _mock_send.assert_awaited_once_with("@0", "list files", raw=True)
+
+    @patch(f"{_TH}._handle_dead_window", new_callable=AsyncMock, return_value=False)
+    @patch(f"{_TH}.thread_router")
+    @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
+    async def test_echo_output_diff_returns_to_same_topic(
+        self,
+        mock_send: AsyncMock,
+        mock_tr: MagicMock,
+        _mock_dead: AsyncMock,
+        monkeypatch,
+    ) -> None:
+        mock_tr.get_window_for_thread.return_value = "@0"
+
+        from ccgram.handlers.status import topic_status_diff
+        from ccgram.handlers.text.text_handler import handle_text_message
+
+        topic_status_diff.reset_topic_status_diff_state()
+        monkeypatch.setattr(topic_status_diff.config, "topic_status_diff_enabled", True)
+        monkeypatch.setattr(topic_status_diff.config, "topic_status_diff_interval", 10)
+        monkeypatch.setattr(topic_status_diff, "is_last", lambda *_args, **_kw: False)
+        clock = SimpleNamespace(value=0.0)
+        monkeypatch.setattr(
+            topic_status_diff.time,
+            "monotonic",
+            lambda: clock.value,
+        )
+        telegram_send = AsyncMock(
+            side_effect=[
+                SimpleNamespace(message_id=10),
+                SimpleNamespace(message_id=11),
+            ]
+        )
+        monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", telegram_send)
+
+        update = MagicMock()
+        update.effective_user.id = 100
+        update.message.message_thread_id = 42
+        update.message.message_id = 7
+        update.message.text = "echo 123"
+        update.message.chat_id = -100
+        update.message.chat.id = -100
+        update.message.chat.type = "supergroup"
+        update.message.chat.send_action = AsyncMock()
+        context = MagicMock()
+        context.bot = AsyncMock()
+        context.user_data = {}
+
+        await handle_text_message(update, context)
+
+        mock_send.assert_awaited_once_with("@0", "echo 123", raw=True)
+
+        await topic_status_diff.update_topic_status_diff(
+            context.bot,
+            chat_id=-100,
+            thread_id=42,
+            window_id="@0",
+            pane_text="prompt\n",
+        )
+        clock.value = 11.0
+        await topic_status_diff.update_topic_status_diff(
+            context.bot,
+            chat_id=-100,
+            thread_id=42,
+            window_id="@0",
+            pane_text="prompt\n123\n",
+        )
+
+        assert telegram_send.await_count == 2
+        diff_call = telegram_send.await_args_list[1]
+        assert diff_call.kwargs["message_thread_id"] == 42
+        assert "123" in diff_call.args[2]
 
 
 class TestForwardMessage:
