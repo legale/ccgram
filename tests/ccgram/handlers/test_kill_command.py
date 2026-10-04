@@ -58,15 +58,15 @@ class TestHandleSessionsKillConfirm:
             (200, 99, "@5"),
             (300, 10, "@9"),
         ]
-        mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@5"))
-        mock_tm.kill_window = AsyncMock()
+        mock_tm.session_name = "ccgram"
+        mock_tm.kill_session = AsyncMock(return_value=True)
 
         query = AsyncMock()
         bot = AsyncMock()
         with patch("ccgram.handlers.sessions_dashboard.safe_edit"):
             await handle_sessions_kill_confirm(query, 100, "@5", bot)
 
-        mock_tm.kill_window.assert_called_once_with("@5")
+        mock_tm.kill_session.assert_awaited_once_with("ccgram")
         assert mock_tr.unbind_thread.call_count == 2
         mock_tr.unbind_thread.assert_any_call(100, 42)
         mock_tr.unbind_thread.assert_any_call(200, 99)
@@ -76,23 +76,23 @@ class TestHandleSessionsKillConfirm:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
         mock_tr.get_display_name.side_effect = lambda wid: "myproj"
         mock_tr.iter_thread_bindings.return_value = [(100, 42, "@5")]
-        mock_tm.find_window_by_id = AsyncMock(return_value=None)
-        mock_tm.kill_window = AsyncMock()
+        mock_tm.session_name = "ccgram"
+        mock_tm.kill_session = AsyncMock(return_value=True)
 
         query = AsyncMock()
         bot = AsyncMock()
         with patch("ccgram.handlers.sessions_dashboard.safe_edit"):
             await handle_sessions_kill_confirm(query, 100, "@5", bot)
 
-        mock_tm.kill_window.assert_not_called()
+        mock_tm.kill_session.assert_awaited_once_with("ccgram")
         mock_tr.unbind_thread.assert_called_once_with(100, 42)
 
     async def test_refreshes_dashboard_after_kill(self, _patch_deps) -> None:
         _mock_sm, mock_tr, mock_tm, _ = _patch_deps
         mock_tr.get_display_name.side_effect = lambda wid: "proj"
         mock_tr.iter_thread_bindings.return_value = [(100, 42, "@5")]
-        mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@5"))
-        mock_tm.kill_window = AsyncMock()
+        mock_tm.session_name = "ccgram"
+        mock_tm.kill_session = AsyncMock(return_value=True)
 
         query = AsyncMock()
         bot = AsyncMock()
