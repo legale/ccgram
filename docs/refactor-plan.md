@@ -89,8 +89,8 @@
 
 ## Assumptions
 
-- Python 3.14 обязателен; синтаксис `except A, B:` и PEP 695 type syntax не
-  считаются проблемой.
+- Python 3.13 обязателен; PEP 695 type syntax поддерживается, несколько исключений
+  писать как `except (A, B):`.
 - Behavior changes не входят в этот refactor plan.
 - Новые публичные API не добавляются, кроме минимальных private helpers внутри
   существующих модулей.

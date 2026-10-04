@@ -24,7 +24,7 @@ Before considering work complete, run at least:
 
 ## Toolchain and Libraries
 
-- Python: `>=3.14`
+- Python: `>=3.13`
 - Package/dependency manager: `uv`
 - Telegram framework: `python-telegram-bot`
 - tmux integration: `libtmux`

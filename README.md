@@ -71,7 +71,7 @@ Each Telegram Forum topic binds to a tmux session/window. Messages you send in t
 
 ### Prerequisites
 
-- **Python 3.14+**
+- **Python 3.13+**
 - **tmux** — installed and available in `PATH`
 
 ### Install
