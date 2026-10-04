@@ -607,7 +607,7 @@ class TestShellProviderRouting:
 
         await handle_text_message(update, context)
 
-        _mock_send.assert_awaited_once_with("@0", "list files", raw=True)
+        _mock_send.assert_awaited_once_with("@0", "list files", raw=False)
 
     @patch(f"{_TH}._handle_dead_window", new_callable=AsyncMock, return_value=False)
     @patch(f"{_TH}.thread_router")
@@ -657,7 +657,7 @@ class TestShellProviderRouting:
 
         await handle_text_message(update, context)
 
-        mock_send.assert_awaited_once_with("@0", "echo 123", raw=True)
+        mock_send.assert_awaited_once_with("@0", "echo 123", raw=False)
 
         await topic_status_diff.update_topic_status_diff(
             context.bot,
@@ -725,7 +725,7 @@ class TestForwardMessage:
 
         await _forward_message("@0", 100, 42, "hello", bot, message)
 
-        mock_send.assert_called_once_with("@0", "hello", raw=True)
+        mock_send.assert_called_once_with("@0", "hello", raw=False)
 
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(

@@ -549,7 +549,7 @@ async def _forward_message(
 ) -> None:
     """Forward a text message to the bound tmux window."""
     await message.chat.send_action(ChatAction.TYPING)  # type: ignore[union-attr]
-    success, err_message = await send_to_window(window_id, text, raw=True)
+    success, err_message = await send_to_window(window_id, text, raw=False)
     if not success:
         await safe_reply(message, f"\u274c {err_message}")
         return
