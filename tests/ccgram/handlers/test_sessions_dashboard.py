@@ -221,6 +221,10 @@ class TestSessionsNew:
             await _create_session_for_topic(query, 100, 42, MagicMock())
 
         mock_tm.create_window.assert_awaited_once()
+        assert mock_tm.create_window.call_args.kwargs == {
+            "session_name": "cc_codex",
+            "window_name": "codex",
+        }
         mock_tr.bind_thread.assert_called_once_with(100, 42, "@5", window_name="codex")
 
     async def test_no_message(self) -> None:
