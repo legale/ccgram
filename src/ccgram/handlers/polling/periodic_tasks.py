@@ -221,44 +221,74 @@ def _runtime_refs() -> set[tuple[int, int]]:
     return refs
 
 
-async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
-    """Project authoritative ``cc_*`` tmux sessions into Telegram."""
-    sessions = [
-        session
-        for session in await tmux_manager.list_sessions()
-        if session.window_name.startswith(config.tmux_session_prefix)
+async def _load_authoritative_sessions() -> list["TmuxWindow"]:
+    return [
+        s
+        for s in await tmux_manager.list_sessions()
+        if s.window_name.startswith(config.tmux_session_prefix)
     ]
 
-    refs: dict[tuple[int, int], list[TmuxWindow]] = {}
-    for session in sessions:
-        if session.topic_ref is not None:
-            refs.setdefault(session.topic_ref, []).append(session)
 
-    duplicate_refs = {ref for ref, items in refs.items() if len(items) > 1}
-    for ref in duplicate_refs:
+def _prepare_bindings(
+    sessions: list["TmuxWindow"],
+) -> tuple[list[tuple["TmuxWindow", int, int, int]], set[tuple[int, int]]]:
+    refs: dict[tuple[int, int], list[TmuxWindow]] = {}
+    for s in sessions:
+        if s.topic_ref is not None:
+            refs.setdefault(s.topic_ref, []).append(s)
+
+    dups = {ref for ref, items in refs.items() if len(items) > 1}
+    for ref in dups:
         logger.error("Duplicate tmux topic binding %s", ref)
 
-    for session in sessions:
-        ref = session.topic_ref
-        if ref is None or ref in duplicate_refs:
+    bindings: list[tuple[TmuxWindow, int, int, int]] = []
+    for s in sessions:
+        if s.topic_ref is None or s.topic_ref in dups:
             continue
-        chat_id, thread_id = ref
+        chat_id, thread_id = s.topic_ref
         user_id = _runtime_user(chat_id, thread_id)
         if user_id is None:
-            logger.warning("Cannot route %s: no authorized users", session.window_name)
+            logger.warning("Cannot route %s: no authorized users", s.window_name)
             continue
+        bindings.append((s, user_id, chat_id, thread_id))
+    return bindings, dups
 
-        changed = await _bind_runtime(session, user_id, chat_id, thread_id)
+
+async def _sync_bindings(
+    client: TelegramClient,
+    bindings: list[tuple["TmuxWindow", int, int, int]],
+    verify: bool,
+) -> None:
+    for s, user_id, chat_id, thread_id in bindings:
+        changed = await _bind_runtime(s, user_id, chat_id, thread_id)
         if changed or verify:
-            await _sync_topic(client, session, user_id, chat_id, thread_id)
+            await _sync_topic(client, s, user_id, chat_id, thread_id)
 
-    live_refs = {
-        session.topic_ref
-        for session in sessions
-        if session.topic_ref is not None and session.topic_ref not in duplicate_refs
+
+async def _clear_orphans(
+    client: TelegramClient,
+    sessions: list["TmuxWindow"],
+    dups: set[tuple[int, int]],
+) -> None:
+    live = {
+        s.topic_ref
+        for s in sessions
+        if s.topic_ref is not None and s.topic_ref not in dups
     }
-    for chat_id, thread_id in _runtime_refs() - live_refs - duplicate_refs:
+    for chat_id, thread_id in _runtime_refs() - live - dups:
         await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
+
+
+async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
+    """Project authoritative ``cc_*`` tmux sessions into Telegram."""
+    # Получаем authoritative tmux-сессии.
+    ss = await _load_authoritative_sessions()
+    # Подготавливаем валидные привязки и конфликты.
+    bs, dups = _prepare_bindings(ss)
+    # Синхронизируем runtime и Telegram.
+    await _sync_bindings(client, bs, verify)
+    # Очищаем осиротевшие привязки.
+    await _clear_orphans(client, ss, dups)
 
 
 async def send_with_reconcile(
