@@ -9,6 +9,9 @@ from telegram.error import BadRequest, TelegramError
 
 from ...config import config
 from ...telegram_client import PTBTelegramClient
+from pathlib import Path
+
+from ...session import session_manager
 from ...thread_router import ThreadRouter, thread_router
 from ...tmux_manager import TmuxWindow, tmux_manager
 from ..callback_helpers import get_thread_id
@@ -45,6 +48,10 @@ def bind_runtime(
     name = tmux_manager.topic_name_from_session_name(session.window_name)
     router.bind_thread(user_id, thread_id, session.window_id, window_name=name)
     router.set_group_chat_id(user_id, thread_id, chat_id)
+    if session.cwd:
+        session_manager.set_window_cwd(
+            session.window_id, str(Path(session.cwd).expanduser().resolve())
+        )
     return session.window_id
 
 
@@ -75,7 +82,7 @@ async def _create_session(name: str) -> tuple[TmuxWindow | None, str | None]:
         TmuxWindow(
             window_id=window_id,
             window_name=target,
-            cwd=config.session_working_directory,
+            cwd=str(Path(config.session_working_directory).expanduser().resolve()),
         ),
         None,
     )
