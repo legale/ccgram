@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 
 from telegram.error import RetryAfter, TelegramError
 
@@ -68,14 +69,10 @@ def _format_snapshot(window_id: str, lines: list[str]) -> str:
 
 def _format_delta(window_id: str, old: list[str], new: list[str]) -> str:
     out: list[str] = []
-    max_len = max(len(old), len(new))
-    for idx in range(max_len):
-        old_line = old[idx] if idx < len(old) else ""
-        new_line = new[idx] if idx < len(new) else ""
-        if old_line == new_line:
-            continue
-        if new_line:
-            out.append(new_line)
+    matcher = SequenceMatcher(a=old, b=new, autojunk=False)
+    for tag, _old_start, _old_end, new_start, new_end in matcher.get_opcodes():
+        if tag in ("insert", "replace"):
+            out.extend(new[new_start:new_end])
     if not out:
         out = ["screen changed"]
     body = "\n".join(_cap_lines(out, _BODY_LIMIT))

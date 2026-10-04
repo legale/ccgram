@@ -61,6 +61,32 @@ async def test_snapshot_strips_ansi(monkeypatch) -> None:
     assert "footer" in body
 
 
+def test_delta_ignores_old_lines_shifted_by_terminal_scroll() -> None:
+    old = [
+        "wico-perftest",
+        "wifi_con_disc.c",
+        "ruslan@host:~$ echo 123",
+        "123",
+        "ruslan@host:~$",
+    ]
+    new = [
+        "wifi_con_disc.c",
+        "ruslan@host:~$ echo 123",
+        "123",
+        "ruslan@host:~$ echo wonderful",
+        "wonderful",
+        "ruslan@host:~$",
+    ]
+
+    delta = topic_status_diff._format_delta("cc_ls:@1756", old, new)
+
+    assert "echo wonderful" in delta
+    assert "wonderful" in delta
+    assert "wico-perftest" not in delta
+    assert "wifi_con_disc.c" not in delta
+    assert delta.count("echo 123") == 0
+
+
 async def test_unchanged_capture_does_nothing(monkeypatch) -> None:
     client = AsyncMock()
     sent = SimpleNamespace(message_id=10)
