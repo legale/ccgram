@@ -51,13 +51,13 @@ class TestTopicEditedHandler:
         )
         mock_tm.rename_window = AsyncMock(return_value=True)
         mock_tm.rename_session = AsyncMock(return_value=True)
-        mock_tm.topic_session_name.side_effect = lambda name: f"ccgram_{name}"
+        mock_tm.topic_session_name.side_effect = lambda name: f"cc_{name}"
 
         update = _make_update("new-name")
         await topic_edited_handler(update, MagicMock())
 
         mock_tm.rename_window.assert_called_once_with("cc_old:@0", "new-name")
-        mock_tm.rename_session.assert_called_once_with("cc_old", "ccgram_new-name")
+        mock_tm.rename_session.assert_called_once_with("cc_old", "cc_new-name")
         mock_sm.set_display_name.assert_called_once_with("@0", "new-name")
 
     @_PATCH_ALLOWED

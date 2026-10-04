@@ -15,7 +15,7 @@ class TestRenameBoundTopic:
         )
         mock_tmux.rename_window = AsyncMock(return_value=True)
         mock_tmux.rename_session = AsyncMock(return_value=True)
-        mock_tmux.topic_session_name.side_effect = lambda name: f"ccgram_{name}"
+        mock_tmux.topic_session_name.side_effect = lambda name: f"cc_{name}"
 
         await rename_bound_topic(
             MagicMock(),
@@ -28,7 +28,7 @@ class TestRenameBoundTopic:
 
         mock_tmux.rename_window.assert_awaited_once_with("cc_old:@7", "backend-api")
         mock_tmux.rename_session.assert_awaited_once_with(
-            "cc_old", "ccgram_backend-api"
+            "cc_old", "cc_backend-api"
         )
 
     @patch("ccgram.handlers.topics.topic_binding.tmux_manager")

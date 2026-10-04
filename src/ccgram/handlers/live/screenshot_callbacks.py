@@ -268,6 +268,7 @@ async def handle_screenshot_callback(
     data: str,
     update: Update,
     _context: ContextTypes.DEFAULT_TYPE,
+    allow_unowned: bool = False,
 ) -> None:
     """Handle screenshot-related callbacks only.
 
@@ -282,7 +283,10 @@ async def handle_screenshot_callback(
     }
     for prefix, handler in with_update.items():
         if data.startswith(prefix):
-            await handler(query, user_id, data, update)
+            if prefix == CB_STATUS_SCREENSHOT:
+                await handler(query, user_id, data, update, allow_unowned)
+            else:
+                await handler(query, user_id, data, update)
             return
 
     without_update = {
@@ -332,11 +336,15 @@ async def _handle_refresh(query: CallbackQuery, user_id: int, data: str) -> None
 
 
 async def _handle_status_screenshot(
-    query: CallbackQuery, user_id: int, data: str, update: Update
+    query: CallbackQuery,
+    user_id: int,
+    data: str,
+    update: Update,
+    allow_unowned: bool = False,
 ) -> None:
     """Handle CB_STATUS_SCREENSHOT: take screenshot from status message."""
     window_id = data[len(CB_STATUS_SCREENSHOT) :]
-    if not user_owns_window(user_id, window_id):
+    if not allow_unowned and not user_owns_window(user_id, window_id):
         await query.answer("Not your session", show_alert=True)
         return
     w = await tmux_manager.find_window_by_id(window_id)
@@ -354,6 +362,8 @@ async def _handle_status_screenshot(
         await query.answer("Use in a topic", show_alert=True)
         return
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+    if allow_unowned and chat_id is None and query.message and query.message.chat:
+        chat_id = query.message.chat.id
     client = PTBTelegramClient(query.get_bot())
     try:
         await client.send_document(

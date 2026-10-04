@@ -218,8 +218,6 @@ class TmuxManager:
                 if s.strip()
                 and (
                     s.strip().startswith(config.tmux_session_prefix)
-                    or s.strip().startswith("ccgram")
-                    or s.strip().startswith("cc_")
                     or s.strip() == self.session_name
                 )
             ]

@@ -4,10 +4,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ccgram.handlers.callback_data import CB_SESSIONS_RENAME, CB_STATUS_SCREENSHOT
+from ccgram.handlers.callback_data import CB_SESSIONS_RENAME, CB_SESSIONS_SCREENSHOT
 from ccgram.handlers.sessions_dashboard import (
     _build_dashboard,
     _create_session_for_topic,
+    _dispatch,
     apply_session_rename,
     handle_sessions_refresh,
     handle_sessions_rename,
@@ -29,9 +30,9 @@ def _patch_deps():
         mock_view.side_effect = lambda wid: WindowState()
         mock_tm.list_sessions = AsyncMock(return_value=[])
         mock_tm.discover_external_sessions = AsyncMock(return_value=[])
-        mock_tm.topic_session_name.side_effect = lambda name: f"ccgram_{name}"
+        mock_tm.topic_session_name.side_effect = lambda name: f"cc_{name}"
         mock_tm.topic_name_from_session_name.side_effect = lambda name: (
-            name.removeprefix("ccgram_")
+            name.removeprefix("cc_")
         )
         mock_cfg.is_user_allowed.return_value = True
         yield mock_view, mock_tr, mock_tm, mock_cfg
@@ -113,7 +114,7 @@ class TestBuildDashboard:
         assert [button.text for button in name_row] == ["+ myproject"]
         assert [button.text for button in actions_row] == ["scr", "kill"]
         assert name_row[0].callback_data.startswith(CB_SESSIONS_RENAME)
-        assert actions_row[0].callback_data.startswith(CB_STATUS_SCREENSHOT)
+        assert actions_row[0].callback_data.startswith(CB_SESSIONS_SCREENSHOT)
         assert actions_row[1].callback_data.startswith("sess:kill:")
 
     async def test_session_lines_have_strict_status_name_format(
@@ -162,6 +163,7 @@ class TestSessionsCommand:
             assert update.message == mock_reply.call_args[0][0]
             assert "No active sessions" in mock_reply.call_args[0][1]
 
+
     async def test_unauthorized(self, _patch_deps) -> None:
         _, _, _, mock_cfg = _patch_deps
         mock_cfg.is_user_allowed.return_value = False
@@ -183,6 +185,26 @@ class TestSessionsCommand:
         with patch("ccgram.handlers.sessions_dashboard.safe_reply") as mock_reply:
             await sessions_command(update, MagicMock())
         mock_reply.assert_not_called()
+
+
+class TestSessionButtons:
+    async def test_screenshot_button_dispatches_for_unbound_session(
+        self, _patch_deps
+    ) -> None:
+        query = AsyncMock()
+        query.data = f"{CB_SESSIONS_SCREENSHOT}other:@7"
+        update = MagicMock(callback_query=query)
+        update.effective_user.id = 100
+        context = MagicMock()
+
+        with patch(
+            "ccgram.handlers.live.screenshot_callbacks.handle_screenshot_callback",
+            new_callable=AsyncMock,
+        ) as mock_screenshot:
+            await _dispatch(update, context)
+
+        mock_screenshot.assert_awaited_once()
+        assert mock_screenshot.call_args.kwargs["allow_unowned"] is True
 
 
 class TestSessionsNew:
@@ -299,6 +321,7 @@ class TestRenameButtons:
     ) -> None:
         _mock_sm, mock_tr, _, _ = _patch_deps
         mock_tr.get_display_name.return_value = "myproject"
+        mock_tr.get_all_thread_windows.return_value = {42: "@0"}
 
         query = AsyncMock()
         query.message.message_thread_id = 42
@@ -323,7 +346,7 @@ class TestRenameButtons:
 
     async def test_apply_session_rename(self, _patch_deps: tuple) -> None:
         _mock_sm, mock_tr, mock_tm, mock_cfg = _patch_deps
-        mock_cfg.tmux_session_prefix = "ccgram_"
+        mock_cfg.tmux_session_prefix = "cc_"
         mock_window = MagicMock(window_id="cc_old:@0")
         mock_tm.find_window_by_id = AsyncMock(return_value=mock_window)
         mock_tm.rename_window = AsyncMock(return_value=True)
@@ -351,7 +374,7 @@ class TestRenameButtons:
 
         assert result is True
         mock_tm.rename_window.assert_awaited_once_with("cc_old:@0", "new-project")
-        mock_tm.rename_session.assert_awaited_once_with("cc_old", "ccgram_new-project")
+        mock_tm.rename_session.assert_awaited_once_with("cc_old", "cc_new-project")
         assert SESSION_RENAME_WINDOW_ID not in user_data
         client.edit_forum_topic.assert_awaited_once_with(
             -100123, 42, name="new-project"
