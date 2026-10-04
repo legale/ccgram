@@ -412,10 +412,7 @@ class SessionManager:
 
         # 4. Stale window_states (not bound and not live)
         for wid in self.window_states:
-            if (
-                wid not in bound_window_ids
-                and wid not in live_window_ids
-            ):
+            if wid not in bound_window_ids and wid not in live_window_ids:
                 display = self.window_states[wid].window_name or wid
                 issues.append(
                     AuditIssue(
@@ -481,10 +478,7 @@ class SessionManager:
         stale = [
             wid
             for wid in self.window_states
-            if (
-                wid not in bound_window_ids
-                and wid not in live_window_ids
-            )
+            if (wid not in bound_window_ids and wid not in live_window_ids)
         ]
         if not stale:
             return False

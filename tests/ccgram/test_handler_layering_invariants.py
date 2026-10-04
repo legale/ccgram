@@ -57,9 +57,7 @@ _PTB_BOT_ALLOWLIST = frozenset(
 # substores directly. New entries require an explicit decision —
 # either go through ``window_query`` / ``session_query`` instead, or
 # justify the direct access in the diff.
-_SINGLETON_ATTRS = frozenset(
-    {"window_store", "thread_router", "user_preferences"}
-)
+_SINGLETON_ATTRS = frozenset({"window_store", "thread_router", "user_preferences"})
 _SINGLETON_ALLOWLIST = frozenset(
     {
         "callback_helpers.py",

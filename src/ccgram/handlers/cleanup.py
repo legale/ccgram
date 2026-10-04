@@ -107,7 +107,6 @@ async def clear_topic_state(
             mb.clear_inbox(qualified_id)
 
 
-
 async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Close a topic and preserve its session outside the managed prefix."""
     user = update.effective_user
@@ -137,7 +136,9 @@ async def detach_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     session = await find_topic_session(chat_id, thread_id)
     if session is None:
-        await safe_reply(update.message, "This topic is not bound to a managed session.")
+        await safe_reply(
+            update.message, "This topic is not bound to a managed session."
+        )
         return
 
     window_id = session.window_id

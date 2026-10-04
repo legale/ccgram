@@ -56,11 +56,13 @@ def test_matches_no_match():
 
 def test_find_handler_exact_name():
     from ccgram.handlers.live import screenshot_command
+
     assert _find_handler("screenshot") is screenshot_command
 
 
 def test_find_handler_prefix_screenshot_unambiguous():
     from ccgram.handlers.live import screenshot_command
+
     # "screensho" is longer than "screen" so it only matches "screenshot"
     assert _find_handler("screensho") is screenshot_command
 
@@ -72,18 +74,15 @@ def test_find_handler_prefix_screen_ambiguous():
 
 def test_find_handler_screen_alias():
     from ccgram.handlers.live import screenshot_command
+
     # "screen" is an exact alias in the table → exact match wins
     assert _find_handler("screen") is screenshot_command
 
 
 def test_find_handler_prefix_det():
     from ccgram.handlers.cleanup import detach_command
+
     assert _find_handler("det") is detach_command
-
-
-def test_find_handler_bind():
-    from ccgram.handlers.topics.topic_binding import bind_command
-    assert _find_handler("bind") is bind_command
 
 
 def test_find_handler_ambiguous_returns_none():
@@ -97,12 +96,14 @@ def test_find_handler_unknown_returns_none():
 
 def test_find_handler_help_alias():
     from ccgram.handlers.commands import commands_command
+
     # "help" is an exact alias in the table
     assert _find_handler("help") is commands_command
 
 
 def test_find_handler_ses_alias():
     from ccgram.handlers.sessions_dashboard import sessions_command
+
     # "ses" is an exact alias in the table → exact match wins over prefix ambiguity
     assert _find_handler("ses") is sessions_command
 
@@ -127,7 +128,16 @@ def test_command_names_matches_dispatch_table():
 
 
 def test_command_names_contains_minimal_contract():
-    contract = {"commands", "help", "sessions", "ses", "bind", "detach", "screenshot", "live", "send"}
+    contract = {
+        "commands",
+        "help",
+        "sessions",
+        "ses",
+        "detach",
+        "screenshot",
+        "live",
+        "send",
+    }
     assert contract.issubset(set(COMMAND_NAMES))
 
 
@@ -152,6 +162,7 @@ def test_register_all_registers_expected_handler_kinds():
 
     # No PrefixHandlers — replaced by a single MessageHandler for ^//
     from telegram.ext import PrefixHandler
+
     assert by_kind.get(PrefixHandler, 0) == 0
     assert by_kind.get(CallbackQueryHandler) == 1
     # MessageHandlers: //dispatch, topic_created, topic_closed,
@@ -196,7 +207,9 @@ async def test_dispatch_unknown_command_replies():
     msg.text = "//xyzzy"
     update.effective_message = msg
 
-    with patch("ccgram.handlers.registry.safe_reply", new_callable=AsyncMock) as mock_reply:
+    with patch(
+        "ccgram.handlers.registry.safe_reply", new_callable=AsyncMock
+    ) as mock_reply:
         await _dispatch_double_slash(update, MagicMock())
         mock_reply.assert_awaited_once()
         args = mock_reply.call_args[0]
@@ -213,7 +226,9 @@ async def test_dispatch_ambiguous_prefix_replies():
     msg.text = "//s"
     update.effective_message = msg
 
-    with patch("ccgram.handlers.registry.safe_reply", new_callable=AsyncMock) as mock_reply:
+    with patch(
+        "ccgram.handlers.registry.safe_reply", new_callable=AsyncMock
+    ) as mock_reply:
         await _dispatch_double_slash(update, MagicMock())
         mock_reply.assert_awaited_once()
 
@@ -224,6 +239,7 @@ async def test_dispatch_ambiguous_prefix_replies():
 
 def test_single_slash_path_does_not_match_double_slash_regex():
     import re
+
     pattern = re.compile(r"^//")
     assert not pattern.match("/bin/ls -la")
     assert pattern.match("//screenshot")

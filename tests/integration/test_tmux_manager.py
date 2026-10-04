@@ -106,7 +106,10 @@ async def test_kill_window(tmux, tmp_path) -> None:
 async def test_kill_session_removes_the_tmux_session(tmux, tmp_path) -> None:
     session_name = "cc_kill-session"
     ok, _msg, _name, _window_id = await tmux.create_window(
-        str(tmp_path), session_name=session_name, window_name="kill-me", start_agent=False
+        str(tmp_path),
+        session_name=session_name,
+        window_name="kill-me",
+        start_agent=False,
     )
     assert ok
     assert tmux.get_session(session_name) is not None

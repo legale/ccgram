@@ -2,6 +2,7 @@
 
 import pytest
 
+
 @pytest.fixture(autouse=True)
 def _disable_send_rate_limit(monkeypatch):
     """Zero out MESSAGE_SEND_INTERVAL so back-to-back sends don't sleep.

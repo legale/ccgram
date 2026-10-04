@@ -217,9 +217,7 @@ class TestUpdateStatusActiveLine:
                 "ccgram.handlers.polling.window_tick.apply.enqueue_status_update",
                 new_callable=AsyncMock,
             ) as mock_enqueue,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.thread_router"
-            ),
+            patch("ccgram.handlers.polling.window_tick.apply.thread_router"),
         ):
             await _transition_to_idle(bot, 1, "@0", 100, 42, "test")
 
@@ -243,9 +241,7 @@ class TestUpdateStatusActiveLine:
             mock_tr.resolve_chat_id.return_value = 42
             mock_tr.get_display_name.return_value = "agy"
 
-            await _apply_active_transition(
-                bot, 1, "cc_agy:@1", 100, decision, "all"
-            )
+            await _apply_active_transition(bot, 1, "cc_agy:@1", 100, decision, "all")
 
         mock_typing.assert_not_awaited()
 

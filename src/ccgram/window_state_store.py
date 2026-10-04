@@ -564,10 +564,7 @@ class WindowStateStore:
         stale = [
             wid
             for wid in self.window_states
-            if (
-                wid not in bound_window_ids
-                and wid not in live_window_ids
-            )
+            if (wid not in bound_window_ids and wid not in live_window_ids)
         ]
         if not stale:
             return False

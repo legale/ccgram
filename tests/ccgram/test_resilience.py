@@ -10,7 +10,6 @@ import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-
 class TestScreenBufferResilience:
     def test_feed_malformed_ansi_does_not_raise(self):
         from ccgram.screen_buffer import ScreenBuffer

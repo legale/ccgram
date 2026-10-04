@@ -31,7 +31,9 @@ async def test_topic_created_claims_strict_name_match() -> None:
     with (
         patch("ccgram.config.Config.is_user_allowed", return_value=True),
         patch.object(
-            topic_lifecycle, "ensure_topic_session", new=AsyncMock(return_value=("cc_foo:@1", None))
+            topic_lifecycle,
+            "ensure_topic_session",
+            new=AsyncMock(return_value=("cc_foo:@1", None)),
         ) as ensure,
         patch(
             "ccgram.handlers.status.topic_emoji.sync_topic_name", new_callable=AsyncMock

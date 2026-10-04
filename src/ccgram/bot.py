@@ -58,7 +58,6 @@ __all__ = [
 logger = structlog.get_logger()
 
 
-
 def is_user_allowed(user_id: int | None) -> bool:
     """Thin wrapper around ``config.is_user_allowed`` for None-safety."""
     return user_id is not None and config.is_user_allowed(user_id)

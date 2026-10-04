@@ -237,7 +237,9 @@ async def broker_delivery_cycle(
         try:
             sanitize_dir_name(qualified_id)
         except ValueError:
-            logger.warning("Skipping unsafe window ID in broker cycle", window_id=qualified_id)
+            logger.warning(
+                "Skipping unsafe window ID in broker cycle", window_id=qualified_id
+            )
             continue
 
         provider = get_provider_for_window(

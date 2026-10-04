@@ -163,7 +163,9 @@ class TestDisplayNames:
 
 
 class TestToDictRoundtrip:
-    def test_roundtrip_keeps_only_non_lifecycle_state(self, router: ThreadRouter) -> None:
+    def test_roundtrip_keeps_only_non_lifecycle_state(
+        self, router: ThreadRouter
+    ) -> None:
         router.bind_thread(100, 1, "@1", window_name="proj")
         router.set_group_chat_id(100, 1, -999)
         data = router.to_dict()
@@ -201,7 +203,6 @@ class TestReset:
         assert router.resolve_chat_id(100, 1) == 100
         assert router.get_display_name("@1") == "@1"
         assert list(router.iter_thread_bindings()) == []
-
 
 
 class TestScheduleSave:

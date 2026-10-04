@@ -117,10 +117,12 @@ async def _dispatch_double_slash(update: Update, context) -> None:  # type: igno
 
     text = message.text.strip()
     # Strip the "//" prefix and split into tokens
-    body = text[len(COMMAND_PREFIX):]
+    body = text[len(COMMAND_PREFIX) :]
     tokens = body.split()
     if not tokens:
-        await safe_reply(message, f"Empty command. Use `{COMMAND_PREFIX}commands` for help.")
+        await safe_reply(
+            message, f"Empty command. Use `{COMMAND_PREFIX}commands` for help."
+        )
         return
 
     it = ArgIter(tokens)

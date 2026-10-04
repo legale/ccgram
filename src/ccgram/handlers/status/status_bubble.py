@@ -205,6 +205,7 @@ def format_pane_block(window_id: str) -> str | None:
 # Status formatting
 # ---------------------------------------------------------------------------
 
+
 def format_claude_task_status(window_id: str, base_text: str | None) -> str | None:
     """Compose the base status plus the per-pane block, if any."""
     pane_block = format_pane_block(window_id)

@@ -110,9 +110,7 @@ class TestSessionsKill:
                 new_callable=AsyncMock,
             ),
         ):
-            killed = await handle_sessions_kill_confirm(
-                query, 100, "cc_foo:@7", client
-            )
+            killed = await handle_sessions_kill_confirm(query, 100, "cc_foo:@7", client)
 
         assert killed is True
         client.delete_forum_topic.assert_awaited_once_with(-100, 42)
@@ -132,9 +130,7 @@ class TestSessionsKill:
         with patch(
             "ccgram.handlers.sessions_dashboard.safe_edit", new_callable=AsyncMock
         ):
-            killed = await handle_sessions_kill_confirm(
-                query, 100, "cc_foo:@7", client
-            )
+            killed = await handle_sessions_kill_confirm(query, 100, "cc_foo:@7", client)
 
         assert killed is False
         tmux.kill_session.assert_not_called()
@@ -148,9 +144,7 @@ class TestSessionsKill:
         with patch(
             "ccgram.handlers.sessions_dashboard.safe_edit", new_callable=AsyncMock
         ):
-            killed = await handle_sessions_kill_confirm(
-                query, 100, "cc_foo:@7", client
-            )
+            killed = await handle_sessions_kill_confirm(query, 100, "cc_foo:@7", client)
 
         assert killed is False
         router.unbind_thread.assert_not_called()

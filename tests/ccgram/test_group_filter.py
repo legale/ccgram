@@ -58,7 +58,6 @@ class TestGroupFilterModule:
         assert result_none is filters.ALL
 
 
-
 # ── Handler registration tests ──────────────────────────────────────────
 
 

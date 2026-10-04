@@ -91,6 +91,28 @@ async def _bind_runtime(
     return changed
 
 
+async def _delete_runtime_topic(
+    client: TelegramClient, chat_id: int, thread_id: int
+) -> bool:
+    """Delete a Telegram projection whose authoritative tmux session vanished."""
+    try:
+        await client.delete_forum_topic(chat_id, thread_id)
+    except TelegramError as e:
+        if not is_thread_gone(e):
+            log_throttled(
+                logger,
+                f"topic-delete:{chat_id}:{thread_id}",
+                "Topic delete error for %s:%s: %s",
+                chat_id,
+                thread_id,
+                e,
+            )
+            return False
+
+    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=True)
+    return True
+
+
 async def _replace_missing_topic(
     client: TelegramClient,
     session: "TmuxWindow",
@@ -114,9 +136,7 @@ async def _replace_missing_topic(
         return
 
     new_thread_id = topic.message_thread_id
-    if not await tmux_manager.set_session_topic(
-        session_name, chat_id, new_thread_id
-    ):
+    if not await tmux_manager.set_session_topic(session_name, chat_id, new_thread_id):
         try:
             await client.delete_forum_topic(chat_id, new_thread_id)
         except TelegramError:
@@ -124,9 +144,7 @@ async def _replace_missing_topic(
         logger.error("Failed to store replacement topic for %s", session_name)
         return
 
-    await _clear_runtime_topic(
-        client, chat_id, thread_id, window_dead=False
-    )
+    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
     session.topic_ref = (chat_id, new_thread_id)
     await _bind_runtime(session, user_id, chat_id, new_thread_id)
     logger.info(
@@ -148,9 +166,7 @@ async def _sync_topic(
         await client.reopen_forum_topic(chat_id, thread_id)
     except BadRequest as e:
         if is_thread_gone(e):
-            await _replace_missing_topic(
-                client, session, user_id, chat_id, thread_id
-            )
+            await _replace_missing_topic(client, session, user_id, chat_id, thread_id)
             return
         if "topic_not_modified" not in e.message.lower():
             log_throttled(
@@ -178,9 +194,7 @@ async def _sync_topic(
         if "topic_not_modified" in e.message.lower():
             return
         if is_thread_gone(e):
-            await _replace_missing_topic(
-                client, session, user_id, chat_id, thread_id
-            )
+            await _replace_missing_topic(client, session, user_id, chat_id, thread_id)
             return
         log_throttled(
             logger,

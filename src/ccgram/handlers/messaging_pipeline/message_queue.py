@@ -60,6 +60,7 @@ _queue_locks: dict[int, asyncio.Lock] = {}  # Protect drain/refill operations
 # for editing tool_use messages with results
 _tool_msg_ids: dict[tuple[str, int, int], int] = {}
 
+
 def get_message_queue(user_id: int) -> asyncio.Queue[MessageTask] | None:
     """Get the message queue for a user (if exists)."""
     return _message_queues.get(user_id)

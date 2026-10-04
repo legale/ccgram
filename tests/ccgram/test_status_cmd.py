@@ -7,10 +7,14 @@ from ccgram.status_cmd import _list_managed_sessions, status_main
 
 class TestListManagedSessions:
     def test_filters_prefix_and_keeps_topic_identity(self, monkeypatch) -> None:
-        result = type("R", (), {
-            "returncode": 0,
-            "stdout": "cc_foo\t/tmp/foo\t-100:42\nother\t/tmp/other\t\n",
-        })()
+        result = type(
+            "R",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "cc_foo\t/tmp/foo\t-100:42\nother\t/tmp/other\t\n",
+            },
+        )()
         monkeypatch.setattr("ccgram.status_cmd.subprocess.run", lambda *a, **kw: result)
 
         assert _list_managed_sessions("cc_") == [

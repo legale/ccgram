@@ -301,6 +301,8 @@ def mark_telegram_command(
     state.telegram_thread_id = thread_id
     state.telegram_message_id = message_id
     state.telegram_generation = _fix_generation
+
+
 def mark_telegram_activity(window_id: str, message_id: int) -> None:
     """Record any incoming Telegram message for the shell window.
 
