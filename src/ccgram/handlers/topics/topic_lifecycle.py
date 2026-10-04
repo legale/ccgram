@@ -285,6 +285,39 @@ async def topic_closed_handler(
         )
 
 
+async def topic_created_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Remember a newly created topic name for first-message routing."""
+    user = update.effective_user
+    message = update.message
+    chat = update.effective_chat
+    if not user or not config.is_user_allowed(user.id) or not message or not chat:
+        return
+    created = message.forum_topic_created
+    if not created or not created.name:
+        return
+
+    from ..callback_helpers import get_thread_id
+    from ..status.topic_emoji import sync_topic_name
+
+    thread_id = get_thread_id(update)
+    if thread_id is None:
+        return
+
+    thread_router.remember_forum_chat_id(user.id, chat.id)
+    thread_router.set_group_chat_id(user.id, thread_id, chat.id)
+    await sync_topic_name(
+        PTBTelegramClient(context.bot), chat.id, thread_id, created.name
+    )
+    logger.info(
+        "Remembered new Telegram topic %r (chat=%d, thread=%d)",
+        created.name,
+        chat.id,
+        thread_id,
+    )
+
+
 async def topic_edited_handler(
     update: Update, _context: ContextTypes.DEFAULT_TYPE
 ) -> None:

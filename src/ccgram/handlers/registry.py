@@ -30,7 +30,11 @@ from .live import live_command, screenshot_command
 from .send import send_command
 from .sessions_dashboard import sessions_command
 from .text.text_handler import text_handler
-from .topics.topic_lifecycle import topic_closed_handler, topic_edited_handler
+from .topics.topic_lifecycle import (
+    topic_closed_handler,
+    topic_created_handler,
+    topic_edited_handler,
+)
 
 from .messaging_pipeline.message_sender import safe_reply
 
@@ -92,6 +96,12 @@ def register_all(
     _load_callback_handlers()
     application.add_handler(CallbackQueryHandler(_dispatch_callback))
 
+    application.add_handler(
+        MessageHandler(
+            filters.StatusUpdate.FORUM_TOPIC_CREATED & group_filter,
+            topic_created_handler,
+        )
+    )
     application.add_handler(
         MessageHandler(
             filters.StatusUpdate.FORUM_TOPIC_CLOSED & group_filter,

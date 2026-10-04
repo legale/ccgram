@@ -12,6 +12,7 @@ from ccgram.handlers.topics.topic_lifecycle import (
     check_unbound_window_ttl,
     probe_topic_existence,
     prune_stale_state,
+    topic_created_handler,
 )
 from ccgram.handlers.polling.polling_state import (
     lifecycle_strategy,
@@ -35,6 +36,35 @@ class TestCheckAutocloseTimers:
         bot = AsyncMock(spec=Bot)
         await check_autoclose_timers(bot)
         bot.delete_forum_topic.assert_not_called()
+
+
+class TestTopicCreatedHandler:
+    async def test_remembers_topic_name_and_chat(self) -> None:
+        update = MagicMock()
+        update.effective_user = MagicMock(id=100)
+        update.effective_chat = MagicMock(id=-100999)
+        update.message.message_thread_id = 42
+        update.message.forum_topic_created.name = "test"
+        context = MagicMock(bot=MagicMock())
+
+        with (
+            patch("ccgram.handlers.topics.topic_lifecycle.config") as mock_config,
+            patch(
+                "ccgram.handlers.topics.topic_lifecycle.thread_router"
+            ) as mock_router,
+            patch(
+                "ccgram.handlers.status.topic_emoji.sync_topic_name",
+                new_callable=AsyncMock,
+            ) as mock_sync,
+        ):
+            mock_config.is_user_allowed.return_value = True
+
+            await topic_created_handler(update, context)
+
+        mock_router.remember_forum_chat_id.assert_called_once_with(100, -100999)
+        mock_router.set_group_chat_id.assert_called_once_with(100, 42, -100999)
+        mock_sync.assert_awaited_once()
+        assert mock_sync.call_args.args[1:] == (-100999, 42, "test")
 
     async def test_expired_done_topic_gets_closed(self):
         bot = AsyncMock(spec=Bot)
