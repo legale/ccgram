@@ -148,7 +148,12 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         window_id=window_id,
         window_dead=False,
     )
+    from .status.topic_emoji import get_stored_topic_name, update_stored_topic_name
+
+    topic_name = get_stored_topic_name(update.effective_chat.id, thread_id)
     thread_router.unbind_thread(user.id, thread_id)
+    if topic_name:
+        update_stored_topic_name(update.effective_chat.id, thread_id, topic_name)
     await safe_reply(
         update.message,
         f"Unbound from window `{display}`. The session is still running.\n"

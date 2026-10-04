@@ -289,6 +289,8 @@ async def _handle_named_session_request(
     user_id: int,
     thread_id: int,
     requested_name: str,
+    pending_text: str = "",
+    client: TelegramClient | None = None,
 ) -> None:
     """Attach an existing named session or create it in the configured directory."""
     target_session = tmux_manager.topic_session_name(requested_name)
@@ -324,14 +326,69 @@ async def _handle_named_session_request(
         message,
         f"Attached session `{requested_name}` (tmux `{target_session}`) to this topic.",
     )
+    if pending_text:
+        if client is None:
+            return
+        await _forward_message(
+            existing.window_id,
+            user_id,
+            thread_id,
+            pending_text,
+            client,
+            message,
+        )
 
 
-async def _handle_unbound_topic(
+async def _handle_stored_topic_session(
+    message: Message,
+    user_data: dict | None,
+    user_id: int,
+    thread_id: int,
+    text: str,
+    client: TelegramClient | None,
+) -> bool:
+    """Rebind an unbound topic to its strictly name-matched tmux session."""
+    from ..status.topic_emoji import get_stored_topic_name
+
+    topic_name = get_stored_topic_name(message.chat.id, thread_id)
+    if not topic_name:
+        return False
+    await _handle_named_session_request(
+        message,
+        user_data,
+        user_id,
+        thread_id,
+        topic_name,
+        pending_text=text,
+        client=client,
+    )
+    return True
+
+
+async def _handle_named_session_text(
+    message: Message,
+    user_data: dict | None,
+    user_id: int,
+    thread_id: int,
+    text: str,
+) -> bool:
+    """Create or attach a session named explicitly by an unbound topic message."""
+    requested_name = text.strip()
+    if not _is_named_session_request(requested_name):
+        return False
+    await _handle_named_session_request(
+        message, user_data, user_id, thread_id, requested_name
+    )
+    return True
+
+
+async def _handle_unbound_topic(  # noqa: C901
     user_id: int,
     thread_id: int,
     text: str,
     user_data: dict | None,
     message: Message,
+    client: TelegramClient | None = None,
 ) -> bool:
     """Show window picker or directory browser for an unbound topic.
 
@@ -355,11 +412,11 @@ async def _handle_unbound_topic(
     if not topic_name:
         topic_name = message.chat.title or message.chat.username or "topic"
 
-    requested_name = text.strip()
-    if _is_named_session_request(requested_name):
-        await _handle_named_session_request(
-            message, user_data, user_id, thread_id, requested_name
-        )
+    if await _handle_stored_topic_session(
+        message, user_data, user_id, thread_id, text, client
+    ):
+        return True
+    if await _handle_named_session_text(message, user_data, user_id, thread_id, text):
         return True
 
     selected_path = _resolve_directory_input(text)
@@ -584,7 +641,12 @@ async def handle_text_message(
 
     # Unbound topic — show picker or browser
     if await _handle_unbound_topic(
-        user.id, thread_id, text, context.user_data, message
+        user.id,
+        thread_id,
+        text,
+        context.user_data,
+        message,
+        PTBTelegramClient(context.bot),
     ):
         return
 

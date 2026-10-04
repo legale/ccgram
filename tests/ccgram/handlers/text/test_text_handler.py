@@ -215,6 +215,43 @@ class TestHandleUnboundTopic:
         )
         assert "Attached session" in mock_reply.call_args.args[1]
 
+    @patch(f"{_TH}._forward_message", new_callable=AsyncMock)
+    @patch("ccgram.handlers.status.topic_emoji.get_stored_topic_name")
+    @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
+    @patch(f"{_TH}.tmux_manager")
+    @patch(f"{_TH}.thread_router")
+    async def test_message_after_unbind_rebinds_by_topic_name(
+        self,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        _mock_reply: AsyncMock,
+        mock_topic_name: MagicMock,
+        mock_forward: AsyncMock,
+    ) -> None:
+        mock_tr.get_window_for_thread.return_value = None
+        mock_tm.topic_session_name.return_value = "cc_mmm"
+        existing = MagicMock(window_name="cc_mmm", window_id="cc_mmm:@1")
+        mock_tm.list_sessions = AsyncMock(return_value=[existing])
+        mock_topic_name.return_value = "mmm"
+        message = MagicMock()
+        message.chat.type = "supergroup"
+        message.chat.id = -100123
+        message.get_bot.return_value = MagicMock()
+
+        client = MagicMock()
+        result = await _handle_unbound_topic(
+            100, 42, "m", {}, message, client
+        )
+
+        assert result is True
+        mock_tr.bind_thread.assert_called_once_with(
+            100, 42, "cc_mmm:@1", window_name="mmm"
+        )
+        mock_forward.assert_awaited_once()
+        assert mock_forward.call_args.args[3] == "m"
+        assert mock_forward.call_args.args[4] is client
+
+
     @patch(f"{_TH}.safe_reply", new_callable=AsyncMock)
     @patch(f"{_TH}.build_directory_browser")
     @patch(f"{_TH}.tmux_manager")
