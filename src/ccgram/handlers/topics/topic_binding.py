@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from ...telegram_client import TelegramClient
 
 
-
 def _valid_name(name: str) -> bool:
     return bool(name) and len(name) <= 50 and "\n" not in name
 
@@ -131,9 +130,7 @@ async def ensure_topic_session(
     )
 
     if linked and linked[0].window_name == target:
-        return bind_runtime(
-            user_id, chat_id, thread_id, linked[0], router=router
-        ), None
+        return bind_runtime(user_id, chat_id, thread_id, linked[0], router=router), None
 
     if not rebind:
         if linked:
@@ -266,6 +263,4 @@ async def create_from_all(
         return None, f"Failed to bind tmux session {target}."
 
     session.topic_ref = (chat_id, thread_id)
-    return bind_runtime(
-        user_id, chat_id, thread_id, session, router=router
-    ), None
+    return bind_runtime(user_id, chat_id, thread_id, session, router=router), None

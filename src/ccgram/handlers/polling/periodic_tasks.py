@@ -257,9 +257,7 @@ async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
         if session.topic_ref is not None and session.topic_ref not in duplicate_refs
     }
     for chat_id, thread_id in _runtime_refs() - live_refs - duplicate_refs:
-        await _clear_runtime_topic(
-            client, chat_id, thread_id, window_dead=False
-        )
+        await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
 
 
 async def send_with_reconcile(

@@ -137,9 +137,7 @@ async def test_create_from_all_rejects_existing_session_before_topic_creation() 
     with patch.object(topic_binding, "tmux_manager") as tmux:
         tmux.list_sessions = AsyncMock(return_value=[_session("cc_tmp2")])
         tmux.topic_session_name.return_value = "cc_tmp2"
-        window_id, error = await topic_binding.create_from_all(
-            1, -100, "tmp2", client
-        )
+        window_id, error = await topic_binding.create_from_all(1, -100, "tmp2", client)
 
     assert window_id is None
     assert error == "Session cc_tmp2 already exists."
