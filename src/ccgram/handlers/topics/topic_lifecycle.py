@@ -193,26 +193,13 @@ async def topic_edited_handler(
         return
 
     from ..callback_helpers import get_thread_id
-    from ..status.topic_emoji import strip_emoji_prefix, update_stored_topic_name
+    from ..status.topic_emoji import update_stored_topic_name
 
     thread_id = get_thread_id(update)
     if thread_id is None:
         return
     session = await find_topic_session(chat.id, thread_id)
     if session is None:
-        # A stale runtime route means its authoritative tmux session vanished.
-        # Do not recreate it from a Telegram-side rename; reconcile owns cleanup.
-        if thread_router.get_window_for_chat_thread(chat.id, thread_id) is not None:
-            return
-        name = strip_emoji_prefix(message.forum_topic_edited.name)
-        update_stored_topic_name(chat.id, thread_id, name)
-        _window_id, error = await ensure_topic_session(
-            user.id, chat.id, thread_id, name
-        )
-        if error:
-            await PTBTelegramClient(context.bot).send_message(
-                chat.id, error, message_thread_id=thread_id
-            )
         return
 
     name = tmux_manager.topic_name_from_session_name(session.window_name)

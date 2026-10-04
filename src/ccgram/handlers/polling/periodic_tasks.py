@@ -91,30 +91,6 @@ async def _bind_runtime(
     return changed
 
 
-async def _delete_runtime_topic(
-    client: TelegramClient, chat_id: int, thread_id: int
-) -> bool:
-    """Delete a Telegram projection whose authoritative tmux session vanished."""
-    try:
-        await client.delete_forum_topic(chat_id, thread_id)
-    except TelegramError as e:
-        if not is_thread_gone(e):
-            log_throttled(
-                logger,
-                f"topic-delete:{chat_id}:{thread_id}",
-                "Topic delete error for %s:%s: %s",
-                chat_id,
-                thread_id,
-                e,
-            )
-            return False
-
-    await _clear_runtime_topic(
-        client, chat_id, thread_id, window_dead=True
-    )
-    return True
-
-
 async def _replace_missing_topic(
     client: TelegramClient,
     session: "TmuxWindow",
@@ -267,7 +243,9 @@ async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
         if session.topic_ref is not None and session.topic_ref not in duplicate_refs
     }
     for chat_id, thread_id in _runtime_refs() - live_refs - duplicate_refs:
-        await _delete_runtime_topic(client, chat_id, thread_id)
+        await _clear_runtime_topic(
+            client, chat_id, thread_id, window_dead=False
+        )
 
 
 async def send_with_reconcile(

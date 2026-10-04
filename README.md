@@ -18,7 +18,7 @@
 - **Desktop to phone, seamless continuity** — walk away from your desk and monitor your running terminal tasks from Telegram.
 - **Phone back to desktop anytime** — run `tmux attach` on your machine and you are right where you left off with full scrollback.
 - **Topic per session** — each Telegram topic maps directly to an isolated tmux session/window.
-- **Double slash bot commands (`//`)** — keeps native single-slash `/` commands uncluttered in your shell and bot commands isolated (`//commands`, `//unbind`, `//sessions`, `//ses`).
+- **Double slash bot commands (`//`)** — keeps native single-slash `/` commands uncluttered in your shell and bot commands isolated (`//commands`, `//bind`, `//detach`, `//sessions`, `//ses`).
 
 ---
 
@@ -62,7 +62,8 @@ Each Telegram Forum topic binds to a tmux session/window. Messages you send in t
 ## Commands
 
 - `//commands` — list available bot commands
-- `//unbind` — unbind current topic from tmux window (session continues running)
+- `//bind <name>` — bind the current topic to `cc_<name>` (create it if needed)
+- `//detach` — close the topic and keep the tmux session running without the `cc_` prefix
 - `//sessions` / `//ses` — list active bridge sessions and manage bindings
 
 ---
@@ -106,7 +107,7 @@ CCGRAM_GROUP_ID=your_telegram_group_id
 ccgram
 ```
 
-Open your Telegram group, create topic `foo`, and send a message. ccgram binds it to tmux session `cc_foo`; if that session does not exist, ccgram creates it. To hand an existing session `foo` to ccgram, rename it to `cc_foo` first.
+For a manually created Telegram topic, run `//bind foo`. ccgram finds or creates tmux session `cc_foo`, stores the topic identity in the tmux session, and renames the Telegram topic to `foo`. In the special `all` topic, sending `foo` creates a new `cc_foo` session and Telegram topic; if `cc_foo` already exists, ccgram returns an error in `all` and creates nothing.
 
 
 ---

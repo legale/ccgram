@@ -64,7 +64,7 @@ async def test_reconcile_ignores_unbound_prefixed_candidate() -> None:
     assert list(router.iter_thread_bindings()) == []
 
 
-async def test_reconcile_deletes_topic_when_tmux_session_disappears() -> None:
+async def test_reconcile_drops_route_when_tmux_session_disappears() -> None:
     client = AsyncMock()
     router = _router()
     router.bind_thread(1, 42, "cc_foo:@1", "foo")
@@ -80,7 +80,7 @@ async def test_reconcile_deletes_topic_when_tmux_session_disappears() -> None:
         config.tmux_session_prefix = "cc_"
         await periodic_tasks.reconcile(client)
 
-    client.delete_forum_topic.assert_awaited_once_with(-100, 42)
+    client.delete_forum_topic.assert_not_called()
     tmux.create_window.assert_not_called()
     assert router.get_window_for_thread(1, 42) is None
 

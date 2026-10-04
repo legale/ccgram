@@ -32,6 +32,7 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//screenshot` (или `//screen`) — скриншот терминала",
         "• `//live` — автообновляемый просмотр терминала",
         "• `//sessions` — дашборд сессий",
+        "• `//bind <name>` — привязать текущий топик к `cc_<name>`",
         "• `//detach` — закрыть топик, сохранив tmux-сессию",
         "• `//send` — отправить файл в tmux",
         "",

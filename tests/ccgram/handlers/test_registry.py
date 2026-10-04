@@ -81,6 +81,11 @@ def test_find_handler_prefix_det():
     assert _find_handler("det") is detach_command
 
 
+def test_find_handler_bind():
+    from ccgram.handlers.topics.topic_binding import bind_command
+    assert _find_handler("bind") is bind_command
+
+
 def test_find_handler_ambiguous_returns_none():
     # "s" is not exact and is prefix of sessions, ses, screenshot, screen, send → ambiguous
     assert _find_handler("s") is None
@@ -122,7 +127,7 @@ def test_command_names_matches_dispatch_table():
 
 
 def test_command_names_contains_minimal_contract():
-    contract = {"commands", "help", "sessions", "ses", "detach", "screenshot", "live", "send"}
+    contract = {"commands", "help", "sessions", "ses", "bind", "detach", "screenshot", "live", "send"}
     assert contract.issubset(set(COMMAND_NAMES))
 
 

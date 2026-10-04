@@ -1,8 +1,7 @@
 """Route Telegram topic text to its authoritative tmux session.
 
-A topic is resolved from tmux session metadata first.  For a new topic,
-``cc_<topic name>`` is claimed or created exactly once; no picker, text-name
-heuristic, or persisted binding participates in routing.
+A topic is resolved only from tmux session metadata.  Unknown topics require
+explicit ``//bind <name>``; the special ``cc_all`` topic creates new pairs.
 """
 
 from __future__ import annotations
@@ -38,20 +37,43 @@ async def _handle_unbound_topic(
     if thread_router.get_window_for_thread(user_id, thread_id) is not None:
         return False
 
-    from ..status.topic_emoji import get_stored_topic_name
-    from ..topics.topic_binding import ensure_topic_session
+    from ..topics.topic_binding import bind_runtime, find_topic_session
 
     chat = message.chat
     if chat is None:
         return True
-    topic_name = get_stored_topic_name(chat.id, thread_id) or ""
-    _window_id, error = await ensure_topic_session(
-        user_id, chat.id, thread_id, topic_name
-    )
+    session = await find_topic_session(chat.id, thread_id)
+    if session is None:
+        await safe_reply(message, "Topic is not bound. Use `//bind <name>`.")
+        return True
+    bind_runtime(user_id, chat.id, thread_id, session)
+    return False
+
+
+def _is_all_window(window_id: str) -> bool:
+    target = tmux_manager.topic_session_name("all")
+    return window_id == target or window_id.startswith(f"{target}:")
+
+
+async def _handle_all_topic(
+    user_id: int,
+    text: str,
+    client: TelegramClient,
+    message: Message,
+) -> bool:
+    """Create a new managed session/topic pair from the ``all`` topic."""
+    chat = message.chat
+    if chat is None:
+        return True
+
+    from ..topics.topic_binding import create_from_all
+
+    _window_id, error = await create_from_all(user_id, chat.id, text, client)
     if error:
         await safe_reply(message, error)
         return True
-    return False
+    await ack_reaction(client, chat.id, message.message_id)
+    return True
 
 
 async def _forward_message(
@@ -155,6 +177,9 @@ async def handle_text_message(
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     assert window_id is not None
+    if _is_all_window(window_id):
+        await _handle_all_topic(user.id, message.text, client, message)
+        return
     await _forward_message(
         window_id,
         user.id,

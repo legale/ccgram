@@ -15,6 +15,7 @@ Command dispatch uses iproute2-style prefix matching via
   ``//sc``   → screenshot_command   (prefix match of "screenshot")
   ``//det``  → detach_command        (prefix match of "detach")
   ``//ses``  → sessions_command      (prefix match of "sessions")
+  ``//bind`` → bind_command          (bind current topic to cc_<name>)
 
 Full names are always valid; the shortest unambiguous prefix works too.
 """
@@ -43,6 +44,7 @@ from .live import live_command, screenshot_command
 from .send import send_command
 from .sessions_dashboard import sessions_command
 from .text.text_handler import text_handler
+from .topics.topic_binding import bind_command
 from .topics.topic_lifecycle import (
     topic_closed_handler,
     topic_created_handler,
@@ -72,6 +74,7 @@ _DISPATCH_TABLE: list[tuple[str, HandlerFn]] = [
     ("help", commands_command),
     ("sessions", sessions_command),
     ("ses", sessions_command),
+    ("bind", bind_command),
     ("detach", detach_command),
     ("screenshot", screenshot_command),
     ("screen", screenshot_command),
