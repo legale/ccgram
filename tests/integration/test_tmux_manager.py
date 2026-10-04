@@ -103,6 +103,20 @@ async def test_kill_window(tmux, tmp_path) -> None:
     assert window_id not in ids
 
 
+async def test_kill_session_removes_the_tmux_session(tmux, tmp_path) -> None:
+    session_name = "cc_kill-session"
+    ok, _msg, _name, _window_id = await tmux.create_window(
+        str(tmp_path), session_name=session_name, window_name="kill-me", start_agent=False
+    )
+    assert ok
+    assert tmux.get_session(session_name) is not None
+
+    killed = await tmux.kill_session(session_name)
+
+    assert killed is True
+    assert tmux.get_session(session_name) is None
+
+
 async def test_reset_server_reconnects(tmux, tmp_path) -> None:
     ok, _msg, _name, window_id = await tmux.create_window(
         str(tmp_path), window_name="reset-test", start_agent=False

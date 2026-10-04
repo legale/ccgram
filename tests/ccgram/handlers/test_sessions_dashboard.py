@@ -9,6 +9,7 @@ from ccgram.handlers.sessions_dashboard import (
     _build_dashboard,
     _create_session_for_topic,
     _dispatch,
+    handle_sessions_kill_confirm,
     apply_session_rename,
     handle_sessions_refresh,
     handle_sessions_rename,
@@ -149,6 +150,34 @@ class TestBuildDashboard:
             if isinstance(btn.callback_data, str)
         ]
         assert data == []
+
+
+class TestSessionsKill:
+    async def test_confirm_kills_the_tmux_session(self, _patch_deps) -> None:
+        _mock_view, mock_tr, mock_tm, _mock_cfg = _patch_deps
+        mock_tm.kill_session = AsyncMock(return_value=True)
+        mock_tm.session_name = "ccgram"
+        mock_tr.iter_thread_bindings.return_value = []
+        mock_tm.list_sessions = AsyncMock(return_value=[])
+        query = AsyncMock()
+        client = AsyncMock()
+
+        await handle_sessions_kill_confirm(query, 100, "cc_project:@7", client)
+
+        mock_tm.kill_session.assert_awaited_once_with("cc_project")
+        mock_tm.kill_window.assert_not_called()
+
+    async def test_failed_kill_does_not_unbind(self, _patch_deps) -> None:
+        _mock_view, mock_tr, mock_tm, _mock_cfg = _patch_deps
+        mock_tm.kill_session = AsyncMock(return_value=False)
+        query = AsyncMock()
+        client = AsyncMock()
+
+        killed = await handle_sessions_kill_confirm(query, 100, "cc_project:@7", client)
+
+        assert killed is False
+        mock_tr.unbind_thread.assert_not_called()
+        assert "was not killed" in query.edit_message_text.call_args.args[0]
 
 
 class TestSessionsCommand:

@@ -195,13 +195,19 @@ async def handle_sessions_kill(
 
 async def handle_sessions_kill_confirm(
     query: CallbackQuery, user_id: int, window_id: str, client: TelegramClient
-) -> None:
+) -> bool:
     """Second tap — kill the tmux window, unbind all users, refresh dashboard."""
     display = thread_router.get_display_name(window_id)
 
-    w = await tmux_manager.find_window_by_id(window_id)
-    if w:
-        await tmux_manager.kill_window(w.window_id)
+    session_name = (
+        window_id.rsplit(":", 1)[0]
+        if ":" in window_id and not window_id.startswith("@")
+        else tmux_manager.session_name
+    )
+    killed = await tmux_manager.kill_session(session_name)
+    if not killed:
+        await safe_edit(query, f"Session `{session_name}` was not killed.")
+        return False
 
     # Clean up BEFORE unbind — resolve_chat_id needs group_chat_ids
     # which unbind_thread deletes
@@ -211,15 +217,17 @@ async def handle_sessions_kill_confirm(
             thread_router.unbind_thread(uid, tid)
 
     logger.info(
-        "sessions_kill_confirm: killed window %s (%s), user=%d",
-        window_id,
+        "sessions_kill_confirm: killed session %s (%s), ok=%s, user=%d",
+        session_name,
         display,
+        killed,
         user_id,
     )
 
     # Re-render dashboard
     text, keyboard = await _build_dashboard(user_id)
     await safe_edit(query, f"Killed '{display}'\n\n{text}", reply_markup=keyboard)
+    return True
 
 
 async def handle_sessions_rename(
@@ -382,8 +390,8 @@ async def _dispatch_window_action(
     client = PTBTelegramClient(context.bot)
     if data.startswith(CB_SESSIONS_KILL_CONFIRM):
         window_id = data[len(CB_SESSIONS_KILL_CONFIRM) :]
-        await handle_sessions_kill_confirm(query, user_id, window_id, client)
-        await query.answer("Killed")
+        killed = await handle_sessions_kill_confirm(query, user_id, window_id, client)
+        await query.answer("Killed" if killed else "Session not found")
     elif data.startswith(CB_SESSIONS_KILL):
         window_id = data[len(CB_SESSIONS_KILL) :]
         await handle_sessions_kill(query, user_id, window_id)

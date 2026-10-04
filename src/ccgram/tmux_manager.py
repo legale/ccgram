@@ -881,6 +881,26 @@ class TmuxManager:
 
         return await asyncio.to_thread(_sync_kill)
 
+    async def kill_session(self, session_name: str) -> bool:
+        """Kill a tmux session and all of its windows."""
+        if session_name == self.session_name:
+            logger.warning("Refusing to kill the main tmux session %s", session_name)
+            return False
+
+        def _sync_kill() -> bool:
+            session = self.get_session(session_name)
+            if not session:
+                return False
+            try:
+                session.kill()
+                logger.info("Killed tmux session %s", session_name)
+                return True
+            except _TmuxError:
+                logger.exception("Failed to kill tmux session %s", session_name)
+                return False
+
+        return await asyncio.to_thread(_sync_kill)
+
     async def discover_external_sessions(self) -> list[TmuxWindow]:
         """Discover external tmux sessions running AI agent processes.
 
