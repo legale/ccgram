@@ -271,6 +271,54 @@ class TmuxManager:
 
         return await asyncio.to_thread(_sync_list_windows)
 
+    async def list_sessions(self) -> list[TmuxWindow]:
+        """List every tmux session as one dashboard record.
+
+        The returned window id targets the session's first window so existing
+        dashboard actions can operate on the record without changing the
+        window polling path.
+        """
+
+        def _sync_list_sessions() -> list[TmuxWindow]:
+            try:
+                result = subprocess.run(
+                    [
+                        "tmux",
+                        "list-sessions",
+                        "-F",
+                        "#{session_name}\t#{session_path}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                return []
+            if result.returncode != 0:
+                return []
+
+            sessions: list[TmuxWindow] = []
+            for line in result.stdout.splitlines():
+                session_name, _, cwd = line.partition("\t")
+                session_name = session_name.strip()
+                if not session_name:
+                    continue
+                session = self.get_session(session_name)
+                if not session or not session.windows:
+                    continue
+                window = session.windows[0]
+                window_id = f"{session_name}:{window.window_id or ''}"
+                sessions.append(
+                    TmuxWindow(
+                        window_id=window_id,
+                        window_name=session_name,
+                        cwd=cwd,
+                    )
+                )
+            return sessions
+
+        return await asyncio.to_thread(_sync_list_sessions)
+
     async def find_window_by_name(self, window_name: str) -> TmuxWindow | None:
         """Find a window by its name.
 

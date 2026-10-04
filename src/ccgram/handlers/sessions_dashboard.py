@@ -65,57 +65,55 @@ _NEW_BTN = InlineKeyboardButton("New Session", callback_data=CB_SESSIONS_NEW)
 async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     """Build dashboard text and keyboard for a user's sessions."""
     bindings = thread_router.get_all_thread_windows(user_id)
-    all_windows = await tmux_manager.list_windows()
-    live_ids = {w.window_id for w in all_windows}
+    all_sessions = await tmux_manager.list_sessions()
 
-    if not bindings and not all_windows:
-        keyboard = InlineKeyboardMarkup([[_REFRESH_BTN, _NEW_BTN]])
+    if not all_sessions:
         return (
             "No active sessions.\n\nCreate a new topic to start a session.",
-            keyboard,
+            InlineKeyboardMarkup([]),
         )
 
     lines: list[str] = []
     action_rows: list[list[InlineKeyboardButton]] = []
-    bound_ids: set[str] = set()
+    bound_window_ids = set(bindings.values())
 
-    for _thread_id, window_id in sorted(bindings.items()):
-        bound_ids.add(window_id)
-        display_name = thread_router.get_display_name(window_id)
-        alive = window_id in live_ids
-        status = "+" if alive else "-"
-
-        lines.append(f"{status} {display_name}")
-
-        if alive:
-            row: list[InlineKeyboardButton] = [
-                InlineKeyboardButton(
-                    f"{status} {display_name}",
-                    callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
-                ),
-                InlineKeyboardButton(
-                    "scr",
-                    callback_data=f"{CB_STATUS_SCREENSHOT}{window_id}"[:64],
-                ),
-                InlineKeyboardButton(
-                    "kill",
-                    callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
-                ),
+    for session in all_sessions:
+        window_id = next(
+            (
+                bound_id
+                for bound_id in bound_window_ids
+                if bound_id == session.window_id
+                or bound_id.startswith(f"{session.window_name}:")
+            ),
+            session.window_id,
+        )
+        status = "+" if window_id in bound_window_ids else "o"
+        display_name = session.window_name
+        lines.append(f"{status} {display_name} {session.cwd}".rstrip())
+        action_rows.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        f"{status} {display_name}",
+                        callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "scr",
+                        callback_data=f"{CB_STATUS_SCREENSHOT}{window_id}"[:64],
+                    ),
+                    InlineKeyboardButton(
+                        "kill",
+                        callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
+                    ),
+                ],
             ]
-            action_rows.append(row)
-
-    # Show unbound live tmux windows
-    seen_unbound: set[str] = set()
-    for w in all_windows:
-        if w.window_id in bound_ids or w.window_id in seen_unbound:
-            continue
-        seen_unbound.add(w.window_id)
-        lines.append(f"o {w.window_name}")
+        )
 
     content = "\n".join(lines)
     text = f"Sessions\n\n```\n{content}\n```"
-    rows = action_rows + [[_REFRESH_BTN, _NEW_BTN]]
-    return text, InlineKeyboardMarkup(rows)
+    return text, InlineKeyboardMarkup(action_rows)
 
 
 async def sessions_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
