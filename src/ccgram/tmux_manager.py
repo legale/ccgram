@@ -88,6 +88,7 @@ _TmuxError = (
 )
 
 _EXTERNAL_DISCOVERY_TTL = 10.0  # seconds — cache external session discovery
+_TOPIC_OPTION = "@ccgram_topic"
 
 
 async def _kill_timed_out_proc(proc: asyncio.subprocess.Process | None) -> None:
@@ -122,6 +123,7 @@ class TmuxWindow:
     pane_tty: str = ""  # TTY device for the active pane (e.g. /dev/ttys003)
     pane_width: int = 0  # Active pane width (columns)
     pane_height: int = 0  # Active pane height (rows)
+    topic_ref: tuple[int, int] | None = None  # (chat_id, thread_id), session-scoped
 
 
 # Alias: entity is a tmux session/window (ses)
@@ -284,7 +286,7 @@ class TmuxManager:
                         "tmux",
                         "list-sessions",
                         "-F",
-                        "#{session_name}\t#{session_path}",
+                        "#{session_name}\t#{session_path}\t#{@ccgram_topic}",
                     ],
                     capture_output=True,
                     text=True,
@@ -297,25 +299,100 @@ class TmuxManager:
 
             sessions: list[TmuxWindow] = []
             for line in result.stdout.splitlines():
-                session_name, _, cwd = line.partition("\t")
+                parts = line.split("\t", 2)
+                session_name = parts[0].strip()
+                cwd = parts[1] if len(parts) > 1 else ""
+                topic_ref = self._parse_topic_ref(parts[2] if len(parts) > 2 else "")
                 session_name = session_name.strip()
                 if not session_name:
                     continue
                 session = self.get_session(session_name)
                 if not session or not session.windows:
                     continue
-                window = session.windows[0]
+                window = next(
+                    (
+                        w
+                        for w in session.windows
+                        if (getattr(w, "window_name", "") or "")
+                        != config.tmux_main_window_name
+                    ),
+                    session.windows[0],
+                )
                 window_id = f"{session_name}:{window.window_id or ''}"
                 sessions.append(
                     TmuxWindow(
                         window_id=window_id,
                         window_name=session_name,
                         cwd=cwd,
+                        topic_ref=topic_ref,
                     )
                 )
             return sessions
 
         return await asyncio.to_thread(_sync_list_sessions)
+
+    @staticmethod
+    def _parse_topic_ref(value: str) -> tuple[int, int] | None:
+        if not value:
+            return None
+        chat_id, sep, thread_id = value.partition(":")
+        if not sep:
+            return None
+        try:
+            return int(chat_id), int(thread_id)
+        except ValueError:
+            return None
+
+    async def set_session_topic(
+        self, session_name: str, chat_id: int, thread_id: int
+    ) -> bool:
+        """Store the Telegram topic identity on the tmux session."""
+
+        def _sync_set() -> bool:
+            try:
+                proc = subprocess.run(
+                    [
+                        "tmux",
+                        "set-option",
+                        "-t",
+                        session_name,
+                        _TOPIC_OPTION,
+                        f"{chat_id}:{thread_id}",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                return False
+            if proc.returncode != 0:
+                logger.warning(
+                    "Failed to set %s on %s: %s",
+                    _TOPIC_OPTION,
+                    session_name,
+                    proc.stderr.strip(),
+                )
+                return False
+            return True
+
+        return await asyncio.to_thread(_sync_set)
+
+    async def clear_session_topic(self, session_name: str) -> bool:
+        """Remove the Telegram topic identity from the tmux session."""
+
+        def _sync_clear() -> bool:
+            try:
+                proc = subprocess.run(
+                    ["tmux", "set-option", "-u", "-t", session_name, _TOPIC_OPTION],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                return False
+            return proc.returncode == 0
+
+        return await asyncio.to_thread(_sync_clear)
 
     async def find_window_by_name(self, window_name: str) -> TmuxWindow | None:
         """Find a window by its name.
