@@ -323,7 +323,19 @@ async def _execute_raw_command(
     """
     await _cancel_stuck_input(window_id)
 
-    success, err_message = await send_to_window(window_id, command, raw=True)
+    # Lazy: reconciliation imports the polling lifecycle, which imports topic
+    # handlers and would create a cold-start cycle here.
+    from ..polling.periodic_tasks import send_with_reconcile
+
+    success, err_message = await send_with_reconcile(
+        client,
+        user_id,
+        thread_id,
+        window_id,
+        command,
+        raw=True,
+        send_fn=send_to_window,
+    )
     if not success:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
         await safe_send(

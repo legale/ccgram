@@ -235,3 +235,14 @@ def clear_topic_status_diff_state(_user_id: int, thread_id: int) -> None:
 
 def reset_topic_status_diff_state() -> None:
     _diff_states.clear()
+
+
+def prime_topic_status_diff(
+    chat_id: int, thread_id: int, window_id: str, pane_text: str
+) -> None:
+    """Seed the screen baseline without sending the current terminal contents."""
+    if not pane_text:
+        return
+    state = _get_state(chat_id, thread_id, window_id)
+    state.prev_lines = _normalize_screen_text(pane_text)
+    state.last_edit_ts = time.monotonic()

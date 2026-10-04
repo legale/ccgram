@@ -78,6 +78,7 @@ _SINGLETON_ALLOWLIST = frozenset(
         "messaging_pipeline/tool_batch.py",
         "messaging_pipeline/topic_commands.py",
         "polling/polling_coordinator.py",
+        "polling/periodic_tasks.py",
         "polling/polling_state.py",
         "polling/window_tick/apply.py",
         "send/send_callbacks.py",

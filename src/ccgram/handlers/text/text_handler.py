@@ -549,7 +549,19 @@ async def _forward_message(
 ) -> None:
     """Forward a text message to the bound tmux window."""
     await message.chat.send_action(ChatAction.TYPING)  # type: ignore[union-attr]
-    success, err_message = await send_to_window(window_id, text, raw=False)
+    # Lazy: reconciliation imports the polling lifecycle, which imports topic
+    # handlers and would create a cold-start cycle here.
+    from ..polling.periodic_tasks import send_with_reconcile
+
+    success, err_message = await send_with_reconcile(
+        client,
+        _user_id,
+        _thread_id,
+        window_id,
+        text,
+        raw=False,
+        send_fn=send_to_window,
+    )
     if not success:
         await safe_reply(message, f"\u274c {err_message}")
         return
@@ -609,7 +621,11 @@ async def handle_text_message(
     assert message is not None and message.text  # guaranteed by caller
 
     thread_id = _get_thread_id(update)
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
+    window_id = (
+        thread_router.get_window_for_thread(user.id, thread_id)
+        if thread_id is not None
+        else None
+    )
     if window_id:
         from ..status.topic_status_diff import mark_topic_status_activity
 
