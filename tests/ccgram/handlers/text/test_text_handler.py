@@ -644,6 +644,39 @@ class TestShellProviderRouting:
         assert "123" in diff_call.args[2]
 
 
+class TestTextHandlerPriority:
+    @patch(f"{_TH}._handle_rename_captures", new_callable=AsyncMock, return_value=True)
+    @patch(
+        f"{_TH}._handle_session_start_directory_input",
+        new_callable=AsyncMock,
+        return_value=True,
+    )
+    async def test_rename_input_wins_over_stale_directory_state(
+        self,
+        mock_start_input: AsyncMock,
+        mock_rename: AsyncMock,
+    ) -> None:
+        from ccgram.handlers.text.text_handler import handle_text_message
+
+        update = MagicMock()
+        update.effective_user.id = 100
+        update.message.message_thread_id = 42
+        update.message.text = "cc_tmpe"
+        update.message.chat.type = "supergroup"
+        update.message.chat.id = -100
+        context = MagicMock()
+        context.bot = AsyncMock()
+        context.user_data = {
+            STATE_KEY: STATE_BROWSING_DIRECTORY,
+            PENDING_THREAD_ID: 42,
+        }
+
+        await handle_text_message(update, context)
+
+        mock_rename.assert_awaited_once()
+        mock_start_input.assert_not_awaited()
+
+
 class TestForwardMessage:
     @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
     @patch(f"{_TH}.window_query")

@@ -559,6 +559,12 @@ async def handle_text_message(
     if chat.type in ("group", "supergroup") and thread_id is not None:
         thread_router.set_group_chat_id(user.id, thread_id, chat.id)
 
+    # Rename captures (pane or session)
+    if await _handle_rename_captures(
+        context.user_data, thread_id, text, message, PTBTelegramClient(context.bot)
+    ):
+        return
+
     if await _handle_session_start_directory_input(
         thread_id,
         text,
@@ -569,12 +575,6 @@ async def handle_text_message(
 
     # UI guards (window picker / directory browser active)
     if await _check_ui_guards(context.user_data, thread_id, message):
-        return
-
-    # Rename captures (pane or session)
-    if await _handle_rename_captures(
-        context.user_data, thread_id, text, message, PTBTelegramClient(context.bot)
-    ):
         return
 
     # Must be in a named topic
