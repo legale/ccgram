@@ -488,40 +488,38 @@ class TestHandleSessionStartDirectoryInput:
 class TestShellProviderRouting:
     @patch(f"{_TH}._handle_dead_window", new_callable=AsyncMock, return_value=False)
     @patch(f"{_TH}.thread_router")
-    async def test_shell_provider_routes_to_handle_shell_message(
+    @patch(f"{_TH}.send_to_window", new_callable=AsyncMock, return_value=(True, "ok"))
+    @patch("ccgram.handlers.shell.shell_capture.mark_telegram_command")
+    async def test_bound_topic_routes_directly_to_tmux(
         self,
+        mock_mark: MagicMock,
+        _mock_send: AsyncMock,
         mock_tr: MagicMock,
         _mock_dead: AsyncMock,
     ) -> None:
         mock_tr.get_window_for_thread.return_value = "@0"
 
-        with patch(
-            "ccgram.handlers.shell.shell_commands.handle_shell_message",
-            new_callable=AsyncMock,
-        ) as mock_shell:
-            from ccgram.handlers.text.text_handler import handle_text_message
+        from ccgram.handlers.text.text_handler import handle_text_message
 
-            update = MagicMock()
-            update.effective_user.id = 100
-            context = MagicMock()
-            context.bot = AsyncMock()
-            context.user_data = {}
-            message = AsyncMock()
-            message.message_thread_id = 42
-            message.text = "list files"
-            message.chat_id = -100
-            message.chat.type = "supergroup"
-            update.message = message
-            update.effective_user = MagicMock()
-            update.effective_user.id = 100
+        update = MagicMock()
+        update.effective_user.id = 100
+        context = MagicMock()
+        context.bot = AsyncMock()
+        context.user_data = {}
+        message = AsyncMock()
+        message.message_thread_id = 42
+        message.message_id = 7
+        message.text = "list files"
+        message.chat_id = -100
+        message.chat.type = "supergroup"
+        update.message = message
+        update.effective_user = MagicMock()
+        update.effective_user.id = 100
 
-            await handle_text_message(update, context)
+        await handle_text_message(update, context)
 
-            mock_shell.assert_called_once()
-            call_args = mock_shell.call_args
-            assert call_args[0][2] == 42
-            assert call_args[0][3] == "@0"
-            assert call_args[0][4] == "!list files"
+        _mock_send.assert_awaited_once_with("@0", "list files")
+        mock_mark.assert_called_once_with("@0", "list files", 100, 42, 7)
 
 
 class TestForwardMessage:

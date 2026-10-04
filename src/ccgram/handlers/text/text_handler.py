@@ -540,6 +540,12 @@ async def _forward_message(
         await safe_reply(message, f"\u274c {err_message}")
         return
 
+    # Let the existing tmux polling/capture path associate the next output
+    # diff with this Telegram command.
+    from ..shell.shell_capture import mark_telegram_command
+
+    mark_telegram_command(window_id, text, user_id, thread_id, message.message_id)
+
     await ack_reaction(client, message.chat.id, message.message_id)
 
     # Lazy: command_history cycle — same as status_bar_actions sites.
@@ -660,23 +666,6 @@ async def handle_text_message(
     ):
         return
 
-    # Lazy: break text_handler <-> shell circular dependency
-    from ..shell.shell_commands import handle_shell_message
-
-    if not text.startswith("!"):
-        text = f"!{text}"
-
-    await handle_shell_message(
-        PTBTelegramClient(context.bot),
-        user.id,
-        thread_id,
-        window_id,
-        text,
-        message,
-    )
-    return
-
-    # Forward message to window
     await _forward_message(
         window_id,
         user.id,
