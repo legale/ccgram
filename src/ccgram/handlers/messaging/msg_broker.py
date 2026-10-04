@@ -215,6 +215,7 @@ async def broker_delivery_cycle(
     # path stays free of provider / window_resolver weight.
     # Lazy: providers / window_query proxies wired by SessionManager constructor
     from ...providers import get_provider_for_window
+    from ...mailbox import sanitize_dir_name
 
     # Lazy: providers / window_query proxies wired by SessionManager constructor
     from ...window_query import get_window_provider
@@ -232,6 +233,12 @@ async def broker_delivery_cycle(
             qualified_id = window_id
         else:
             qualified_id = f"{tmux_session}:{window_id}"
+
+        try:
+            sanitize_dir_name(qualified_id)
+        except ValueError:
+            logger.warning("Skipping unsafe window ID in broker cycle", window_id=qualified_id)
+            continue
 
         provider = get_provider_for_window(
             window_id, provider_name=get_window_provider(window_id)

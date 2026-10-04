@@ -330,6 +330,27 @@ class TestBrokerDeliveryCycle:
         msgs = mailbox.inbox("ccgram:@5")
         assert len(msgs) == 0 or msgs[0].status == "delivered"
 
+    async def test_unsafe_window_id_does_not_stop_other_windows(
+        self, mailbox, mock_tmux, mock_provider
+    ):
+        mailbox.send("ccgram:@0", "ccgram:@5", "hello", msg_type="request")
+
+        with patch(
+            "ccgram.providers.get_provider_for_window",
+            return_value=mock_provider,
+        ):
+            count = await broker_delivery_cycle(
+                mailbox,
+                mock_tmux,
+                ["ccgram_//ses:@909", "@5"],
+                "ccgram",
+                10,
+                idle_windows=frozenset({"ccgram:@5"}),
+            )
+
+        assert count == 1
+        mock_tmux.send_keys.assert_called_once()
+
     async def test_skips_shell_windows(self, mailbox, mock_tmux, shell_provider):
         mailbox.send("ccgram:@0", "ccgram:@5", "hello", msg_type="request")
         window_ids = ["@5"]
