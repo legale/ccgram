@@ -98,7 +98,7 @@ class Config:
 
         # Tmux session naming
         self.tmux_session_prefix = os.getenv("TMUX_SESSION_PREFIX", "cc_")
-        self.tmux_session_name = os.getenv("TMUX_SESSION_NAME", "ccgram")
+        self.tmux_session_name = os.getenv("TMUX_SESSION_NAME") or "ccgram"
         self.tmux_main_window_name = "__main__"
         # Own tmux window ID (set by run_bot() after auto-detect, used to skip self in list_windows)
         self.own_window_id: str | None = None
