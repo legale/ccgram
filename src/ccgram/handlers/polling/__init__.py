@@ -1,8 +1,9 @@
-"""Polling subpackage — terminal status polling orchestration.
+"""Polling subpackage — single-task terminal status orchestration.
 
-Bundles the modules that drive the per-window polling cycle:
-``polling_coordinator`` (the outer loop), ``window_tick`` (per-window
-work), ``polling_types`` (pure data types and constants), ``polling_state``
+Bundles the modules that drive the centralized polling cycle:
+``polling_coordinator`` (the one background task), ``window_tick`` (one
+sequential session step), ``polling_types`` (pure data types and constants),
+``polling_state``
 (stateful strategy classes + module-level singletons), and
 ``periodic_tasks`` (broker delivery, mailbox sweep, lifecycle ticking).
 
