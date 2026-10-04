@@ -8,18 +8,15 @@ tool-use batching lives in ``tool_batch``.
 
 import asyncio
 import contextlib
-from io import BytesIO
 from typing import assert_never
 
 import structlog
 from telegram.error import RetryAfter, TelegramError
 
-from ...config import config
 from ...telegram_client import TelegramClient
 from ...thread_router import thread_router
 from ...topic_state_registry import topic_state
 from ...utils import task_done_callback
-from ...tts import TtsSynthesisError, get_synthesizer, prepare_tts_text
 from ...window_query import is_tool_calls_hidden
 from ..status.status_bubble import (
     clear_status_message,
@@ -63,66 +60,6 @@ _queue_locks: dict[int, asyncio.Lock] = {}  # Protect drain/refill operations
 # Map (tool_use_id, user_id, thread_key) -> telegram message_id
 # for editing tool_use messages with results
 _tool_msg_ids: dict[tuple[str, int, int], int] = {}
-
-_CAPTION_MAX_LENGTH = 1024  # Telegram Bot API caption limit
-
-
-def _truncate_caption(text: str) -> str:
-    """Truncate at last whitespace boundary under the Telegram caption limit."""
-    if len(text) <= _CAPTION_MAX_LENGTH:
-        return text
-    truncated = text[: _CAPTION_MAX_LENGTH - 1]
-    last_ws = truncated.rfind(" ")
-    if last_ws > 0:
-        truncated = truncated[:last_ws]
-    return truncated + "…"
-
-
-def _should_send_tts(task: ContentTask) -> bool:
-    if not config.tts_provider:
-        return False
-    if task.content_type != "text":
-        return False
-    return task.role == "assistant"
-
-
-async def _send_tts_voice(
-    client: TelegramClient,
-    chat_id: int,
-    thread_id: int | None,
-    text: str,
-    *,
-    window_id: str,
-) -> bool:
-    try:
-        synthesizer = get_synthesizer()
-    except (ValueError, ImportError) as exc:
-        logger.warning("TTS not available for %s: %s", window_id, exc)
-        return False
-    if synthesizer is None:
-        return False
-    try:
-        audio = await synthesizer.synthesize(text)
-    except TtsSynthesisError as exc:
-        logger.warning("TTS synthesis failed for %s: %s", window_id, exc)
-        return False
-
-    voice_file = BytesIO(audio.data)
-    voice_file.name = audio.filename
-    caption = _truncate_caption(text)
-    await rate_limit_send(chat_id)
-    try:
-        await client.send_voice(
-            chat_id=chat_id,
-            voice=voice_file,
-            caption=caption,
-            **send_kwargs(thread_id),
-        )
-    except TelegramError as exc:
-        logger.warning("Failed to send TTS voice for %s: %s", window_id, exc)
-        return False
-    return True
-
 
 def get_message_queue(user_id: int) -> asyncio.Queue[MessageTask] | None:
     """Get the message queue for a user (if exists)."""
@@ -443,15 +380,6 @@ async def _process_content_task(
 
         if sent:
             last_msg_id = sent.message_id
-
-    if _should_send_tts(task) and (tts_text := prepare_tts_text(task.parts)):
-        await _send_tts_voice(
-            client,
-            chat_id,
-            task.thread_id,
-            tts_text,
-            window_id=task.window_id,
-        )
 
     if last_msg_id and task.tool_use_id and task.content_type == "tool_use":
         _tool_msg_ids[(task.tool_use_id, user_id, tkey)] = last_msg_id
