@@ -731,22 +731,6 @@ class TestFlushBatch:
         assert (1, 0) not in _active_batches
         bot.edit_message_text.assert_not_awaited()
 
-    @patch("ccgram.claude_task_state.get_subagent_names", return_value=["researcher"])
-    @patch("ccgram.handlers.messaging_pipeline.tool_batch.thread_router")
-    async def test_flush_includes_subagent_label(self, mock_tr, _mock_names) -> None:
-        mock_tr.resolve_chat_id.return_value = 42
-        _active_batches[(1, 0)] = ToolBatch(
-            window_id="@0",
-            thread_id=0,
-            entries=[ToolBatchEntry("t1", "Read x", "ok")],
-            telegram_msg_id=100,
-        )
-
-        bot = AsyncMock()
-        await flush_batch(bot, 1, 0)
-        text_sent = bot.edit_message_text.call_args.kwargs["text"]
-        assert "researcher" in text_sent
-
     @patch("ccgram.handlers.messaging_pipeline.tool_batch.thread_router")
     async def test_flush_handles_telegram_error(self, mock_tr) -> None:
         from telegram.error import TelegramError

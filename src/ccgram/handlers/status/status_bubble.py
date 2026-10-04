@@ -16,7 +16,6 @@ import structlog
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
-from ...claude_task_state import get_claude_task_snapshot, get_claude_wait_header
 from ...expandable_quote import format_expandable_quote
 from ...telegram_client import TelegramClient, unwrap_bot
 from ...telegram_draft import DraftStream
@@ -31,7 +30,6 @@ from ..callback_data import (
     CB_STATUS_SCREENSHOT,
     NOTIFY_MODE_ICONS,
 )
-from ...claude_task_state import IDLE_STATUS_TEXT
 from ..messaging_pipeline.message_sender import edit_with_fallback, rate_limit_send
 from ..messaging_pipeline.message_task import (
     StatusClearTask,
@@ -40,6 +38,7 @@ from ..messaging_pipeline.message_task import (
 )
 
 logger = structlog.get_logger()
+IDLE_STATUS_TEXT = "idle"
 
 
 # ---------------------------------------------------------------------------
@@ -203,63 +202,15 @@ def format_pane_block(window_id: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Claude task-status formatting
+# Status formatting
 # ---------------------------------------------------------------------------
 
-
-_TASK_STATUS_GLYPHS = {
-    "completed": "\u2714",
-    "in_progress": "\u25d4",
-}
-_TASK_DEFAULT_GLYPH = "\u25fb"
-_VISIBLE_TASK_LIMIT = 8
-
-
-def _format_task_lines(snapshot: object) -> list[str]:
-    """Render the task snapshot into status-bubble lines."""
-    total = getattr(snapshot, "total_count", 0)
-    done = getattr(snapshot, "done_count", 0)
-    open_count = getattr(snapshot, "open_count", 0)
-    items = list(getattr(snapshot, "items", []))
-    visible_items = items[:_VISIBLE_TASK_LIMIT]
-    lines: list[str] = [f"{total} tasks ({done} done, {open_count} open)"]
-    for item in visible_items:
-        glyph = _TASK_STATUS_GLYPHS.get(item.status, _TASK_DEFAULT_GLYPH)
-        label = (
-            item.active_form
-            if item.status == "in_progress" and item.active_form
-            else item.subject
-        )
-        if item.owner:
-            label = f"{label} ({item.owner})"
-        line = f"{glyph} #{item.task_id} {label}".rstrip()
-        if item.blocked_by:
-            blocked = ", ".join(f"#{task_id}" for task_id in item.blocked_by)
-            line = f"{line} blocked by {blocked}"
-        lines.append(line)
-    hidden_count = total - len(visible_items)
-    if hidden_count > 0:
-        lines.append(f"+{hidden_count} more")
-    return lines
-
-
 def format_claude_task_status(window_id: str, base_text: str | None) -> str | None:
-    """Compose Claude wait/task state plus the per-pane block (if any)."""
-    snapshot = get_claude_task_snapshot(window_id)
-    wait_header = get_claude_wait_header(window_id)
+    """Compose the base status plus the per-pane block, if any."""
     pane_block = format_pane_block(window_id)
-    if snapshot is None and not wait_header and pane_block is None:
+    if pane_block is None:
         return base_text
-
-    lines: list[str] = []
-    header = wait_header or base_text
-    if header:
-        lines.append(header)
-    if pane_block is not None:
-        lines.append(pane_block)
-    if snapshot is not None:
-        lines.extend(_format_task_lines(snapshot))
-    return "\n".join(lines) if lines else base_text
+    return "\n".join(part for part in (base_text, pane_block) if part)
 
 
 # ---------------------------------------------------------------------------

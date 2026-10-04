@@ -18,18 +18,12 @@ from telegram.constants import ChatAction
 from telegram.error import BadRequest, TelegramError
 
 from .... import window_query
-from ....claude_task_state import (
-    build_subagent_label,
-    claude_task_state,
-    get_subagent_names,
-)
 from ....config import config
 from ....providers import get_provider_for_window
 from ....telegram_client import PTBTelegramClient
 from ....thread_router import thread_router
 from ....tmux_manager import tmux_manager
 from ....window_state_store import window_store
-from ....claude_task_state import IDLE_STATUS_TEXT
 from ...cleanup import clear_topic_state
 from ...messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
@@ -55,6 +49,7 @@ if TYPE_CHECKING:
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
+IDLE_STATUS_TEXT = "idle"
 
 
 def _get_provider(window_id: str) -> "AgentProvider":
@@ -313,16 +308,10 @@ async def _apply_active_transition(
 ) -> None:
     client = PTBTelegramClient(bot)
     if decision.send_status:
-        claude_task_state.clear_wait_header(window_id)
-        claude_task_state.set_last_status(window_id, decision.status_text or "")
         terminal_poll_state.mark_seen_status(window_id)
         await _send_typing_throttled(bot, user_id, thread_id)
         if notif_mode not in ("muted", "errors_only"):
-            subagent_names = get_subagent_names(window_id)
             display_status = decision.status_text or ""
-            if subagent_names:
-                label = build_subagent_label(subagent_names)
-                display_status = f"{display_status} ({label})"
             await enqueue_status_update(
                 client,
                 user_id,
@@ -331,7 +320,6 @@ async def _apply_active_transition(
                 thread_id=thread_id,
             )
     else:
-        claude_task_state.clear_wait_header(window_id)
         await _send_typing_throttled(bot, user_id, thread_id)
     if thread_id is not None:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)

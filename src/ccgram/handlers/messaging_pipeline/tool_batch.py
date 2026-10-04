@@ -313,14 +313,10 @@ async def _send_or_edit_batch(
     # Lazy: status_bubble is registered as a callback target via the
     # registry; importing it at top forms tool_batch ↔ status_bubble
     # through the messaging_pipeline subpackage's __init__ chain.
-    # Lazy: claude_task_state import is provider-specific; resolved per-call
-    from ...claude_task_state import build_subagent_label, get_subagent_names
-
     # Lazy: status ↔ messaging_pipeline cycle
     from ..status.status_bubble import clear_status_message
 
-    subagent_label = build_subagent_label(get_subagent_names(batch.window_id))
-    batch_text = format_batch_message(batch.entries, subagent_label=subagent_label)
+    batch_text = format_batch_message(batch.entries)
 
     if batch.draft is None:
         await clear_status_message(client, user_id, thread_id_or_0)
@@ -493,13 +489,7 @@ async def flush_batch(
     thread_id: int | None = thread_id_or_0 if thread_id_or_0 != 0 else None
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
 
-    # Lazy: claude_task_state imports session readers; deferring keeps
-    # this module's cold path tied only to the queue.
-    # Lazy: claude_task_state import is provider-specific; resolved per-call
-    from ...claude_task_state import build_subagent_label, get_subagent_names
-
-    subagent_label = build_subagent_label(get_subagent_names(batch.window_id))
-    batch_text = format_batch_message(batch.entries, subagent_label=subagent_label)
+    batch_text = format_batch_message(batch.entries)
 
     if batch.draft is not None and not batch.draft.closed:
         try:

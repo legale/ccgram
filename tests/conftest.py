@@ -29,7 +29,6 @@ for _key in (
 
 @pytest.fixture(autouse=True)
 def _clear_window_store():
-    from ccgram.claude_task_state import claude_task_state
     from ccgram.window_state_store import get_window_store
 
     def _clear() -> None:
@@ -37,8 +36,6 @@ def _clear_window_store():
         with contextlib.suppress(RuntimeError):
             get_window_store().window_states.clear()
 
-    claude_task_state.reset()
     _clear()
     yield
-    claude_task_state.reset()
     _clear()
