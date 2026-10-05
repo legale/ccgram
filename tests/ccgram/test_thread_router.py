@@ -5,10 +5,7 @@ from ccgram.thread_router import ThreadRouter
 
 @pytest.fixture
 def router() -> ThreadRouter:
-    return ThreadRouter(
-        schedule_save=lambda: None,
-        has_window_state=lambda _wid: False,
-    )
+    return ThreadRouter()
 
 
 class TestBindThread:
@@ -59,6 +56,11 @@ class TestUnbindThread:
         router.bind_thread(100, 1, "@1")
         router.unbind_thread(100, 1)
         assert 100 not in router.thread_bindings
+
+    def test_unbind_cleans_display_name(self, router: ThreadRouter) -> None:
+        router.bind_thread(100, 1, "@1", window_name="proj")
+        router.unbind_thread(100, 1)
+        assert router.get_display_name("@1") == "@1"
 
 
 class TestReverseIndex:
@@ -146,53 +148,6 @@ class TestDisplayNames:
         router.set_display_name("@1", "myproject")
         assert router.get_display_name("@1") == "myproject"
 
-    def test_sync_display_names(self, router: ThreadRouter) -> None:
-        router.window_display_names["@1"] = "old-name"
-        changed = router.sync_display_names([("@1", "new-name")])
-        assert changed is True
-        assert router.get_display_name("@1") == "new-name"
-
-    def test_sync_no_change(self, router: ThreadRouter) -> None:
-        router.window_display_names["@1"] = "same"
-        changed = router.sync_display_names([("@1", "same")])
-        assert changed is False
-
-    def test_sync_ignores_unknown(self, router: ThreadRouter) -> None:
-        changed = router.sync_display_names([("@99", "something")])
-        assert changed is False
-
-
-class TestToDictRoundtrip:
-    def test_roundtrip_keeps_only_non_lifecycle_state(
-        self, router: ThreadRouter
-    ) -> None:
-        router.bind_thread(100, 1, "@1", window_name="proj")
-        router.set_group_chat_id(100, 1, -999)
-        data = router.to_dict()
-        assert "thread_bindings" not in data
-        assert "group_chat_ids" not in data
-
-        new_router = ThreadRouter(
-            schedule_save=lambda: None,
-            has_window_state=lambda _wid: False,
-        )
-        new_router.from_dict(data)
-
-        assert new_router.get_window_for_thread(100, 1) is None
-        assert new_router.get_display_name("@1") == "proj"
-
-    def test_from_dict_ignores_legacy_bindings(self, router: ThreadRouter) -> None:
-        router.from_dict(
-            {
-                "thread_bindings": {"100": {"1": "@1"}},
-                "group_chat_ids": {"100:1": -999},
-                "window_display_names": {"@1": "proj"},
-            }
-        )
-        assert list(router.iter_thread_bindings()) == []
-        assert router.resolve_chat_id(100, 1) == 100
-        assert router.get_display_name("@1") == "proj"
-
 
 class TestReset:
     def test_reset_clears_all(self, router: ThreadRouter) -> None:
@@ -203,38 +158,3 @@ class TestReset:
         assert router.resolve_chat_id(100, 1) == 100
         assert router.get_display_name("@1") == "@1"
         assert list(router.iter_thread_bindings()) == []
-
-
-class TestScheduleSave:
-    def test_schedule_save_only_when_bind_changes_persisted_name(
-        self, router: ThreadRouter
-    ) -> None:
-        calls = []
-        router._schedule_save = lambda: calls.append(1)
-        router.bind_thread(100, 1, "@1")
-        assert calls == []
-        router.bind_thread(100, 1, "@1", window_name="proj")
-        assert calls == [1]
-
-    def test_schedule_save_on_unbind_only_when_display_name_removed(
-        self, router: ThreadRouter
-    ) -> None:
-        calls = []
-        router.bind_thread(100, 1, "@1", window_name="proj")
-        router._schedule_save = lambda: calls.append(1)
-        router.unbind_thread(100, 1)
-        assert calls == [1]
-
-    def test_set_group_chat_id_is_runtime_only(self, router: ThreadRouter) -> None:
-        calls = []
-        router._schedule_save = lambda: calls.append(1)
-        router.set_group_chat_id(100, 1, -999)
-        assert calls == []
-
-    def test_schedule_save_called_on_set_display_name(
-        self, router: ThreadRouter
-    ) -> None:
-        calls = []
-        router._schedule_save = lambda: calls.append(1)
-        router.set_display_name("@1", "proj")
-        assert len(calls) == 1

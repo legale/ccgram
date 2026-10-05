@@ -1,18 +1,10 @@
 """Thread routing — Telegram topic to tmux session binding.
 
 Maps Telegram topics (user_id + thread_id) to tmux sessions (window_id)
-bidirectionally.  Manages group chat IDs for multi-group forum topic
-routing and display names for windows.
+bidirectionally in runtime memory. Manages group chat IDs for multi-group
+forum topic routing and display names for windows.
 
-Key class: ThreadRouter. Persistence and window-state queries are
-injected via the constructor — the router cannot be built without
-explicit callbacks.
-
-Module-level access: ``get_thread_router()`` returns the
-SessionManager-owned instance (raises RuntimeError until SessionManager
-has constructed the router). The legacy module attribute
-``thread_router`` is a thin proxy that delegates to the same instance
-for backward compat.
+Key class: ThreadRouter.
 
 Key data:
   - thread_bindings  (user_id -> {thread_id -> window_id})
@@ -24,33 +16,19 @@ Key data:
 from __future__ import annotations
 
 import structlog
-from collections.abc import Callable, Iterator
-from typing import Any, cast
+from collections.abc import Iterator
 
 logger = structlog.get_logger()
 
 
 class ThreadRouter:
-    """Bidirectional mapping between Telegram topics and tmux sessions.
+    """Bidirectional runtime mapping between Telegram topics and tmux sessions.
 
     Owns thread_bindings, group_chat_ids, window_display_names, and
     the reverse index _window_to_thread.
-
-    Persistence and window-state queries are injected via the
-    constructor:
-
-    * ``schedule_save``: triggers a debounced save after mutations.
-    * ``has_window_state``: returns True when a window has tracked
-      WindowState — used to decide whether a display name is still
-      load-bearing during ``unbind_thread``.
     """
 
-    def __init__(
-        self,
-        *,
-        schedule_save: Callable[[], None],
-        has_window_state: Callable[[str], bool],
-    ) -> None:
+    def __init__(self) -> None:
         self.thread_bindings: dict[int, dict[int, str]] = {}
         # "user_id:thread_id" -> chat_id (supports multiple groups per user)
         self.group_chat_ids: dict[str, int] = {}
@@ -58,11 +36,9 @@ class ThreadRouter:
         self.window_display_names: dict[str, str] = {}
         # Reverse index: (user_id, window_id) -> thread_id for O(1) lookups
         self._window_to_thread: dict[tuple[int, str], int] = {}
-        self._schedule_save: Callable[[], None] = schedule_save
-        self._has_window_state: Callable[[str], bool] = has_window_state
 
     def reset(self) -> None:
-        """Clear all state.  Used for test isolation."""
+        """Clear all state. Used for test isolation."""
         self.thread_bindings.clear()
         self.group_chat_ids.clear()
         self.window_display_names.clear()
@@ -78,27 +54,6 @@ class ThreadRouter:
         for uid, bindings in self.thread_bindings.items():
             for tid, wid in bindings.items():
                 self._window_to_thread[(uid, wid)] = tid
-
-    # ------------------------------------------------------------------
-    # Serialization
-    # ------------------------------------------------------------------
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize non-lifecycle routing state for state.json persistence."""
-        return {"window_display_names": self.window_display_names}
-
-    def from_dict(self, data: dict[str, Any]) -> None:
-        """Restore routing state from persisted data.
-
-        Does NOT call ``_schedule_save`` — loading from disk must not
-        trigger a write.
-        """
-        # tmux session options are authoritative for topic bindings.  Never
-        # resurrect runtime routes from stale state.json data.
-        self.thread_bindings = {}
-        self.group_chat_ids = {}
-        self.window_display_names = data.get("window_display_names", {})
-        self._rebuild_reverse_index()
 
     # ------------------------------------------------------------------
     # Thread binding operations
@@ -138,9 +93,8 @@ class ThreadRouter:
 
         self.thread_bindings[user_id][thread_id] = window_id
         self._window_to_thread[(user_id, window_id)] = thread_id
-        if window_name and self.window_display_names.get(window_id) != window_name:
+        if window_name:
             self.window_display_names[window_id] = window_name
-            self._schedule_save()
         display = window_name or self.get_display_name(window_id)
         logger.info(
             "Bound tg_topic %d -> tmux_session %s (%s) for user %d",
@@ -151,12 +105,7 @@ class ThreadRouter:
         )
 
     def unbind_thread(self, user_id: int, thread_id: int) -> str | None:
-        """Remove a thread binding.  Returns the previously bound tmux_session.
-
-        Cleans up the reverse index and group_chat_id.  Does NOT touch
-        display names — the caller (SessionManager) handles display-name
-        lifecycle because it requires window_states knowledge.
-        """
+        """Remove a thread binding. Returns the previously bound tmux_session."""
         bindings = self.thread_bindings.get(user_id)
         if not bindings or thread_id not in bindings:
             return None
@@ -175,15 +124,14 @@ class ThreadRouter:
         chat_key = f"{user_id}:{thread_id}"
         self.group_chat_ids.pop(chat_key, None)
 
-        # Clean up orphaned display name if nothing references this window
+        # Clean up display name if nothing references this window
         still_bound = any(
             wid == window_id
             for ub in self.thread_bindings.values()
             for wid in ub.values()
         )
-        if not still_bound and not self._has_window_state(window_id):  # noqa: SIM102
-            if self.window_display_names.pop(window_id, None) is not None:
-                self._schedule_save()
+        if not still_bound:
+            self.window_display_names.pop(window_id, None)
 
         return window_id
 
@@ -281,89 +229,16 @@ class ThreadRouter:
 
     def pop_display_name(self, window_id: str) -> str:
         """Remove and return display name for window_id. Falls back to window_id."""
-        if window_id not in self.window_display_names:
-            return window_id
-        name = self.window_display_names.pop(window_id)
-        self._schedule_save()
-        return name
+        return self.window_display_names.pop(window_id, window_id)
 
     def set_display_name(self, window_id: str, window_name: str) -> None:
         """Update display name for a window_id."""
-        if self.window_display_names.get(window_id) != window_name:
-            self.window_display_names[window_id] = window_name
-            self._schedule_save()
-
-    def sync_display_names(self, live_windows: list[tuple[str, str]]) -> bool:
-        """Sync display names from live tmux windows.  Returns True if changed.
-
-        Saves state internally when changes are detected.
-        """
-        changed = False
-        for window_id, window_name in live_windows:
-            old = self.window_display_names.get(window_id)
-            if old and old != window_name:
-                self.window_display_names[window_id] = window_name
-                changed = True
-                logger.info(
-                    "Synced display name: %s %s → %s", window_id, old, window_name
-                )
-        if changed:
-            self._schedule_save()
-        return changed
+        self.window_display_names[window_id] = window_name
 
 
-_active_router: ThreadRouter | None = None
+thread_router: ThreadRouter = ThreadRouter()
 
 
 def get_thread_router() -> ThreadRouter:
-    """Return the SessionManager-owned ThreadRouter.
-
-    Raises:
-        RuntimeError: when called before SessionManager has constructed
-        and installed the router.
-    """
-    if _active_router is None:
-        raise RuntimeError(
-            "ThreadRouter not yet wired. "
-            "Instantiate SessionManager() before accessing thread_router."
-        )
-    return _active_router
-
-
-def install_thread_router(router: ThreadRouter) -> None:
-    """Install the SessionManager-owned router as the module-level singleton.
-
-    Called once by ``SessionManager.__post_init__``. Replaces any
-    previously installed router (used by tests that build a fresh
-    SessionManager).
-    """
-    global _active_router
-    _active_router = router
-
-
-class _ThreadRouterProxy:
-    """Backward-compat module-level facade that resolves to the wired router.
-
-    All attribute access delegates to the SessionManager-owned
-    ``ThreadRouter``. Raises ``RuntimeError`` if accessed before
-    SessionManager has installed an instance.
-    """
-
-    __slots__ = ()
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(get_thread_router(), name)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        setattr(get_thread_router(), name, value)
-
-    def __delattr__(self, name: str) -> None:
-        delattr(get_thread_router(), name)
-
-    def __repr__(self) -> str:
-        if _active_router is None:
-            return "<ThreadRouterProxy unwired>"
-        return f"<ThreadRouterProxy → {_active_router!r}>"
-
-
-thread_router: ThreadRouter = cast("ThreadRouter", _ThreadRouterProxy())
+    """Return the global ThreadRouter instance."""
+    return thread_router

@@ -20,7 +20,6 @@ from ccgram.window_state_store import WindowState, WindowStateStore
 def _store(monkeypatch) -> WindowStateStore:
     store = WindowStateStore(
         schedule_save=lambda: None,
-        on_hookless_provider_switch=lambda _wid: None,
     )
     monkeypatch.setattr("ccgram.window_query.window_store", store)
     monkeypatch.setattr("ccgram.window_state_store.window_store", store)

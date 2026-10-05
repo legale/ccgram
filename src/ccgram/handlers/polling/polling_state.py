@@ -640,7 +640,7 @@ class PaneStatusStrategy:
             )
 
     async def _classify_non_active(
-        self, window_id: str, pane: TmuxPaneInfo, provider: AgentProvider
+        self, window_id: str, pane: TmuxPaneInfo
     ) -> tuple[PaneStateName, StatusUpdate | None, str]:
         """Capture a non-active pane and classify its state.
 
@@ -657,7 +657,7 @@ class PaneStatusStrategy:
         )
         if not pane_text:
             return "idle", None, ""
-        status = provider.parse_terminal_status(pane_text, pane_title="")
+        status = None
         return self.classify_pane(pane.active, status), status, pane_text
 
     async def _maybe_surface_alert(
@@ -823,9 +823,7 @@ class PaneStatusStrategy:
         new_state, status, pane_text = await self._classify_non_active(
             window_id, pane
         )
-        prev = self.record_pane_state(
-            window_id, pane.pane_id, new_state, provider=pane_provider
-        )
+        prev = self.record_pane_state(window_id, pane.pane_id, new_state, provider="shell")
         self._track(transitions, pane.pane_id, prev, new_state)
 
         if pane_text and on_pane_output is not None:

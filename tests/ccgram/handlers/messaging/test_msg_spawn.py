@@ -201,9 +201,7 @@ class TestApprovalFlow:
             mock_wq.window_count.return_value = 0
             await handle_spawn_approval(spawn_request.id, mock_bot)
 
-        mock_sm.set_window_provider.assert_called_once_with(
-            "@7", "claude", cwd=str(tmp_path)
-        )
+        mock_sm.set_window_cwd.assert_called_once_with("@7", str(tmp_path))
 
     async def test_approve_window_creation_failure(self, mock_bot, spawn_request):
         mock_tmux = AsyncMock()

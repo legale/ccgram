@@ -309,7 +309,6 @@ class TestSubscribedOutputForwarding:
         provider.parse_terminal_status.return_value = None
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window", return_value=provider),
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[_pane("%1", active=True, index=0), _pane("%2")]
@@ -341,7 +340,6 @@ class TestSubscribedOutputForwarding:
         provider.parse_terminal_status.return_value = None
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window", return_value=provider),
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[_pane("%1", active=True, index=0), _pane("%2")]
@@ -367,7 +365,6 @@ class TestSubscribedOutputForwarding:
         provider.parse_terminal_status.return_value = None
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window", return_value=provider),
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[_pane("%1", active=True, index=0), _pane("%2")]
@@ -408,7 +405,6 @@ class TestSubscribedOutputForwarding:
         outputs = iter(["first\n", "second\n"])
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window", return_value=provider),
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[_pane("%1", active=True, index=0), _pane("%2")]
@@ -448,7 +444,6 @@ class TestSubscribedOutputForwarding:
         outputs = iter(["first\n", "second\n"])
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window", return_value=provider),
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[_pane("%1", active=True, index=0), _pane("%2")]
@@ -485,7 +480,6 @@ class TestSubscribedOutputForwarding:
         provider.parse_terminal_status.return_value = None
         with (
             patch("ccgram.tmux_manager.tmux_manager") as mock_tm,
-            patch("ccgram.providers.get_provider_for_window", return_value=provider),
         ):
             mock_tm.list_panes = AsyncMock(
                 return_value=[_pane("%1", active=True, index=0)]

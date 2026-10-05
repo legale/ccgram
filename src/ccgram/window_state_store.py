@@ -1,13 +1,12 @@
 """Window state storage — per-window mode and session metadata.
 
 Owns the WindowState dataclass and all window-scoped mode settings
-(approval, batch, notification). Extracted from SessionManager so that
-providers, handlers, and tests can import window state without pulling in
-the full session management stack.
+(approval, batch, notification, tool-call visibility). Extracted from
+SessionManager so that handlers and tests can import window state without
+pulling in the full session management stack.
 
-Key class: WindowStateStore. Persistence and hookless-provider hooks are
-injected via the constructor — the store cannot be built without
-explicit callbacks.
+Key class: WindowStateStore. Persistence hook is injected via the constructor
+— the store cannot be built without an explicit callback.
 
 Module-level access: ``get_window_store()`` returns the
 SessionManager-owned instance (raises RuntimeError until SessionManager
@@ -38,13 +37,6 @@ NOTIFICATION_MODES: tuple[str, ...] = ("all", "errors_only", "muted")
 TOOL_CALL_VISIBILITY_MODES: tuple[str, ...] = ("default", "shown", "hidden")
 DEFAULT_TOOL_CALL_VISIBILITY: str = "default"
 
-WINDOW_ORIGINS: frozenset[str] = frozenset(
-    {"manual_discovered", "ccgram_created"}
-)
-DEFAULT_WINDOW_ORIGIN = "manual_discovered"
-CCGRAM_CREATED_WINDOW_ORIGIN = "ccgram_created"
-MANUAL_DISCOVERED_WINDOW_ORIGIN = "manual_discovered"
-
 PaneState = Literal["active", "idle", "blocked", "dead"]
 PANE_STATES: frozenset[str] = frozenset({"active", "idle", "blocked", "dead"})
 DEFAULT_PANE_STATE: PaneState = "idle"
@@ -66,7 +58,7 @@ class PaneInfo:
     Attributes:
         pane_id: tmux pane id (e.g. ``%5``); unique within a tmux server.
         name: User-supplied pane name (None if never renamed).
-        provider: Detected provider name for the pane (claude/codex/.../shell).
+        provider: Detected provider name for the pane (shell).
         last_active_ts: Unix timestamp of last detected activity.
         state: Current pane state — active/idle/blocked/dead.
         subscribed: Forward output of this pane to the bound topic when True.
@@ -109,21 +101,19 @@ class PaneInfo:
 
 @dataclass
 class WindowState:
-    """Persistent state for a tmux window.
+    """Runtime and persistent state for a tmux window.
 
     Attributes:
-        session_id: Associated Claude session ID (empty if not yet detected)
-        cwd: Working directory for direct file path construction
-        window_name: Display name of the window
-        transcript_path: Direct path to JSONL transcript file (from hook payload)
-        notification_mode: "all" | "errors_only" | "muted"
-        approval_mode: "normal" | "yolo"
-        batch_mode: "batched" | "verbose"
-        tool_call_visibility: "default" | "shown" | "hidden"
-        origin: Lifecycle origin. Manual/external windows are never auto-killed by ccgram.
-        panes: Per-pane runtime state, keyed by tmux pane id (e.g. ``%5``).
-        pane_lifecycle_notify: Per-window override for pane created/closed
-            notifications. ``None`` means "use the global config default".
+        session_id: Associated session ID (runtime only)
+        cwd: Working directory for direct file path construction (runtime only)
+        window_name: Display name of the window (runtime only)
+        transcript_path: Direct path to JSONL transcript file (runtime only)
+        notification_mode: "all" | "errors_only" | "muted" (user preference)
+        approval_mode: "normal" | "yolo" (user preference)
+        batch_mode: "batched" | "verbose" (user preference)
+        tool_call_visibility: "default" | "shown" | "hidden" (user preference)
+        panes: Per-pane runtime state, keyed by tmux pane id (e.g. ``%5``)
+        pane_lifecycle_notify: Per-window override for pane notifications
     """
 
     session_id: str = ""
@@ -134,19 +124,12 @@ class WindowState:
     approval_mode: str = DEFAULT_APPROVAL_MODE
     batch_mode: str = DEFAULT_BATCH_MODE
     tool_call_visibility: str = DEFAULT_TOOL_CALL_VISIBILITY
-    origin: str = DEFAULT_WINDOW_ORIGIN
     panes: dict[str, PaneInfo] = field(default_factory=dict)
     pane_lifecycle_notify: bool | None = None
 
-    def to_dict(self) -> dict[str, Any]:  # noqa: C901
-        d: dict[str, Any] = {
-            "session_id": self.session_id,
-            "cwd": self.cwd,
-        }
-        if self.window_name:
-            d["window_name"] = self.window_name
-        if self.transcript_path:
-            d["transcript_path"] = self.transcript_path
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize user preference modes only (no lifecycle/runtime state)."""
+        d: dict[str, Any] = {}
         if self.notification_mode != "all":
             d["notification_mode"] = self.notification_mode
         if self.approval_mode != DEFAULT_APPROVAL_MODE:
@@ -155,73 +138,39 @@ class WindowState:
             d["batch_mode"] = self.batch_mode
         if self.tool_call_visibility != DEFAULT_TOOL_CALL_VISIBILITY:
             d["tool_call_visibility"] = self.tool_call_visibility
-        if self.origin != DEFAULT_WINDOW_ORIGIN:
-            d["origin"] = self.origin
-        if self.panes:
-            d["panes"] = {pid: p.to_dict() for pid, p in self.panes.items()}
-        if self.pane_lifecycle_notify is not None:
-            d["pane_lifecycle_notify"] = self.pane_lifecycle_notify
         return d
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:  # noqa: C901
-        raw_panes = data.get("panes") or {}
-        panes: dict[str, PaneInfo] = {}
-        if isinstance(raw_panes, dict):
-            for pid, pdata in raw_panes.items():
-                if not isinstance(pdata, dict):
-                    continue
-                pane = PaneInfo.from_dict(
-                    {**pdata, "pane_id": pdata.get("pane_id", pid)}
-                )
-                panes[pid] = pane
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """Load user preference modes."""
         return cls(
-            session_id=data.get("session_id", ""),
-            cwd=data.get("cwd", ""),
-            window_name=data.get("window_name", ""),
-            transcript_path=data.get("transcript_path", ""),
             notification_mode=data.get("notification_mode", "all"),
             approval_mode=data.get("approval_mode", DEFAULT_APPROVAL_MODE),
             batch_mode=data.get("batch_mode", DEFAULT_BATCH_MODE),
             tool_call_visibility=data.get(
                 "tool_call_visibility", DEFAULT_TOOL_CALL_VISIBILITY
             ),
-            origin=(
-                data.get("origin", DEFAULT_WINDOW_ORIGIN)
-                if data.get("origin", DEFAULT_WINDOW_ORIGIN) in WINDOW_ORIGINS
-                else DEFAULT_WINDOW_ORIGIN
-            ),
-            panes=panes,
-            pane_lifecycle_notify=data.get("pane_lifecycle_notify"),
         )
 
 
 class WindowStateStore:
     """Per-window mode and session metadata store.
 
-    Owns the window_states dict and all methods for reading/writing
+    Owns the window_states dict and methods for reading/writing
     per-window settings: notification mode, approval mode, batch mode,
-    provider name, and session/cwd association.
+    and session/cwd association.
 
-    Persistence and hookless-provider hooks are injected via the
-    constructor:
-
+    Persistence hook is injected via the constructor:
     * ``schedule_save``: triggers a debounced save after mutations.
-    * ``on_hookless_provider_switch``: called when switching to a
-      provider-switch cleanup callback without a circular dependency.
     """
 
     def __init__(
         self,
         *,
         schedule_save: Callable[[], None],
-        on_hookless_provider_switch: Callable[[str], None],
     ) -> None:
         self.window_states: dict[str, WindowState] = {}
         self._schedule_save: Callable[[], None] = schedule_save
-        self._on_hookless_provider_switch: Callable[[str], None] = (
-            on_hookless_provider_switch
-        )
 
     def reset(self) -> None:
         """Clear all state. Used for test isolation."""
@@ -232,11 +181,15 @@ class WindowStateStore:
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize window_states for state.json persistence."""
-        return {k: v.to_dict() for k, v in self.window_states.items()}
+        """Serialize per-window user preferences for state.json persistence."""
+        result = {}
+        for k, v in self.window_states.items():
+            if d := v.to_dict():
+                result[k] = d
+        return result
 
     def from_dict(self, data: dict[str, Any]) -> None:
-        """Load window_states from state.json data."""
+        """Load per-window user preferences from state.json data."""
         self.window_states = {
             k: WindowState.from_dict(v) for k, v in data.items() if isinstance(v, dict)
         }
@@ -252,27 +205,15 @@ class WindowStateStore:
         return self.window_states[window_id]
 
     def update_cwd(self, window_id: str, cwd: str) -> None:
-        """Update CWD for a window and schedule persistence."""
+        """Update CWD for a window (runtime memory only)."""
         if window_id in self.window_states:
             self.window_states[window_id].cwd = cwd
-            self._schedule_save()
-
-    def set_window_origin(self, window_id: str, origin: str) -> None:
-        """Set the lifecycle origin for a window."""
-        if origin not in WINDOW_ORIGINS:
-            raise ValueError(f"Invalid window origin: {origin!r}")
-        state = self.get_window_state(window_id)
-        if state.origin == origin:
-            return
-        state.origin = origin
-        self._schedule_save()
 
     def clear_session_fields(self, window_id: str) -> None:
         """Clear session_id and cwd for a window (session file gone)."""
         if window_id in self.window_states:
             self.window_states[window_id].session_id = ""
             self.window_states[window_id].cwd = ""
-            self._schedule_save()
 
     def clear_window_session(self, window_id: str) -> None:
         """Clear session association for a window (e.g., after /clear command)."""
@@ -328,12 +269,10 @@ class WindowStateStore:
         state: PaneState | None = None,
         subscribed: bool | None = None,
     ) -> PaneInfo:
-        """Create or update a PaneInfo entry and schedule a save.
+        """Create or update a PaneInfo entry.
 
-        Only fields that are explicitly passed are mutated; this lets callers
-        update one attribute without clobbering the rest. ``name`` accepts
-        ``None`` as a real value (clearing the name), so a sentinel is used to
-        distinguish "not provided" from "set to None".
+        Only fields that are explicitly passed are mutated. Pane state is
+        runtime-only.
         """
         window_state = self.get_window_state(window_id)
         pane = window_state.panes.get(pane_id)
@@ -352,7 +291,6 @@ class WindowStateStore:
             pane.state = state
         if subscribed is not None:
             pane.subscribed = subscribed
-        self._schedule_save()
         return pane
 
     def remove_pane(self, window_id: str, pane_id: str) -> bool:
@@ -361,74 +299,21 @@ class WindowStateStore:
         if state is None or pane_id not in state.panes:
             return False
         del state.panes[pane_id]
-        self._schedule_save()
         return True
 
     def get_pane_lifecycle_notify(self, window_id: str, default: bool) -> bool:
-        """Effective pane lifecycle notification setting for a window.
-
-        Returns the per-window override when set, otherwise ``default``
-        (typically the global config flag).
-        """
+        """Effective pane lifecycle notification setting for a window."""
         state = self.window_states.get(window_id)
         if state is None or state.pane_lifecycle_notify is None:
             return default
         return state.pane_lifecycle_notify
 
     def set_pane_lifecycle_notify(self, window_id: str, value: bool | None) -> None:
-        """Persist the per-window pane lifecycle notification override.
-
-        Pass ``None`` to clear the override and fall back to the global default.
-        """
+        """Set per-window pane lifecycle notification override."""
         state = self.get_window_state(window_id)
         if state.pane_lifecycle_notify == value:
             return
         state.pane_lifecycle_notify = value
-        self._schedule_save()
-
-    # ------------------------------------------------------------------
-    # Provider management
-    # ------------------------------------------------------------------
-
-    def set_window_provider(
-        self,
-        window_id: str,
-        *,
-        cwd: str | None = None,
-        new_provider_supports_hook: bool = True,
-    ) -> None:
-        """Set the provider for a window. Empty string resets to config default.
-
-        Always saves state unconditionally. When *cwd* is provided, persists it
-        in the same write so provider/cwd updates stay atomic.
-
-        When switching to a hookless provider (e.g. shell), invokes the
-        cleanup callback without importing the session manager.
-
-        ``new_provider_supports_hook`` must be resolved by the caller (e.g.
-        via ``registry.get(provider_name).capabilities.supports_hook``) so
-        this layer stays free of provider imports.
-        """
-        state = self.get_window_state(window_id)
-        old_provider = state.provider_name
-        state.provider_name = provider_name
-        if cwd:
-            state.cwd = cwd
-
-        # Guards: (1) only on real provider change, (2) only when non-empty
-        # (empty string is a reset-to-default and must NOT trigger cleanup),
-        # (3) only for hookless providers. Session fields are cleared only when
-        # set, but the hookless-switch callback is always invoked for hookless.
-        if (
-            old_provider != provider_name
-            and provider_name
-            and not new_provider_supports_hook
-        ):
-            if state.session_id:
-                state.session_id = ""
-                state.transcript_path = ""
-            self._on_hookless_provider_switch(window_id)
-
         self._schedule_save()
 
     # ------------------------------------------------------------------
@@ -533,32 +418,6 @@ class WindowStateStore:
         new_mode = modes[(idx + 1) % len(modes)]
         self.set_tool_call_visibility(window_id, new_mode)
         return new_mode
-
-    # ------------------------------------------------------------------
-    # Stale state pruning
-    # ------------------------------------------------------------------
-
-    def prune_stale_window_states(
-        self,
-        live_window_ids: set[str],
-        bound_window_ids: set[str],
-    ) -> bool:
-        """Remove window_states not bound and not live.
-
-        Returns True if any changes were made.
-        """
-        stale = [
-            wid
-            for wid in self.window_states
-            if (wid not in bound_window_ids and wid not in live_window_ids)
-        ]
-        if not stale:
-            return False
-        for wid in stale:
-            logger.info("Pruning stale window_state: %s", wid)
-            del self.window_states[wid]
-        self._schedule_save()
-        return True
 
 
 _active_store: WindowStateStore | None = None

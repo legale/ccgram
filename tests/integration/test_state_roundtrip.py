@@ -1,18 +1,15 @@
 """Integration tests for SessionManager state persistence round-trips.
 
-Tests bind → save → reload → verify cycles using real file I/O,
+Tests save → reload → verify cycles using real file I/O,
 ensuring state.json serialization is correct across restarts.
-Pure in-memory behavior (notification cycling, one-topic-one-window)
-is covered by unit tests in test_session.py.
+Only user preferences and window mode settings are persisted.
 """
 
-import json
 from pathlib import Path
 
 import pytest
 
 from ccgram.session import SessionManager
-from ccgram.thread_router import thread_router
 from ccgram.user_preferences import user_preferences
 from ccgram.window_state_store import window_store
 
@@ -35,52 +32,6 @@ def make_session_manager(tmp_path, monkeypatch):
     "setup_fn, check_fn",
     [
         pytest.param(
-            lambda sm: thread_router.bind_thread(
-                user_id=1, thread_id=42, window_id="@0", window_name="test-proj"
-            ),
-            lambda sm: (
-                thread_router.get_window_for_thread(user_id=1, thread_id=42) is None
-                and thread_router.get_display_name("@0") == "test-proj"
-            ),
-            id="bind-thread",
-        ),
-        pytest.param(
-            lambda sm: (
-                thread_router.bind_thread(user_id=1, thread_id=10, window_id="@0"),
-                thread_router.bind_thread(user_id=1, thread_id=20, window_id="@1"),
-                thread_router.unbind_thread(user_id=1, thread_id=10),
-            ),
-            lambda sm: (
-                thread_router.get_window_for_thread(user_id=1, thread_id=10) is None
-                and thread_router.get_window_for_thread(user_id=1, thread_id=20) is None
-            ),
-            id="unbind-thread",
-        ),
-        pytest.param(
-            lambda sm: (
-                thread_router.bind_thread(
-                    user_id=100, thread_id=1, window_id="@0", window_name="proj-a"
-                ),
-                thread_router.bind_thread(
-                    user_id=200, thread_id=2, window_id="@1", window_name="proj-b"
-                ),
-            ),
-            lambda sm: (
-                thread_router.get_window_for_thread(100, 1) is None
-                and thread_router.get_window_for_thread(200, 2) is None
-                and thread_router.get_display_name("@0") == "proj-a"
-                and thread_router.get_display_name("@1") == "proj-b"
-            ),
-            id="multiple-users",
-        ),
-        pytest.param(
-            lambda sm: thread_router.set_group_chat_id(
-                user_id=1, thread_id=42, chat_id=-100123
-            ),
-            lambda sm: thread_router.resolve_chat_id(1, 42) == 1,
-            id="group-chat-ids",
-        ),
-        pytest.param(
             lambda sm: user_preferences.update_user_window_offset(
                 user_id=1, window_id="@0", offset=12345
             ),
@@ -97,6 +48,16 @@ def make_session_manager(tmp_path, monkeypatch):
                 and any("recent-proj" in s for s in user_preferences.get_user_mru(1))
             ),
             id="directory-favorites",
+        ),
+        pytest.param(
+            lambda sm: sm.set_notification_mode("@0", "muted"),
+            lambda sm: sm.get_notification_mode("@0") == "muted",
+            id="notification-mode",
+        ),
+        pytest.param(
+            lambda sm: sm.set_window_approval_mode("@0", "yolo"),
+            lambda sm: sm.get_approval_mode("@0") == "yolo",
+            id="approval-mode",
         ),
     ],
 )
@@ -115,29 +76,14 @@ async def test_window_state_survives_reload(make_session_manager) -> None:
     state.session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     state.cwd = "/tmp/myproject"
     sm1.set_notification_mode("@5", "errors_only")
+    sm1.set_window_approval_mode("@5", "yolo")
     sm1.flush_state()
 
     _sm2 = make_session_manager()  # reload triggers __post_init__ -> _load_state
     reloaded = window_store.get_window_state("@5")
-    assert reloaded.session_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-    assert reloaded.cwd == "/tmp/myproject"
-    assert reloaded.provider_name == "claude"
+    # Lifecycle and runtime attributes are NOT persisted
+    assert reloaded.session_id == ""
+    assert reloaded.cwd == ""
+    # User mode preferences ARE persisted
     assert reloaded.notification_mode == "errors_only"
-
-
-async def test_duplicate_bindings_deduped_on_load(tmp_path, monkeypatch) -> None:
-    """Old state with duplicate bindings — loader keeps highest thread_id."""
-    state = {
-        "window_states": {},
-        "user_window_offsets": {},
-        "thread_bindings": {"1": {"10": "@0", "20": "@0"}},
-        "group_chat_ids": {},
-        "window_display_names": {},
-        "user_dir_favorites": {},
-    }
-    sf = tmp_path / "state.json"
-    sf.write_text(json.dumps(state))
-    monkeypatch.setattr("ccgram.config.config.state_file", sf)
-    SessionManager()
-    assert thread_router.get_window_for_thread(1, 10) is None
-    assert thread_router.get_window_for_thread(1, 20) is None
+    assert reloaded.approval_mode == "yolo"

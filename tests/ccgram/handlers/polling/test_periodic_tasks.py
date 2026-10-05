@@ -16,7 +16,7 @@ def _session(
 
 
 def _router() -> ThreadRouter:
-    return ThreadRouter(schedule_save=lambda: None, has_window_state=lambda _wid: False)
+    return ThreadRouter()
 
 
 async def test_reconcile_restores_runtime_from_tmux_option() -> None:

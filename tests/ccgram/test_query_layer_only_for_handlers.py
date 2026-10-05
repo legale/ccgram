@@ -42,8 +42,6 @@ import pytest
 #   prune_stale_window_states × 1
 ALLOWED_SESSION_MANAGER_ATTRS: frozenset[str] = frozenset(
     {
-        "set_window_provider",
-        "set_window_origin",
         "set_window_approval_mode",
         "set_window_cwd",
         "set_display_name",
@@ -53,7 +51,6 @@ ALLOWED_SESSION_MANAGER_ATTRS: frozenset[str] = frozenset(
         "cycle_batch_mode",
         "cycle_tool_call_visibility",
         "cycle_notification_mode",
-        "prune_stale_window_states",
     }
 )
 
