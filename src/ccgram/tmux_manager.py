@@ -533,7 +533,7 @@ class TmuxManager:
         target = f"{session_name}:{window_id}"
         for command in (
             ("set-window-option", "-t", target, "window-size", "manual"),
-            ("resize-window", "-t", target, "-x", "80", "-y", "40"),
+            ("resize-window", "-t", target, "-x", "40", "-y", "80"),
         ):
             proc = await asyncio.create_subprocess_exec(
                 "tmux", *command,
