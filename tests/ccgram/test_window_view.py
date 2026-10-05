@@ -29,7 +29,6 @@ class TestWindowViewProjection:
         sm = _wire_store()
         window_store.window_states["@1"] = WindowState(
             cwd="/tmp/proj",
-            provider_name="claude",
             approval_mode="normal",
             notification_mode="all",
             transcript_path="/tmp/log.jsonl",
@@ -38,7 +37,6 @@ class TestWindowViewProjection:
         assert view == WindowView(
             window_id="@1",
             cwd="/tmp/proj",
-            provider_name="claude",
             approval_mode="normal",
             notification_mode="all",
             batch_mode="batched",
@@ -54,7 +52,6 @@ class TestWindowViewProjection:
         sm = _wire_store()
         window_store.window_states["@2"] = WindowState(
             cwd="",
-            provider_name="codex",
             approval_mode="normal",
             notification_mode="all",
             transcript_path="",
@@ -67,7 +64,7 @@ class TestWindowViewProjection:
 
     def test_view_window_is_frozen(self) -> None:
         sm = _wire_store()
-        window_store.window_states["@3"] = WindowState(cwd="/x", provider_name="claude")
+        window_store.window_states["@3"] = WindowState(cwd="/x")
         view = sm.view_window("@3")
         assert view is not None
         with pytest.raises(FrozenInstanceError):

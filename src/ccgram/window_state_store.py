@@ -117,7 +117,6 @@ class WindowState:
         window_name: Display name of the window
         transcript_path: Direct path to JSONL transcript file (from hook payload)
         notification_mode: "all" | "errors_only" | "muted"
-        provider_name: Name of the agent provider for this window
         approval_mode: "normal" | "yolo"
         batch_mode: "batched" | "verbose"
         tool_call_visibility: "default" | "shown" | "hidden"
@@ -132,7 +131,6 @@ class WindowState:
     window_name: str = ""
     transcript_path: str = ""
     notification_mode: str = "all"
-    provider_name: str = ""
     approval_mode: str = DEFAULT_APPROVAL_MODE
     batch_mode: str = DEFAULT_BATCH_MODE
     tool_call_visibility: str = DEFAULT_TOOL_CALL_VISIBILITY
@@ -151,8 +149,6 @@ class WindowState:
             d["transcript_path"] = self.transcript_path
         if self.notification_mode != "all":
             d["notification_mode"] = self.notification_mode
-        if self.provider_name:
-            d["provider_name"] = self.provider_name
         if self.approval_mode != DEFAULT_APPROVAL_MODE:
             d["approval_mode"] = self.approval_mode
         if self.batch_mode != DEFAULT_BATCH_MODE:
@@ -185,7 +181,6 @@ class WindowState:
             window_name=data.get("window_name", ""),
             transcript_path=data.get("transcript_path", ""),
             notification_mode=data.get("notification_mode", "all"),
-            provider_name=data.get("provider_name", ""),
             approval_mode=data.get("approval_mode", DEFAULT_APPROVAL_MODE),
             batch_mode=data.get("batch_mode", DEFAULT_BATCH_MODE),
             tool_call_visibility=data.get(
@@ -398,7 +393,6 @@ class WindowStateStore:
     def set_window_provider(
         self,
         window_id: str,
-        provider_name: str,
         *,
         cwd: str | None = None,
         new_provider_supports_hook: bool = True,

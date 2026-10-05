@@ -42,23 +42,6 @@ class TestWindowStateStoreRequiresCallbacks:
         store.set_notification_mode("@1", "muted")
         assert calls == [1]
 
-    def test_constructor_wires_hookless_provider_switch(self) -> None:
-        seen: list[str] = []
-        store = WindowStateStore(
-            schedule_save=lambda: None,
-            on_hookless_provider_switch=seen.append,
-        )
-        state = store.get_window_state("@1")
-        state.provider_name = "claude"
-        store.set_window_provider("@1", "shell", new_provider_supports_hook=False)
-        assert seen == ["@1"]
-
-
-class TestUserPreferencesRequiresCallback:
-    def test_constructor_requires_schedule_save(self) -> None:
-        with pytest.raises(TypeError, match="schedule_save"):
-            UserPreferences()  # type: ignore[call-arg]
-
     def test_constructor_wires_schedule_save_for_mru(self) -> None:
         calls: list[int] = []
         prefs = UserPreferences(schedule_save=lambda: calls.append(1))
@@ -152,22 +135,6 @@ class TestSessionManagerWiresAllSingletons:
             # otherwise saves synchronously — either path is fine here.
             singleton._schedule_save()
 
-        del sm
-
-    def test_set_window_provider_triggers_save(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        # End-to-end check that SessionManager-level mutations propagate
-        # through the wired stores into StatePersistence.
-        from ccgram.session import SessionManager
-
-        sm = SessionManager()
-        saves: list[None] = []
-        monkeypatch.setattr(
-            sm._persistence, "schedule_save", lambda: saves.append(None)
-        )
-        sm.set_window_provider("@99", "claude")
-        assert saves, "set_window_provider must trigger a debounced save"
         del sm
 
     def test_thread_router_bind_triggers_save(

@@ -248,9 +248,9 @@ class ToolbarConfig:
     layouts: dict[str, ToolbarLayout] = field(default_factory=dict)
     actions: dict[str, ToolbarAction] = field(default_factory=dict)
 
-    def for_provider(self, provider_name: str) -> ToolbarLayout:
+    def for_provider(self, provider_name: str = "shell") -> ToolbarLayout:
         """Return the layout for ``provider_name``, falling back to claude."""
-        return self.layouts.get(provider_name) or self.layouts["claude"]
+        return self.layouts.get(provider_name) or self.layouts.get("claude")
 
 
 def _parse_action(name: str, raw: object) -> ToolbarAction | None:

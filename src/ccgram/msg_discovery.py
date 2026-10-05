@@ -29,8 +29,6 @@ class WindowInfo:
 
     cwd: str = ""
     window_name: str = ""
-    provider_name: str = ""
-    external: bool = False
 
 
 @dataclass
@@ -39,12 +37,10 @@ class PeerInfo:
 
     window_id: str
     name: str
-    provider: str
     cwd: str
     branch: str
     task: str
     team: str
-    external: bool
 
 
 def export_window_info() -> dict[str, WindowInfo]:
@@ -67,8 +63,6 @@ def export_window_info() -> dict[str, WindowInfo]:
             result[window_id] = WindowInfo(
                 cwd=ws_data.get("cwd", ""),
                 window_name=ws_data.get("window_name", ""),
-                provider_name=ws_data.get("provider_name", ""),
-                external=ws_data.get("external", False),
             )
     return result
 
@@ -148,7 +142,6 @@ def list_peers(
     window_states: dict[str, WindowInfo],
     tmux_session: str,
     declared_path: Path | None = None,
-    filter_provider: str | None = None,
     filter_team: str | None = None,
     filter_cwd: str | None = None,
 ) -> list[PeerInfo]:
@@ -158,7 +151,6 @@ def list_peers(
         window_states: WindowState dict from SessionManager (window_id -> state).
         tmux_session: Current tmux session name for qualifying bare window IDs.
         declared_path: Path to declared.json (default: config mailbox_dir).
-        filter_provider: Only include peers with this provider.
         filter_team: Only include peers with this team (from declared overlay).
         filter_cwd: Only include peers whose cwd matches this glob pattern.
 
@@ -175,8 +167,6 @@ def list_peers(
         qualified_id = _qualify_window_id(window_id, tmux_session)
         decl = declared.get(qualified_id, {})
 
-        if filter_provider and ws.provider_name != filter_provider:
-            continue
         if filter_team and decl.get("team", "") != filter_team:
             continue
         if filter_cwd and not fnmatch(ws.cwd, filter_cwd):
@@ -188,12 +178,10 @@ def list_peers(
             PeerInfo(
                 window_id=qualified_id,
                 name=ws.window_name,
-                provider=ws.provider_name,
                 cwd=ws.cwd,
                 branch=branch,
                 task=decl.get("task", ""),
                 team=decl.get("team", ""),
-                external=ws.external,
             )
         )
 

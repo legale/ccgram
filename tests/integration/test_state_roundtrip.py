@@ -114,7 +114,6 @@ async def test_window_state_survives_reload(make_session_manager) -> None:
     state = window_store.get_window_state("@5")
     state.session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     state.cwd = "/tmp/myproject"
-    sm1.set_window_provider("@5", "claude")
     sm1.set_notification_mode("@5", "errors_only")
     sm1.flush_state()
 

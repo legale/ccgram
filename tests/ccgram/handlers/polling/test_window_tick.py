@@ -271,7 +271,6 @@ class TestUpdateStatusActiveLine:
                 "ccgram.handlers.polling.window_tick.apply._send_typing_throttled",
                 new_callable=AsyncMock,
             ),
-            patch("ccgram.handlers.polling.window_tick.apply.get_provider_for_window"),
         ):
             mock_tm.find_window_by_id = AsyncMock(return_value=w)
             mock_tm.capture_pane = AsyncMock(return_value="pane text")
@@ -307,7 +306,6 @@ class TestUpdateStatusActiveLine:
                 "ccgram.handlers.polling.window_tick.apply._send_typing_throttled",
                 new_callable=AsyncMock,
             ) as mock_typing,
-            patch("ccgram.handlers.polling.window_tick.apply.get_provider_for_window"),
         ):
             mock_tm.find_window_by_id = AsyncMock(return_value=w)
             mock_tm.capture_pane = AsyncMock(return_value="pane text")

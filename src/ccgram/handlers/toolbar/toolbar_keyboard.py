@@ -80,11 +80,11 @@ def _make_button(
 
 
 def build_toolbar_keyboard(
-    window_id: str, provider_name: str = "claude"
+    window_id: str
 ) -> InlineKeyboardMarkup:
     """Build the inline keyboard for /toolbar from per-provider config."""
     cfg = get_toolbar_config()
-    layout = cfg.for_provider(provider_name)
+    layout = cfg.for_provider("shell")
     rows: list[list[InlineKeyboardButton]] = []
     for row_names in layout.buttons:
         cells: list[InlineKeyboardButton] = []
@@ -139,10 +139,9 @@ async def refresh_button_label(
 
     await asyncio.sleep(delay)
     view = window_query.view_window(window_id)
-    provider_name = view.provider_name if view else "shell"
     short_label = "Def"
     _set_action_label(window_id, action.name, short_label)
-    new_kb = build_toolbar_keyboard(window_id, provider_name)
+    new_kb = build_toolbar_keyboard(window_id)
     try:
         await query.edit_message_reply_markup(reply_markup=new_kb)
     except TelegramError as exc:

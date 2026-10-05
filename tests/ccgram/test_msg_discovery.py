@@ -25,12 +25,10 @@ class TestListPeers:
             "@0": WindowInfo(
                 cwd="/home/user/payment-svc",
                 window_name="payment-svc",
-                provider_name="claude",
             ),
             "@5": WindowInfo(
                 cwd="/home/user/api-gw",
                 window_name="api-gw",
-                provider_name="codex",
             ),
         }
         peers = list_peers(
@@ -49,7 +47,6 @@ class TestListPeers:
             "@0": WindowInfo(
                 cwd="/proj",
                 window_name="proj",
-                provider_name="claude",
             ),
         }
         peers = list_peers(
@@ -57,7 +54,6 @@ class TestListPeers:
             tmux_session="ccgram",
             declared_path=declared_path,
         )
-        assert peers[0].provider == "claude"
         assert peers[0].cwd == "/proj"
         assert peers[0].name == "proj"
 
@@ -66,7 +62,6 @@ class TestListPeers:
             "@0": WindowInfo(
                 cwd="/proj",
                 window_name="proj",
-                provider_name="claude",
             ),
         }
         register_declared(
@@ -85,6 +80,7 @@ class TestListPeers:
             window_states={},
             tmux_session="ccgram",
             declared_path=declared_path,
+            filter_team="not_exist",
         )
         assert peers == []
 
@@ -93,8 +89,6 @@ class TestListPeers:
             "emdash-claude-main-abc:@0": WindowInfo(
                 cwd="/proj",
                 window_name="proj",
-                provider_name="claude",
-                external=True,
             ),
         }
         peers = list_peers(
@@ -112,31 +106,16 @@ class TestFiltering:
             "@0": WindowInfo(
                 cwd="/home/user/payment-svc",
                 window_name="payment-svc",
-                provider_name="claude",
             ),
             "@5": WindowInfo(
                 cwd="/home/user/api-gw",
                 window_name="api-gw",
-                provider_name="codex",
             ),
             "@8": WindowInfo(
                 cwd="/home/user/dashboard",
                 window_name="dashboard",
-                provider_name="gemini",
             ),
         }
-
-    def test_filter_by_provider(
-        self, window_states: dict[str, WindowInfo], declared_path: Path
-    ) -> None:
-        peers = list_peers(
-            window_states=window_states,
-            tmux_session="ccgram",
-            declared_path=declared_path,
-            filter_provider="claude",
-        )
-        assert len(peers) == 1
-        assert peers[0].provider == "claude"
 
     def test_filter_by_team(
         self, window_states: dict[str, WindowInfo], declared_path: Path
@@ -177,11 +156,11 @@ class TestFiltering:
             window_states=window_states,
             tmux_session="ccgram",
             declared_path=declared_path,
-            filter_provider="codex",
             filter_team="backend",
         )
-        assert len(peers) == 1
-        assert peers[0].window_id == "ccgram:@5"
+        assert len(peers) == 2
+        ids = {p.window_id for p in peers}
+        assert ids == {"ccgram:@0", "ccgram:@5"}
 
     def test_no_match_returns_empty(
         self, window_states: dict[str, WindowInfo], declared_path: Path
@@ -190,7 +169,7 @@ class TestFiltering:
             window_states=window_states,
             tmux_session="ccgram",
             declared_path=declared_path,
-            filter_provider="shell",
+            filter_team="not_exist",
         )
         assert peers == []
 
@@ -246,7 +225,6 @@ class TestBranchDetection:
             "@0": WindowInfo(
                 cwd=str(tmp_path),
                 window_name="proj",
-                provider_name="claude",
             ),
         }
         with patch(
@@ -267,7 +245,6 @@ class TestBranchDetection:
             "@0": WindowInfo(
                 cwd=str(tmp_path),
                 window_name="proj",
-                provider_name="claude",
             ),
         }
         with patch(

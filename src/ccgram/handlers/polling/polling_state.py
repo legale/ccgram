@@ -512,7 +512,6 @@ class PaneStatusStrategy:
     * Updates ``WindowState.panes`` (upsert + remove for dead panes).
     * Detects transitions between scans and returns them so callers (e.g.
       lifecycle notifications in v2.13) can react.
-    * Auto-detects provider per pane via ``detect_provider_from_command``.
     * Surfaces blocked panes (interactive prompts) via an injected callback,
       preserving the existing ``InteractiveUIStrategy`` deduplication.
 
@@ -628,29 +627,6 @@ class PaneStatusStrategy:
         )
         return prev_state
 
-    def _resolve_pane_provider(
-        self, window_id: str, pane_command: str, fallback: str
-    ) -> str:
-        """Pick the most specific provider name available for a pane.
-
-        Tries the per-pane process basename first, falls back to the window's
-        stored provider, then to the supplied fallback.
-        """
-        # Lazy: providers/__init__.py reaches back into tmux_manager;
-        # keep this resolution at call site to avoid bringing the full
-        # provider registry into polling_state's import graph.
-        # Lazy: providers package pulls PTB; defer per-call resolution
-        from ...providers import detect_provider_from_command
-
-        # Lazy: window_query proxy resolved per-call
-        from ...window_query import get_window_provider
-
-        return (
-            detect_provider_from_command(pane_command)
-            or get_window_provider(window_id)
-            or fallback
-        )
-
     def _track(
         self,
         transitions: list[PaneTransition],
@@ -737,13 +713,11 @@ class PaneStatusStrategy:
         # Lazy: same tmux_manager ↔ providers cycle as
         # _classify_non_active; also avoids registry-import side effects.
         # Lazy: providers package pulls PTB; defer per-call resolution
-        from ...providers import get_provider_for_window
 
         # Lazy: tmux_manager imports providers eagerly; resolved per-call
         from ...tmux_manager import tmux_manager
 
         # Lazy: window_query proxy resolved per-call
-        from ...window_query import get_window_provider
 
         if self._screen_buffer.is_single_pane_cached(window_id):
             return []
@@ -779,22 +753,15 @@ class PaneStatusStrategy:
 
         now_mono = time.monotonic()
         now_wall = time.time()
-        window_provider = get_provider_for_window(
-            window_id, provider_name=get_window_provider(window_id)
-        )
 
         for pane in panes:
-            pane_provider = self._resolve_pane_provider(
-                window_id, pane.command, window_provider.capabilities.name
-            )
+            pane_provider = "shell"
             await self._scan_one_pane(
                 bot,
                 user_id,
                 thread_id,
                 window_id,
                 pane,
-                pane_provider,
-                window_provider,
                 now_mono,
                 now_wall,
                 transitions,
@@ -820,13 +787,12 @@ class PaneStatusStrategy:
         transitions: list[PaneTransition],
     ) -> None:
         for pane in panes:
-            pane_provider = self._resolve_pane_provider(window_id, pane.command, "")
+            pane_provider = "shell"
             new_state: PaneStateName = "active" if pane.active else "idle"
             prev = self.record_pane_state(
                 window_id,
                 pane.pane_id,
                 new_state,
-                provider=pane_provider,
                 last_active_ts=time.time() if pane.active else None,
             )
             self._track(transitions, pane.pane_id, prev, new_state)
@@ -838,8 +804,6 @@ class PaneStatusStrategy:
         thread_id: int,
         window_id: str,
         pane: TmuxPaneInfo,
-        pane_provider: str,
-        window_provider: AgentProvider,
         now_mono: float,
         now_wall: float,
         transitions: list[PaneTransition],
@@ -851,14 +815,13 @@ class PaneStatusStrategy:
                 window_id,
                 pane.pane_id,
                 "active",
-                provider=pane_provider,
                 last_active_ts=now_wall,
             )
             self._track(transitions, pane.pane_id, prev, "active")
             return
 
         new_state, status, pane_text = await self._classify_non_active(
-            window_id, pane, window_provider
+            window_id, pane
         )
         prev = self.record_pane_state(
             window_id, pane.pane_id, new_state, provider=pane_provider

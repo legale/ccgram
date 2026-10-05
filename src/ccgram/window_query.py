@@ -36,7 +36,6 @@ def view_window(window_id: str) -> WindowView | None:
     return WindowView(
         window_id=window_id,
         cwd=ws.cwd or "",
-        provider_name=ws.provider_name,
         approval_mode=ws.approval_mode,
         notification_mode=ws.notification_mode,
         batch_mode=ws.batch_mode,
@@ -45,12 +44,6 @@ def view_window(window_id: str) -> WindowView | None:
         window_name=ws.window_name,
         session_id=ws.session_id,
     )
-
-
-def get_window_provider(window_id: str) -> str | None:
-    """Return the provider name for a window, or None if not set."""
-    state = window_store.window_states.get(window_id)
-    return state.provider_name if state else None
 
 
 def get_approval_mode(window_id: str) -> str:

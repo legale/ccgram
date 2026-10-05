@@ -214,13 +214,9 @@ async def broker_delivery_cycle(
     # cross-package imports are kept at call site so the registry import
     # path stays free of provider / window_resolver weight.
     # Lazy: providers / window_query proxies wired by SessionManager constructor
-    from ...providers import get_provider_for_window
 
     # Lazy: mailbox is only needed while delivering broker messages.
     from ...mailbox import sanitize_dir_name
-
-    # Lazy: providers / window_query proxies wired by SessionManager constructor
-    from ...window_query import get_window_provider
 
     # Lazy: providers / window_query proxies wired by SessionManager constructor
     _recover_stale_pending(mailbox)
@@ -238,12 +234,8 @@ async def broker_delivery_cycle(
             )
             continue
 
-        provider = get_provider_for_window(
-            window_id, provider_name=get_window_provider(window_id)
-        )
-        if not provider.capabilities.supports_mailbox_delivery:
-            await _deliver_to_shell_topic(client, mailbox, qualified_id)
-            continue
+        await _deliver_to_shell_topic(client, mailbox, qualified_id)
+        continue
 
         # Hook-enabled providers get delivery via Stop event (hook_events.py).
         # Only deliver when explicitly marked idle; skip in periodic poll.

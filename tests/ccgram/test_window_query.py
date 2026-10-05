@@ -9,7 +9,6 @@ from ccgram.window_query import (
     get_batch_mode,
     get_notification_mode,
     get_session_id_for_window,
-    get_window_provider,
     iter_window_ids,
     view_window,
     window_count,
@@ -33,7 +32,6 @@ def populated(_store: WindowStateStore) -> WindowStateStore:
     _store.window_states["@1"] = WindowState(
         session_id="sid1",
         cwd="/proj",
-        provider_name="claude",
         approval_mode="yolo",
         notification_mode="muted",
         batch_mode="verbose",
@@ -52,7 +50,6 @@ class TestViewWindow:
         assert v is not None
         assert v.window_id == "@1"
         assert v.cwd == "/proj"
-        assert v.provider_name == "claude"
         assert v.session_id == "sid1"
         assert v.window_name == "myproj"
 
@@ -67,20 +64,6 @@ class TestViewWindow:
         v = view_window("@2")
         assert v is not None
         assert v.transcript_path is None
-
-
-class TestGetWindowProvider:
-    def test_returns_none_for_unknown(self) -> None:
-        assert get_window_provider("@missing") is None
-
-    def test_returns_provider_name(self, populated) -> None:
-        assert get_window_provider("@1") == "claude"
-
-    def test_empty_provider_returns_empty_string(
-        self, _store: WindowStateStore
-    ) -> None:
-        _store.window_states["@2"] = WindowState()
-        assert get_window_provider("@2") == ""
 
 
 class TestGetApprovalMode:

@@ -43,7 +43,6 @@ from .decide import build_status_line, decide_tick
 from .observe import (
     _check_vim_insert,
     _get_last_activity_ts,
-    _get_provider,
     _parse_with_pyte,
     _resolve_status,
     build_context,
@@ -84,7 +83,6 @@ __all__ = [
     "_check_vim_insert",
     "_forward_pane_output",
     "_get_last_activity_ts",
-    "_get_provider",
     "_handle_dead_window_notification",
     "_notify_pane_lifecycle",
     "_parse_with_pyte",

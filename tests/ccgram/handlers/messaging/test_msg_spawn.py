@@ -169,7 +169,6 @@ class TestApprovalFlow:
         ):
             mock_sm.window_states = {}
             mock_wq.window_count.return_value = 0
-            mock_sm.get_window_state.return_value = MagicMock(cwd="", provider_name="")
             result = await handle_spawn_approval(spawn_request.id, mock_bot)
 
         assert result is not None
@@ -200,7 +199,6 @@ class TestApprovalFlow:
         ):
             mock_sm.window_states = {}
             mock_wq.window_count.return_value = 0
-            mock_sm.get_window_state.return_value = MagicMock(cwd="", provider_name="")
             await handle_spawn_approval(spawn_request.id, mock_bot)
 
         mock_sm.set_window_provider.assert_called_once_with(
@@ -266,7 +264,6 @@ class TestAutoMode:
         ):
             mock_sm.window_states = {}
             mock_wq.window_count.return_value = 0
-            mock_sm.get_window_state.return_value = MagicMock(cwd="", provider_name="")
             result = await handle_spawn_approval(req.id, mock_bot)
 
         assert result is not None
@@ -325,7 +322,6 @@ class TestContextBootstrap:
         ):
             mock_sm.window_states = {}
             mock_wq.window_count.return_value = 0
-            mock_sm.get_window_state.return_value = MagicMock(cwd="", provider_name="")
             result = await handle_spawn_approval(req.id, mock_bot)
 
         assert result is not None

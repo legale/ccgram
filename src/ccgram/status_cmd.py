@@ -46,7 +46,7 @@ def status_main() -> None:
     # Lazy: version metadata is needed only for the CLI status command.
     from . import __version__
 
-    provider_name, cap_flags = _capability_summary()
+    provider_name, cap_flags = "shell", ""
     prefix = os.getenv("TMUX_SESSION_PREFIX", "cc_")
     sessions = _list_managed_sessions(prefix)
 

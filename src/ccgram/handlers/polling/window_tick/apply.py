@@ -19,7 +19,6 @@ from telegram.error import TelegramError
 
 from .... import window_query
 from ....config import config
-from ....providers import get_provider_for_window
 from ....telegram_client import PTBTelegramClient
 from ....thread_router import thread_router
 from ....tmux_manager import tmux_manager
@@ -48,12 +47,6 @@ if TYPE_CHECKING:
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
-
-
-def _get_provider(window_id: str) -> "AgentProvider":
-    return get_provider_for_window(
-        window_id, provider_name=window_query.get_window_provider(window_id)
-    )
 
 
 # ── Typing throttle ─────────────────────────────────────────────────────

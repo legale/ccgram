@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from .... import window_query
-from ....providers import get_provider_for_window
 from ..polling_types import StatusUpdate
 from ....tmux_manager import has_insert_indicator, notify_vim_insert_seen, tmux_manager
 from ..polling_state import terminal_poll_state, terminal_screen_buffer
@@ -27,12 +26,6 @@ if TYPE_CHECKING:
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
-
-
-def _get_provider(window_id: str) -> "AgentProvider":
-    return get_provider_for_window(
-        window_id, provider_name=window_query.get_window_provider(window_id)
-    )
 
 
 def _parse_with_pyte(
@@ -65,11 +58,7 @@ async def _resolve_status(
     if status is not None:
         return status
     clean_text = terminal_screen_buffer.get_rendered_text(window_id, pane_text)
-    provider = _get_provider(window_id)
-    pane_title = ""
-    if provider.capabilities.uses_pane_title:
-        pane_title = await tmux_manager.get_pane_title(w.window_id)
-    return provider.parse_terminal_status(clean_text, pane_title=pane_title)
+    return None
 
 
 def build_context(
@@ -94,7 +83,6 @@ def build_context(
     )
     resolved_status_text = build_status_line(status)
     ws = terminal_poll_state.peek_state(window_id)
-    provider = _get_provider(window_id)
     return TickContext(
         window_id=window_id,
         resolved_status_text=resolved_status_text,
@@ -103,7 +91,7 @@ def build_context(
         is_recently_active=is_recently_active,
         startup_time=ws.startup_time if ws else None,
         is_dead_window=False,
-        supports_hook=provider.capabilities.supports_hook,
+        supports_hook=False,
         notification_mode=notification_mode,
     )
 
@@ -111,7 +99,6 @@ def build_context(
 __all__ = [
     "_check_vim_insert",
     "_get_last_activity_ts",
-    "_get_provider",
     "_parse_with_pyte",
     "_resolve_status",
     "build_context",

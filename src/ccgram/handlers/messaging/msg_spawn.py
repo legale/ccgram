@@ -26,7 +26,10 @@ from ... import window_query
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
-from ...providers import resolve_launch_command
+import os
+
+def resolve_launch_command(provider_name: str = "shell", *, approval_mode: str = "normal") -> str:
+    return os.environ.get("CCGRAM_SHELL_COMMAND", "")
 from ...session import session_manager
 from ...spawn_request import (
     SpawnRequest,
