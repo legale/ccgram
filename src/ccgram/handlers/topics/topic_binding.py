@@ -293,4 +293,17 @@ async def create_from_all(
         thread_id=thread_id,
         name=name,
     )
+    try:
+        await client.send_message(
+            chat_id,
+            f"topic {name} created\ntmux {target} created and bound",
+            message_thread_id=thread_id,
+        )
+    except TelegramError as exc:
+        logger.warning(
+            "create_from_all_status_message_failed",
+            target=target,
+            thread_id=thread_id,
+            error=str(exc),
+        )
     return window_id, None

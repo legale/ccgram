@@ -169,6 +169,11 @@ async def test_create_from_all_creates_session_topic_and_binding() -> None:
     assert error is None
     assert window_id == "cc_tmp2:@1"
     client.create_forum_topic.assert_awaited_once_with(-100, name="tmp2")
+    client.send_message.assert_awaited_once_with(
+        -100,
+        "topic tmp2 created\ntmux cc_tmp2 created and bound",
+        message_thread_id=99,
+    )
     tmux.set_session_topic.assert_awaited_once_with("cc_tmp2", -100, 99)
     router.bind_thread.assert_called_once_with(1, 99, "cc_tmp2:@1", window_name="tmp2")
     router.set_group_chat_id.assert_called_once_with(1, 99, -100)
