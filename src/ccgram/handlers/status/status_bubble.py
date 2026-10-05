@@ -226,49 +226,7 @@ async def send_status_text(
     window_id: str,
     text: str,
 ) -> None:
-    """Send a new status message with action buttons and track it.
-
-    If a status message already exists for this (user, thread), edit it
-    in-place via the bubble's ``DraftStream`` (streaming when the Bot API
-    supports it, ``editMessageText`` otherwise).  Same-window same-text
-    calls are a no-op.
-    """
-    skey = (user_id, thread_id_or_0)
-    thread_id: int | None = thread_id_or_0 if thread_id_or_0 != 0 else None
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-
-    history = _get_idle_history(user_id, thread_id_or_0, text)
-    keyboard = build_status_keyboard(
-        window_id,
-        history=history,
-        user_id=user_id,
-    )
-
-    existing = _status_msg_info.get(skey)
-    if existing:
-        msg_id, stored_wid, last_text, stored_chat_id = existing
-        if stored_wid == window_id and text == last_text:
-            return
-        if stored_wid == window_id:
-            success = await _replace_or_edit_bubble(
-                client, skey, stored_chat_id, msg_id, text, keyboard
-            )
-            if success:
-                _status_msg_info[skey] = (msg_id, window_id, text, stored_chat_id)
-                return
-            # Both stream replace and legacy edit failed. The original message
-            # may still exist server-side — best-effort delete to avoid an
-            # orphan bubble before creating its replacement.
-            with contextlib.suppress(TelegramError):
-                await client.delete_message(chat_id=stored_chat_id, message_id=msg_id)
-            _status_msg_info.pop(skey, None)
-            _status_drafts.pop(skey, None)
-        else:
-            await clear_status_message(client, user_id, thread_id_or_0)
-
-    msg_id = await _start_bubble(client, skey, chat_id, thread_id, text, keyboard)
-    if msg_id is not None:
-        _status_msg_info[skey] = (msg_id, window_id, text, chat_id)
+    return
 
 
 async def _start_bubble(

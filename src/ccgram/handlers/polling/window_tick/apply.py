@@ -1,10 +1,8 @@
 """Side-effecting transition functions for window_tick.
 
-All Telegram, tmux, and singleton mutations live here. Functions accept
-the inputs gathered by ``observe`` and the decision returned by
-``decide``, and apply the resulting effects: emoji updates, status
-enqueuing, typing indicators, autoclose timers, dead-window
-notifications and multi-pane scans.
+Applies transitions: topic emoji updates, typing indicators,
+dead-window notifications, and screen diffing. Status bubble messages
+and provider lookups have been removed.
 """
 
 from __future__ import annotations
@@ -25,7 +23,6 @@ from ....tmux_manager import tmux_manager
 from ....window_state_store import window_store
 from ...messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
-    enqueue_status_update,
 )
 from ...messaging_pipeline.message_sender import rate_limit_send_message, safe_send
 from ...status.topic_emoji import update_topic_emoji
@@ -40,10 +37,7 @@ from .decide import decide_tick
 from .observe import _check_vim_insert, _resolve_status, build_context
 
 if TYPE_CHECKING:
-    from typing import Any
     from telegram import Bot
-
-    AgentProvider = Any
     from ....tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
@@ -86,9 +80,6 @@ async def _transition_to_idle(
     await update_topic_emoji(client, chat_id, thread_id, "idle", display)
     lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
     lifecycle_strategy.clear_typing_state(user_id, thread_id)
-    # Idle is represented by the topic emoji only. Do not create an idle
-    # status bubble with buttons; clear any previous transient status instead.
-    await enqueue_status_update(client, user_id, window_id, None, thread_id=thread_id)
 
 
 # ── Multi-pane scanning (agent teams) ─────────────────────────────────
@@ -111,13 +102,7 @@ async def _forward_pane_output(
     pane_id: str,
     pane_text: str,
 ) -> None:
-    """Forward a subscribed pane's freshly-captured text to its bound topic.
-
-    Uses the screen buffer to strip ANSI, keeps the tail of the capture so
-    the user sees the most-recent output, and labels the message with the
-    pane's friendly name when one is set.
-    """
-
+    """Forward a subscribed pane's freshly-captured text to its bound topic."""
     pane = window_store.get_pane(window_id, pane_id)
     if pane is None or not pane.subscribed:
         return
@@ -240,18 +225,7 @@ async def _apply_active_transition(
     notif_mode: str,
 ) -> None:
     client = PTBTelegramClient(bot)
-    if decision.send_status:
-        terminal_poll_state.mark_seen_status(window_id)
-        await _send_typing_throttled(bot, user_id, thread_id)
-        if notif_mode not in ("muted", "errors_only"):
-            display_status = decision.status_text or ""
-            await enqueue_status_update(
-                client,
-                user_id,
-                window_id,
-                display_status,
-                thread_id=thread_id,
-            )
+    await _send_typing_throttled(bot, user_id, thread_id)
     if thread_id is not None:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
         display = thread_router.get_display_name(window_id)
@@ -276,9 +250,7 @@ async def _apply_done_transition(
         user_id, thread_id, "done", time.monotonic()
     )
     lifecycle_strategy.clear_typing_state(user_id, thread_id)
-    await enqueue_status_update(client, user_id, window_id, None, thread_id=thread_id)
-    if not _get_provider(window_id).capabilities.supports_hook:
-        terminal_poll_state.mark_seen_status(window_id)
+    terminal_poll_state.mark_seen_status(window_id)
 
 
 async def _apply_starting_transition(
@@ -307,7 +279,7 @@ async def _apply_tick_decision(
     decision: TickDecision,
     notif_mode: str,
 ) -> None:
-    """Apply the effects dictated by a ``TickDecision``. All I/O lives here."""
+    """Apply the effects dictated by a ``TickDecision``."""
     if decision.show_recovery or decision.transition is None:
         return
 
@@ -344,9 +316,6 @@ async def _update_status(
     w = _window or await tmux_manager.find_window_by_id(window_id)
     client = PTBTelegramClient(bot)
     if not w:
-        await enqueue_status_update(
-            client, user_id, window_id, None, thread_id=thread_id
-        )
         return
 
     pane_text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)

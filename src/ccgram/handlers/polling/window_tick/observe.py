@@ -1,31 +1,19 @@
-"""I/O readers for window_tick — gather pane state, build TickContext.
+"""Input-gathering layer for window_tick — reads tmux and terminal state.
 
-Pure inputs in (``window_id``, ``TmuxWindow``, captured pane text), data
-out (``StatusUpdate``, ``TickContext``). No Telegram side effects; the
-only mutating call is ``terminal_poll_state.is_recently_active`` which
-marks the window as having seen status when the transcript is recently
-active — that side effect must run in the coordinator before
-``decide_tick`` so it isn't re-derived.
+Gathers inputs into a pure ``TickContext`` that ``decide_tick`` can consume.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-import structlog
-
-from .... import window_query
-from ..polling_types import StatusUpdate
-from ....tmux_manager import has_insert_indicator, notify_vim_insert_seen, tmux_manager
+from ....tmux_manager import has_insert_indicator, notify_vim_insert_seen
 from ..polling_state import terminal_poll_state, terminal_screen_buffer
-from ..polling_types import TickContext, is_shell_prompt
+from ..polling_types import StatusUpdate, TickContext, is_shell_prompt
 from .decide import build_status_line
 
 if TYPE_CHECKING:
-    AgentProvider = Any
     from ....tmux_manager import TmuxWindow
-
-logger = structlog.get_logger()
 
 
 def _parse_with_pyte(
@@ -44,7 +32,6 @@ def _check_vim_insert(window_id: str, pane_text: str, w: "TmuxWindow") -> None:
 
 
 def _get_last_activity_ts(window_id: str) -> float | None:
-    """Return no transcript activity; tmux polling owns activity detection."""
     _ = window_id
     return None
 
@@ -52,12 +39,7 @@ def _get_last_activity_ts(window_id: str) -> float | None:
 async def _resolve_status(
     window_id: str, pane_text: str, w: "TmuxWindow"
 ) -> StatusUpdate | None:
-    status = _parse_with_pyte(
-        window_id, pane_text, columns=w.pane_width, rows=w.pane_height
-    )
-    if status is not None:
-        return status
-    clean_text = terminal_screen_buffer.get_rendered_text(window_id, pane_text)
+    """Terminal status line parsing is disabled."""
     return None
 
 
@@ -68,15 +50,6 @@ def build_context(
     *,
     notification_mode: str,
 ) -> TickContext:
-    """Build the TickContext that ``decide_tick`` will consume.
-
-    Caller must have already called ``_resolve_status`` (so cached pyte
-    state is up to date), dispatched any interactive-UI side effect, and
-    resolved the notification mode (see ``apply._update_status``). The
-    ``is_recently_active`` calculation has a side effect
-    (``mark_seen_status``) — keeping it inside this builder rather than
-    inside ``decide_tick`` preserves the existing behaviour.
-    """
     last_activity_ts = _get_last_activity_ts(window_id)
     is_recently_active = terminal_poll_state.is_recently_active(
         window_id, last_activity_ts

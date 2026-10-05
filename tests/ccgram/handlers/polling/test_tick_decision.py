@@ -46,15 +46,6 @@ def test_dead_window_ignores_other_fields():
     assert decision.show_recovery is True
 
 
-def test_active_status_text_sends_status():
-    ctx = _ctx(resolved_status_text="⚙ Compiling…")
-    decision = decide_tick(ctx)
-    assert decision.send_status is True
-    assert decision.status_text == "⚙ Compiling…"
-    assert decision.transition == "active"
-    assert decision.show_recovery is False
-
-
 def test_recently_active_transitions_active_without_status():
     ctx = _ctx(is_recently_active=True)
     decision = decide_tick(ctx)
@@ -73,12 +64,6 @@ def test_shell_prompt_no_hook_transitions_idle():
     decision = decide_tick(ctx)
     assert decision.transition == "idle"
     assert decision.send_status is False
-
-
-def test_shell_prompt_with_hook_transitions_done():
-    ctx = _ctx(is_shell_prompt=True, supports_hook=True)
-    decision = decide_tick(ctx)
-    assert decision.transition == "done"
 
 
 def test_has_seen_status_transitions_idle():
@@ -104,21 +89,6 @@ def test_expired_startup_time_transitions_idle():
     ctx = _ctx(startup_time=time.monotonic() - 60.0)
     decision = decide_tick(ctx)
     assert decision.transition == "idle"
-
-
-def test_status_text_takes_priority_over_recently_active():
-    ctx = _ctx(resolved_status_text="Running tests", is_recently_active=True)
-    decision = decide_tick(ctx)
-    assert decision.send_status is True
-    assert decision.status_text == "Running tests"
-    assert decision.transition == "active"
-
-
-def test_status_text_takes_priority_over_shell_prompt():
-    ctx = _ctx(resolved_status_text="Working", is_shell_prompt=True)
-    decision = decide_tick(ctx)
-    assert decision.send_status is True
-    assert decision.transition == "active"
 
 
 def test_tick_decision_defaults_are_no_op():

@@ -205,116 +205,6 @@ class TestUpdateStatusTopicDiff:
             mock_diff.assert_not_called()
 
 
-class TestUpdateStatusActiveLine:
-    async def test_idle_transition_clears_status_without_sending_idle_bubble(self):
-        bot = AsyncMock(spec=Bot)
-        with (
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.enqueue_status_update",
-                new_callable=AsyncMock,
-            ) as mock_enqueue,
-            patch("ccgram.handlers.polling.window_tick.apply.thread_router"),
-        ):
-            await _transition_to_idle(bot, 1, "@0", 100, 42, "test")
-
-        assert mock_enqueue.await_args is not None
-        assert mock_enqueue.await_args.args[3] is None
-
-    async def test_idle_active_transition_does_not_send_typing(self):
-        bot = AsyncMock(spec=Bot)
-        decision = TickDecision(transition="active", send_status=False)
-
-        with (
-            patch(
-                "ccgram.handlers.polling.window_tick.apply._send_typing_throttled",
-                new_callable=AsyncMock,
-            ) as mock_typing,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
-                new_callable=AsyncMock,
-            ),
-            patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
-        ):
-            mock_tr.resolve_chat_id.return_value = 42
-            mock_tr.get_display_name.return_value = "agy"
-
-            await _apply_active_transition(bot, 1, "cc_agy:@1", 100, decision, "all")
-
-        mock_typing.assert_not_awaited()
-
-    async def test_active_status_enqueues_and_sets_emoji(self):
-        bot = AsyncMock(spec=Bot)
-        w = _make_window()
-        status = _make_status(raw_text="Working on task", is_interactive=False)
-
-        with (
-            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
-            patch("ccgram.handlers.polling.window_tick.apply.window_query") as mock_sm,
-            patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
-            patch(
-                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
-                return_value=status,
-            ),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.enqueue_status_update",
-                new_callable=AsyncMock,
-            ) as mock_enqueue,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
-                new_callable=AsyncMock,
-            ) as mock_emoji,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply._send_typing_throttled",
-                new_callable=AsyncMock,
-            ),
-        ):
-            mock_tm.find_window_by_id = AsyncMock(return_value=w)
-            mock_tm.capture_pane = AsyncMock(return_value="pane text")
-            mock_sm.get_notification_mode.return_value = "all"
-            mock_tr.resolve_chat_id.return_value = 42
-            mock_tr.get_display_name.return_value = "test"
-            await _update_status(bot, 1, "@0", thread_id=100, _window=w)
-            mock_enqueue.assert_called_once()
-            mock_emoji.assert_called()
-
-    async def test_muted_skips_enqueue(self):
-        bot = AsyncMock(spec=Bot)
-        w = _make_window()
-        status = _make_status(raw_text="Working", is_interactive=False)
-
-        with (
-            patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
-            patch("ccgram.handlers.polling.window_tick.apply.window_query") as mock_sm,
-            patch("ccgram.handlers.polling.window_tick.apply.thread_router"),
-            patch(
-                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
-                return_value=status,
-            ),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.enqueue_status_update",
-                new_callable=AsyncMock,
-            ) as mock_enqueue,
-            patch(
-                "ccgram.handlers.polling.window_tick.apply.update_topic_emoji",
-                new_callable=AsyncMock,
-            ),
-            patch(
-                "ccgram.handlers.polling.window_tick.apply._send_typing_throttled",
-                new_callable=AsyncMock,
-            ) as mock_typing,
-        ):
-            mock_tm.find_window_by_id = AsyncMock(return_value=w)
-            mock_tm.capture_pane = AsyncMock(return_value="pane text")
-            mock_sm.get_notification_mode.return_value = "muted"
-            await _update_status(bot, 1, "@0", thread_id=100, _window=w)
-            mock_enqueue.assert_not_called()
-            mock_typing.assert_called_once()
-
-
 def _make_ctx(
     window_id: str = "@0",
     resolved_status_text: str | None = None,
@@ -348,10 +238,6 @@ class TestDecideTickActiveTranscript:
 
 
 class TestDecideTickShellPrompt:
-    def test_claude_provider_yields_done(self):
-        ctx = _make_ctx(is_shell_prompt=True, supports_hook=True)
-        decision = decide_tick(ctx)
-        assert decision.transition == "done"
 
     def test_shell_provider_yields_idle(self):
         ctx = _make_ctx(is_shell_prompt=True, supports_hook=False)

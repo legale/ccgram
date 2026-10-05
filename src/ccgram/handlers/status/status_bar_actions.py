@@ -62,23 +62,7 @@ _pending_key_refreshes: dict[tuple[int, str], asyncio.Task[None]] = {}
 
 
 def build_dashboard_button(window_id: str, user_id: int) -> InlineKeyboardButton | None:
-    """Return the Dashboard WebApp button, or None when Mini App is disabled.
-
-    Mints a short-lived signed token scoped to ``(window_id, user_id)`` and
-    embeds it in the URL so the Mini App can verify the request without an
-    extra round-trip. Returns ``None`` (button hidden) when
-    ``CCGRAM_MINIAPP_BASE_URL`` is unset.
-    """
-    base_url = config.miniapp_base_url
-    if not base_url:
-        return None
-    token = sign_token(
-        bot_token=config.telegram_bot_token,
-        window_id=window_id,
-        user_id=user_id,
-    )
-    url = f"{base_url.rstrip('/')}/app/{token}"
-    return InlineKeyboardButton("\U0001fa9f Dashboard", web_app=WebAppInfo(url=url))
+    return None
 
 
 @topic_state.register("window")

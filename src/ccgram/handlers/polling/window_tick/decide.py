@@ -1,15 +1,12 @@
 """Pure decision kernel for window_tick — no I/O, no side effects.
 
 All inputs flow in via ``TickContext``; output is a ``TickDecision``.
-This module imports nothing that touches tmux, Telegram, or singletons,
-so its functions are deterministic and trivially unit-testable.
 """
 
 from __future__ import annotations
 
 import time
 
-from ....terminal_parser import status_emoji_prefix
 from ..polling_types import (
     STARTUP_TIMEOUT,
     StatusUpdate,
@@ -20,38 +17,19 @@ from ..polling_types import (
 
 
 def build_status_line(status: StatusUpdate | None) -> str | None:
-    if not status or status.is_interactive:
-        return None
-    if "\n" in status.raw_text:
-        return status.raw_text
-    return f"{status_emoji_prefix(status.raw_text)} {status.raw_text}"
+    """Status lines are disabled in simplified polling model."""
+    return None
 
 
 def decide_tick(ctx: TickContext) -> TickDecision:
-    """Pure status/idle transition decision — no I/O, no side effects.
-
-    All mutable state reads (``has_seen_status``, ``is_recently_active``,
-    ``startup_time``) must be computed by the coordinator before building
-    ``TickContext``. The ``is_recently_active`` flag is special: its
-    computation in the coordinator may mark_seen_status as a side effect,
-    so it must not be re-derived here.
-    """
+    """Pure status/idle transition decision — no I/O, no side effects."""
     if ctx.is_dead_window:
         return TickDecision(show_recovery=True)
-
-    if ctx.resolved_status_text:
-        return TickDecision(
-            send_status=True,
-            status_text=ctx.resolved_status_text,
-            transition="active",
-        )
 
     if ctx.is_recently_active:
         return TickDecision(transition="active")
 
     if ctx.is_shell_prompt:
-        if ctx.supports_hook:
-            return TickDecision(transition="done")
         return TickDecision(transition="idle")
 
     if ctx.has_seen_status:

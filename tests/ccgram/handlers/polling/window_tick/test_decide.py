@@ -57,33 +57,7 @@ class TestDecideTickDeadWindow:
         assert decision.show_recovery is True
 
 
-class TestDecideTickActiveStatus:
-    def test_resolved_status_yields_active_with_text(self):
-        ctx = _make_ctx(resolved_status_text="Working...")
-        decision = decide_tick(ctx)
-        assert decision.transition == "active"
-        assert decision.send_status is True
-        assert decision.status_text == "Working..."
-
-    def test_recently_active_alone_yields_active_no_status(self):
-        ctx = _make_ctx(is_recently_active=True)
-        decision = decide_tick(ctx)
-        assert decision.transition == "active"
-        assert decision.send_status is False
-        assert decision.status_text is None
-
-    def test_resolved_status_takes_precedence_over_shell_prompt(self):
-        ctx = _make_ctx(resolved_status_text="Working", is_shell_prompt=True)
-        decision = decide_tick(ctx)
-        assert decision.transition == "active"
-        assert decision.send_status is True
-
-
 class TestDecideTickShellPrompt:
-    def test_hook_provider_yields_done(self):
-        ctx = _make_ctx(is_shell_prompt=True, supports_hook=True)
-        decision = decide_tick(ctx)
-        assert decision.transition == "done"
 
     def test_no_hook_provider_yields_idle(self):
         ctx = _make_ctx(is_shell_prompt=True, supports_hook=False)
@@ -112,28 +86,6 @@ class TestDecideTickIdleAndStarting:
         ctx = _make_ctx(startup_time=old_start)
         decision = decide_tick(ctx)
         assert decision.transition == "idle"
-
-
-class TestBuildStatusLine:
-    def test_none_status_returns_none(self):
-        assert build_status_line(None) is None
-
-    def test_interactive_status_returns_none(self):
-        status = StatusUpdate(
-            raw_text="Permission?", display_label="", is_interactive=True
-        )
-        assert build_status_line(status) is None
-
-    def test_multiline_passes_through_unchanged(self):
-        status = StatusUpdate(raw_text="line1\nline2", display_label="")
-        assert build_status_line(status) == "line1\nline2"
-
-    def test_single_line_gets_emoji_prefix(self):
-        status = StatusUpdate(raw_text="Working", display_label="")
-        result = build_status_line(status)
-        assert result is not None
-        assert result.endswith(" Working")
-        assert result != "Working"
 
 
 class TestIsShellPrompt:

@@ -181,16 +181,7 @@ class TerminalScreenBuffer:
             ws.last_pyte_result = result
             return result
 
-        raw_status = parse_status_block_from_screen(buf)
-        if raw_status:
-            headline = raw_status.split("\n", 1)[0]
-            result = StatusUpdate(
-                raw_text=raw_status,
-                display_label=format_status_display(headline),
-            )
-            ws.last_pane_hash = content_hash
-            ws.last_pyte_result = result
-            return result
+
 
         ws.last_pane_hash = content_hash
         ws.last_pyte_result = None
