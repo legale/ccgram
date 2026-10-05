@@ -22,7 +22,11 @@ class TestSendKeysVimProbe:
 
         assert sent is True
         calls = [call.args[1] for call in tmux._pane_send.call_args_list]
-        assert calls == ["ls", ""]
+        assert calls == ["ls", "Enter"]
+        assert tmux._pane_send.call_args_list[-1].kwargs == {
+            "enter": False,
+            "literal": False,
+        }
         assert _vim_state["@1"] is False
 
     async def test_known_vim_state_still_enters_insert_mode(self) -> None:
@@ -35,7 +39,11 @@ class TestSendKeysVimProbe:
 
         assert sent is True
         calls = [call.args[1] for call in tmux._pane_send.call_args_list]
-        assert calls == ["i", "hello", ""]
+        assert calls == ["i", "hello", "Enter"]
+        assert tmux._pane_send.call_args_list[-1].kwargs == {
+            "enter": False,
+            "literal": False,
+        }
 
 
 class TestCreateWindowIds:

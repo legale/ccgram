@@ -851,7 +851,7 @@ class TmuxManager:
                 return False
         await asyncio.sleep(0.5)
         return await asyncio.to_thread(
-            self._pane_send, window_id, "", enter=True, literal=False
+            self._pane_send, window_id, "Enter", enter=False, literal=False
         )
 
     async def send_keys(
