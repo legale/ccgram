@@ -222,7 +222,7 @@ class Config:
             1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
         )
         self.display_buffer_max: int = max(
-            1, _parse_int_env("CCGRAM_DISPLAY_BUFFER_MAX", 3800)
+            1, _parse_int_env("CCGRAM_DISPLAY_BUFFER_MAX", 3200)
         )
 
     def _init_miniapp(self) -> None:
