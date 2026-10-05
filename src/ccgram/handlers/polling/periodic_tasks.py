@@ -436,4 +436,6 @@ async def run_lifecycle_tasks(
     all_windows: list["TmuxWindow"],  # noqa: ARG001 - lifecycle API
 ) -> None:
     """Run per-tick topic lifecycle tasks."""
+    from ..topics.topic_lifecycle import check_autoclose_timers
+
     await check_autoclose_timers(client)
