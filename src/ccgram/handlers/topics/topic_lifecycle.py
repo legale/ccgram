@@ -181,6 +181,20 @@ async def topic_created_handler(
     if error:
         await client.send_message(chat.id, error, message_thread_id=thread_id)
         return
+    target = tmux_manager.topic_session_name(topic_name)
+    try:
+        await client.send_message(
+            chat.id,
+            f"topic {topic_name} created\ntmux {target} created and bound",
+            message_thread_id=thread_id,
+        )
+    except TelegramError as exc:
+        logger.warning(
+            "topic_created_status_message_failed",
+            target=target,
+            thread_id=thread_id,
+            error=str(exc),
+        )
     logger.info(
         "Bound Telegram topic %r (chat=%d, thread=%d)",
         topic_name,

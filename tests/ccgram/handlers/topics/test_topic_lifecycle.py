@@ -38,10 +38,19 @@ async def test_topic_created_claims_strict_name_match() -> None:
         patch(
             "ccgram.handlers.status.topic_emoji.sync_topic_name", new_callable=AsyncMock
         ),
+        patch.object(
+            topic_lifecycle, "PTBTelegramClient", return_value=MagicMock()
+        ) as client_cls,
+        patch.object(topic_lifecycle, "tmux_manager") as tmux,
     ):
+        client_cls.return_value.send_message = AsyncMock()
+        tmux.topic_session_name.return_value = "cc_foo"
         await topic_lifecycle.topic_created_handler(update, context)
 
     ensure.assert_awaited_once_with(1, -100, 42, "foo")
+    client_cls.return_value.send_message.assert_awaited_once_with(
+        -100, "topic foo created\ntmux cc_foo created and bound", message_thread_id=42
+    )
 
 
 async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:

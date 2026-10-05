@@ -1,12 +1,11 @@
 """Route Telegram topic text to its authoritative tmux session.
 
-A topic is resolved only from tmux session metadata.  Unknown topics require
-explicit ``//bind <name>``; the special ``cc_all`` topic creates new pairs.
+A topic is resolved only from tmux session metadata. Unknown topics require
+explicit ``//bind <name>``.
 """
 
 from __future__ import annotations
 
-from collections import deque
 from typing import TYPE_CHECKING
 
 import structlog
@@ -16,7 +15,7 @@ from telegram.constants import ChatAction
 from ...config import config
 from ...telegram_client import PTBTelegramClient
 from ...thread_router import thread_router
-from ...tmux_manager import send_to_window, tmux_manager
+from ...tmux_manager import send_to_window
 from ...utils import handle_general_topic_message, is_general_topic
 from ..callback_helpers import get_thread_id as _get_thread_id
 from ..live.pane_callbacks import apply_pane_rename
@@ -24,8 +23,6 @@ from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..sessions_dashboard import apply_session_rename
 
 logger = structlog.get_logger()
-_ALL_TOPIC_MESSAGES: deque[tuple[int, int]] = deque(maxlen=1024)
-
 if TYPE_CHECKING:
     from telegram import Bot, Chat
     from telegram.ext import ContextTypes
@@ -54,50 +51,6 @@ async def _handle_unbound_topic(
         return True
     bind_runtime(user_id, chat.id, thread_id, session)
     return False
-
-
-def _is_all_window(window_id: str) -> bool:
-    target = tmux_manager.topic_session_name("all")
-    return window_id == target or window_id.startswith(f"{target}:")
-
-
-async def _handle_all_topic(
-    user_id: int,
-    text: str,
-    client: TelegramClient,
-    message: Message,
-) -> bool:
-    """Create a new managed session/topic pair from the ``all`` topic."""
-    chat = message.chat
-    if chat is None:
-        return True
-    _ALL_TOPIC_MESSAGES.append((chat.id, message.message_id))
-
-    # Lazy: topic creation is needed only for messages in the all topic.
-    from ..topics.topic_binding import create_from_all
-
-    logger.info(
-        "all_topic_create_requested",
-        user_id=user_id,
-        chat_id=chat.id,
-        message_id=message.message_id,
-        text=text,
-    )
-    _window_id, error = await create_from_all(user_id, chat.id, text, client)
-    logger.info(
-        "all_topic_create_finished",
-        user_id=user_id,
-        chat_id=chat.id,
-        message_id=message.message_id,
-        text=text,
-        window_id=_window_id,
-        error=error,
-    )
-    if error:
-        await safe_reply(message, error)
-        return True
-    await ack_reaction(client, chat.id, message.message_id)
-    return True
 
 
 async def _forward_message(
@@ -178,16 +131,6 @@ async def handle_text_message(
     assert user is not None
     assert message is not None and message.text
 
-    chat_id = message.chat.id if message.chat else None
-    if chat_id is not None and (chat_id, message.message_id) in _ALL_TOPIC_MESSAGES:
-        logger.info(
-            "skip_reprocessed_all_topic_message",
-            chat_id=chat_id,
-            message_id=message.message_id,
-            text=message.text,
-        )
-        return
-
     thread_id = _get_thread_id(update)
     client = PTBTelegramClient(context.bot)
     window_id = (
@@ -230,9 +173,6 @@ async def handle_text_message(
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     assert window_id is not None
-    if _is_all_window(window_id):
-        await _handle_all_topic(user.id, message.text, client, message)
-        return
     await _forward_message(
         window_id,
         user.id,
