@@ -252,3 +252,50 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await safe_reply(
         update.message, f"Unbound topic. Session `{session_name}` is still running."
     )
+
+
+async def killme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Kill the managed tmux session and close the Telegram forum topic."""
+    user = update.effective_user
+    if not user or not config.is_user_allowed(user.id):
+        return
+    if not update.message:
+        return
+
+    thread_id = get_thread_id(update)
+    if thread_id is None:
+        if (
+            update.message
+            and update.effective_chat
+            and is_general_topic(update.message)
+        ):
+            await handle_general_topic_message(
+                update.get_bot(), update.message, update.effective_chat.id
+            )
+        else:
+            await safe_reply(update.message, "Use this command inside a topic.")
+        return
+
+    window_id = thread_router.get_window_for_thread(user.id, thread_id)
+    if not window_id:
+        chat_id = thread_router.resolve_chat_id(user.id, thread_id)
+        # Lazy: topic binding imports the topic lifecycle graph.
+        from .topics.topic_binding import find_topic_session
+
+        session = await find_topic_session(chat_id, thread_id)
+        if session:
+            window_id = session.window_id
+        else:
+            await safe_reply(
+                update.message, "This topic is not bound to a managed session."
+            )
+            return
+
+    client = PTBTelegramClient(context.bot)
+    from .sessions_dashboard import kill_session_and_unbind
+
+    success, msg = await kill_session_and_unbind(window_id, client)
+    if not success:
+        await safe_reply(update.message, msg)
+
+

@@ -154,12 +154,10 @@ async def handle_sessions_kill(
     )
 
 
-async def handle_sessions_kill_confirm(
-    query: CallbackQuery, user_id: int, window_id: str, client: TelegramClient
-) -> bool:
-    """Second tap — kill the tmux window, unbind all users, refresh dashboard."""
-    display = thread_router.get_display_name(window_id)
-
+async def kill_session_and_unbind(
+    window_id: str, client: TelegramClient
+) -> tuple[bool, str]:
+    """Kill the tmux session, delete associated forum topic, and unbind threads."""
     session_name = (
         window_id.rsplit(":", 1)[0]
         if ":" in window_id and not window_id.startswith("@")
@@ -179,13 +177,11 @@ async def handle_sessions_kill_confirm(
             await client.delete_forum_topic(chat_id, thread_id)
         except TelegramError as e:
             if not is_thread_gone(e):
-                await safe_edit(query, f"Telegram topic was not deleted: {e}")
-                return False
+                return False, f"Telegram topic was not deleted: {e}"
 
     killed = await tmux_manager.kill_session(session_name)
     if not killed:
-        await safe_edit(query, f"Session `{session_name}` was not killed.")
-        return False
+        return False, f"Session `{session_name}` was not killed."
 
     # Clean up BEFORE unbind — resolve_chat_id needs group_chat_ids
     # which unbind_thread deletes
@@ -194,11 +190,24 @@ async def handle_sessions_kill_confirm(
             await clear_topic_state(uid, tid, client, window_id=window_id)
             thread_router.unbind_thread(uid, tid)
 
+    return True, session_name
+
+
+async def handle_sessions_kill_confirm(
+    query: CallbackQuery, user_id: int, window_id: str, client: TelegramClient
+) -> bool:
+    """Second tap — kill the tmux window, unbind all users, refresh dashboard."""
+    display = thread_router.get_display_name(window_id)
+    success, msg = await kill_session_and_unbind(window_id, client)
+    if not success:
+        await safe_edit(query, msg)
+        return False
+
     logger.info(
         "sessions_kill_confirm: killed session %s (%s), ok=%s, user=%d",
-        session_name,
+        msg,
         display,
-        killed,
+        success,
         user_id,
     )
 

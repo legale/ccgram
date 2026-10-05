@@ -1,6 +1,6 @@
 """Tests for session kill via sessions dashboard (two-step confirmation)."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -100,3 +100,36 @@ class TestHandleSessionsKillConfirm:
             mock_edit.assert_called_once()
             text = mock_edit.call_args[0][1]
             assert "Killed" in text
+
+
+class TestKillmeCommand:
+    async def test_kills_and_unbinds_current_topic(self, _patch_deps) -> None:
+        from ccgram.handlers.cleanup import killme_command
+        from telegram import Message, Update, User
+
+        _mock_sm, mock_tr, mock_tm, mock_clear = _patch_deps
+        mock_tr.get_window_for_thread.return_value = "@5"
+        mock_tr.iter_thread_bindings.return_value = [(100, 42, "@5")]
+        mock_tm.session_name = "ccgram"
+        mock_tm.kill_session = AsyncMock(return_value=True)
+
+        update = MagicMock(spec=Update)
+        update.effective_user = User(id=100, is_bot=False, first_name="User")
+        msg = AsyncMock(spec=Message)
+        msg.message_thread_id = 42
+        update.message = msg
+        update.effective_message = msg
+
+        context = MagicMock()
+        context.bot = AsyncMock()
+
+        with (
+            patch("ccgram.config.config.is_user_allowed", return_value=True),
+            patch("ccgram.handlers.cleanup.thread_router", mock_tr),
+        ):
+            await killme_command(update, context)
+
+        mock_tm.kill_session.assert_awaited_once_with("ccgram")
+        mock_tr.unbind_thread.assert_called_once_with(100, 42)
+        mock_clear.assert_called_once()
+
