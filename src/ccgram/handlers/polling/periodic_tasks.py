@@ -114,43 +114,21 @@ async def _delete_runtime_topic(
     return True
 
 
-async def _replace_missing_topic(
+async def _remove_missing_topic(
     client: TelegramClient,
     session: "TmuxWindow",
-    user_id: int,
     chat_id: int,
     thread_id: int,
 ) -> None:
-    """Recreate a deleted Telegram topic for a still-live managed session."""
+    """Remove a tmux session whose Telegram topic was deleted."""
     session_name = session.window_name
-    topic_name = tmux_manager.topic_name_from_session_name(session_name)
-    try:
-        topic = await client.create_forum_topic(chat_id, name=topic_name)
-    except TelegramError as e:
-        log_throttled(
-            logger,
-            f"topic-create:{session_name}",
-            "Topic create error for %s: %s",
-            session_name,
-            e,
-        )
+    if not await tmux_manager.kill_session(session_name):
+        logger.warning("Failed to remove tmux session %s after topic deletion", session_name)
         return
-
-    new_thread_id = topic.message_thread_id
-    if not await tmux_manager.set_session_topic(session_name, chat_id, new_thread_id):
-        try:  # noqa: SIM105 - cleanup is best effort
-            await client.delete_forum_topic(chat_id, new_thread_id)
-        except TelegramError:
-            pass
-        logger.error("Failed to store replacement topic for %s", session_name)
-        return
-
-    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
-    session.topic_ref = (chat_id, new_thread_id)
-    await _bind_runtime(session, user_id, chat_id, new_thread_id)
+    session.topic_ref = None
+    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=True)
     logger.info(
-        "Recreated Telegram topic %d for tmux session %s",
-        new_thread_id,
+        "Removed tmux session %s after Telegram topic deletion",
         session_name,
     )
 
@@ -158,7 +136,6 @@ async def _replace_missing_topic(
 async def _sync_topic(
     client: TelegramClient,
     session: "TmuxWindow",
-    user_id: int,
     chat_id: int,
     thread_id: int,
 ) -> None:
@@ -167,7 +144,7 @@ async def _sync_topic(
         await client.reopen_forum_topic(chat_id, thread_id)
     except BadRequest as e:
         if is_thread_gone(e):
-            await _replace_missing_topic(client, session, user_id, chat_id, thread_id)
+            await _remove_missing_topic(client, session, chat_id, thread_id)
             return
         if "topic_not_modified" not in e.message.lower():
             log_throttled(
@@ -195,7 +172,7 @@ async def _sync_topic(
         if "topic_not_modified" in e.message.lower():
             return
         if is_thread_gone(e):
-            await _replace_missing_topic(client, session, user_id, chat_id, thread_id)
+            await _remove_missing_topic(client, session, chat_id, thread_id)
             return
         log_throttled(
             logger,
@@ -258,11 +235,14 @@ async def _sync_bindings(
     client: TelegramClient,
     bindings: list[tuple["TmuxWindow", int, int, int]],
     verify: bool,
-) -> None:
+) -> set[tuple[int, int]]:
+    checked: set[tuple[int, int]] = set()
     for s, user_id, chat_id, thread_id in bindings:
         changed = await _bind_runtime(s, user_id, chat_id, thread_id)
         if changed or verify:
-            await _sync_topic(client, s, user_id, chat_id, thread_id)
+            await _sync_topic(client, s, chat_id, thread_id)
+            checked.add((chat_id, thread_id))
+    return checked
 
 
 async def _clear_orphans(
@@ -279,6 +259,31 @@ async def _clear_orphans(
         await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
 
 
+async def _clear_dead_topics(
+    client: TelegramClient,
+    sessions: list["TmuxWindow"],
+    checked: set[tuple[int, int]],
+) -> None:
+    """Kill tmux sessions whose Telegram thread IDs no longer exist."""
+    for session in sessions:
+        if session.topic_ref is None or session.topic_ref in checked:
+            continue
+        chat_id, thread_id = session.topic_ref
+        try:
+            await client.reopen_forum_topic(chat_id, thread_id)
+        except BadRequest as exc:
+            if is_thread_gone(exc):
+                await _remove_missing_topic(client, session, chat_id, thread_id)
+        except TelegramError as exc:
+            log_throttled(
+                logger,
+                f"topic-check:{session.window_name}",
+                "Topic check error for %s: %s",
+                session.window_name,
+                exc,
+            )
+
+
 async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
     """Project authoritative ``cc_*`` tmux sessions into Telegram."""
     # Получаем authoritative tmux-сессии.
@@ -286,7 +291,9 @@ async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
     # Подготавливаем валидные привязки и конфликты.
     bs, dups = _prepare_bindings(ss)
     # Синхронизируем runtime и Telegram.
-    await _sync_bindings(client, bs, verify)
+    checked = await _sync_bindings(client, bs, verify)
+    # Проверяем живость thread_id, которые уже были синхронизированы ранее.
+    await _clear_dead_topics(client, ss, checked)
     # Очищаем осиротевшие привязки.
     await _clear_orphans(client, ss, dups)
 

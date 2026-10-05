@@ -1,6 +1,5 @@
 """Tests for tmux-authoritative reconciliation."""
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from telegram.error import BadRequest
@@ -110,11 +109,10 @@ async def test_reconcile_session_rename_keeps_topic_and_updates_route() -> None:
     client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
 
 
-async def test_reconcile_recreates_missing_telegram_topic() -> None:
+async def test_reconcile_removes_session_when_telegram_topic_is_missing() -> None:
     session = _session()
     client = AsyncMock()
     client.reopen_forum_topic.side_effect = BadRequest("Message thread not found")
-    client.create_forum_topic.return_value = SimpleNamespace(message_thread_id=99)
     router = _router()
 
     with (
@@ -125,18 +123,40 @@ async def test_reconcile_recreates_missing_telegram_topic() -> None:
         patch("ccgram.handlers.cleanup.clear_topic_state", new_callable=AsyncMock),
     ):
         tmux.list_sessions = AsyncMock(return_value=[session])
-        tmux.topic_name_from_session_name.return_value = "foo"
         tmux.capture_pane = AsyncMock(return_value=None)
-        tmux.set_session_topic = AsyncMock(return_value=True)
+        tmux.kill_session = AsyncMock(return_value=True)
         config.tmux_session_prefix = "cc_"
         config.allowed_users = {1}
         await periodic_tasks.reconcile(client)
 
-    client.create_forum_topic.assert_awaited_once_with(-100, name="foo")
-    tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 99)
-    assert session.topic_ref == (-100, 99)
+    tmux.kill_session.assert_awaited_once_with("cc_foo")
+    client.create_forum_topic.assert_not_called()
+    assert session.topic_ref is None
     assert router.get_window_for_thread(1, 42) is None
-    assert router.get_window_for_thread(1, 99) == "cc_foo:@1"
+
+
+async def test_reconcile_checks_existing_binding_for_dead_topic() -> None:
+    session = _session()
+    client = AsyncMock()
+    client.reopen_forum_topic.side_effect = BadRequest("Message thread not found")
+    router = _router()
+    router.bind_thread(1, 42, "cc_foo:@1", "foo")
+    router.set_group_chat_id(1, 42, -100)
+
+    with (
+        patch.object(periodic_tasks, "tmux_manager") as tmux,
+        patch.object(periodic_tasks, "thread_router", router),
+        patch.object(periodic_tasks, "config") as config,
+        patch("ccgram.handlers.cleanup.clear_topic_state", new_callable=AsyncMock),
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.kill_session = AsyncMock(return_value=True)
+        config.tmux_session_prefix = "cc_"
+        await periodic_tasks.reconcile(client)
+
+    client.reopen_forum_topic.assert_awaited_once_with(-100, 42)
+    tmux.kill_session.assert_awaited_once_with("cc_foo")
+    assert router.get_window_for_thread(1, 42) is None
 
 
 async def test_send_with_reconcile_retries_only_after_route_changes() -> None:
