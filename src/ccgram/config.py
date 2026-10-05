@@ -219,7 +219,14 @@ class Config:
             "CCGRAM_TOPIC_STATUS_DIFF_ENABLED", True
         )
         self.topic_status_diff_interval: int = max(
-            1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 10)
+            1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
+        )
+        self.display_buffer_target: int = max(
+            1, _parse_int_env("CCGRAM_DISPLAY_BUFFER_TARGET", 3200)
+        )
+        self.display_buffer_max: int = max(
+            self.display_buffer_target,
+            _parse_int_env("CCGRAM_DISPLAY_BUFFER_MAX", 3800),
         )
 
     def _init_miniapp(self) -> None:

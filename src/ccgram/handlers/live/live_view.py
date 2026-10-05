@@ -24,6 +24,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.error import RetryAfter, TelegramError
 
 from ...config import config
+from ...display_buffer import get_display_buffer, normalize_screen_text
 from ...screenshot import text_to_image
 from ...telegram_client import TelegramClient
 from ...tmux_manager import tmux_manager
@@ -149,11 +150,29 @@ async def _tick_one_view(
         if not text:
             return
 
-        h = content_hash(text)
+        display_buffer = get_display_buffer(
+            view.chat_id,
+            view.thread_id,
+            view.window_id,
+            target="main",
+            target_chars=config.display_buffer_target,
+            max_chars=config.display_buffer_max,
+        )
+        if not display_buffer.previous_screen:
+            display_buffer.previous_screen = normalize_screen_text(text)
+            display_buffer.extend(display_buffer.previous_screen)
+        else:
+            display_buffer.update(text)
+
+        display_text = display_buffer.text()
+        if not display_text:
+            return
+
+        h = content_hash(display_text)
         if h == view.last_hash:
             return
 
-        png_bytes = await text_to_image(text, with_ansi=True, live_mode=True)
+        png_bytes = await text_to_image(display_text, with_ansi=False, live_mode=True)
         ts = time.strftime("%H:%M:%S")
 
         await rate_limit_send(view.chat_id)

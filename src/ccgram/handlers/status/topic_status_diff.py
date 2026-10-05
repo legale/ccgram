@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 import asyncio
 from dataclasses import dataclass, field
@@ -12,6 +11,12 @@ import structlog
 from telegram.error import RetryAfter, TelegramError
 
 from ...config import config
+from ...display_buffer import (
+    clear_display_buffers,
+    get_display_buffer,
+    normalize_screen_text,
+    reset_display_buffers,
+)
 from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
 from ...topic_tail import is_last
@@ -21,12 +26,6 @@ from ..messaging_pipeline.message_sender import (
 )
 
 _BODY_LIMIT = TELEGRAM_MAX_MESSAGE_LENGTH - 256
-_RE_ANSI = re.compile(
-    r"\x1b\[[0-?]*[ -/]*[@-~]|"
-    r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
-    r"\x1b[@-_]",
-)
-_RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 logger = structlog.get_logger()
 
 
@@ -46,10 +45,7 @@ _diff_states: dict[tuple[int, int, str], _DiffState] = {}
 
 
 def _normalize_screen_text(pane_text: str) -> list[str]:
-    text = _RE_ANSI.sub("", pane_text)
-    text = _RE_CONTROL.sub("", text)
-    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\t", "    ")
-    return text.splitlines()
+    return normalize_screen_text(pane_text)
 
 
 def _cap_lines(lines: list[str], limit: int) -> list[str]:
@@ -108,6 +104,15 @@ def start_sidecar_diff(
     state.message_id = 0
     state.title = title
     state.prev_lines = _normalize_screen_text(baseline_text) if baseline_text else []
+    if baseline_text:
+        get_display_buffer(
+            chat_id,
+            thread_id,
+            window_id,
+            "sidecar",
+            target_chars=config.display_buffer_target,
+            max_chars=config.display_buffer_max,
+        ).prime(baseline_text)
     state.last_edit_ts = 0.0
     state.last_msg_ts = time.time_ns()
     state.diff_ts = 0
@@ -226,23 +231,31 @@ async def update_topic_status_diff(
         return
 
     state = _get_state(chat_id, thread_id, window_id, target=target)
-    current = _normalize_screen_text(pane_text)
+    display_buffer = get_display_buffer(
+        chat_id,
+        thread_id,
+        window_id,
+        target,
+        target_chars=config.display_buffer_target,
+        max_chars=config.display_buffer_max,
+    )
+    changed = display_buffer.update(pane_text)
+    state.prev_lines = display_buffer.previous_screen
     now = time.monotonic()
 
-    if not state.prev_lines:
-        state.prev_lines = current
+    if not display_buffer.previous_screen:
         state.last_edit_ts = now
         return
 
-    if current == state.prev_lines:
+    if not changed:
         return
 
     if now - state.last_edit_ts < config.topic_status_diff_interval:
         return
 
-    text = _format_delta(window_id, state.prev_lines, current, title=state.title)
+    header = state.title or f"Screen delta {window_id} {time.strftime('%H:%M:%S')}"
+    text = f"{header}\n```\n{display_buffer.text()}\n```"
     if await _edit_or_send(client, chat_id, thread_id, state, text):
-        state.prev_lines = current
         state.last_edit_ts = time.monotonic()
 
 
@@ -250,10 +263,12 @@ def clear_topic_status_diff_state(_user_id: int, thread_id: int) -> None:
     for key in list(_diff_states):
         if key[1] == thread_id:
             _diff_states.pop(key, None)
+    clear_display_buffers(thread_id)
 
 
 def reset_topic_status_diff_state() -> None:
     _diff_states.clear()
+    reset_display_buffers()
 
 
 def prime_topic_status_diff(
@@ -269,4 +284,12 @@ def prime_topic_status_diff(
         return
     state = _get_state(chat_id, thread_id, window_id, target=target)
     state.prev_lines = _normalize_screen_text(pane_text)
+    get_display_buffer(
+        chat_id,
+        thread_id,
+        window_id,
+        target,
+        target_chars=config.display_buffer_target,
+        max_chars=config.display_buffer_max,
+    ).prime(pane_text)
     state.last_edit_ts = time.monotonic()

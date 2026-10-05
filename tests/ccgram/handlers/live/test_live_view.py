@@ -12,6 +12,7 @@ from ccgram.handlers.callback_data import (
     CB_LIVE_STOP,
     CB_SCREENSHOT_REFRESH,
 )
+from ccgram.display_buffer import reset_display_buffers
 from ccgram.handlers.live.live_view import (
     LiveViewState,
     _active_views,
@@ -35,8 +36,10 @@ from ccgram.handlers.toolbar import build_toolbar_keyboard
 @pytest.fixture(autouse=True)
 def _clear_views():
     _active_views.clear()
+    reset_display_buffers()
     yield
     _active_views.clear()
+    reset_display_buffers()
 
 
 def _make_view(

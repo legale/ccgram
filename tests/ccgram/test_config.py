@@ -148,7 +148,7 @@ class TestTopicStatusConfig:
         assert Config().topic_status_diff_interval == expected
 
     def test_status_diff_interval_default(self):
-        assert Config().topic_status_diff_interval == 10
+        assert Config().topic_status_diff_interval == 3
 
     def test_status_diff_interval_invalid(self, monkeypatch):
         monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", "bad")
