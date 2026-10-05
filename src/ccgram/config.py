@@ -106,10 +106,7 @@ class Config:
         # Own tmux window ID (set by run_bot() after auto-detect, used to skip self in list_windows)
         self.own_window_id: str | None = None
 
-        # External session discovery: comma-separated glob patterns to filter session names.
-        # Empty string (default) means all sessions are scanned (excluding own session).
-        # Example: "omc-*,omx-*" limits discovery to sessions matching those patterns.
-        self.tmux_external_patterns: str = os.getenv("TMUX_EXTERNAL_PATTERNS", "")
+
 
         # All state files live under config_dir
         self.state_file = self.config_dir / "state.json"

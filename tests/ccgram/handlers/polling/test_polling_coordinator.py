@@ -79,9 +79,6 @@ def _patch_loop_deps(
                 mocks[name] = stack.enter_context(p)
 
             mocks["tmux_manager"].list_windows = AsyncMock(return_value=windows)
-            mocks["tmux_manager"].discover_external_sessions = AsyncMock(
-                return_value=external
-            )
             mocks["thread_router"].iter_thread_bindings.return_value = bindings
             mocks["config"].status_poll_interval = 1.0
 
@@ -148,19 +145,6 @@ class TestStatusPollLoopPassesWindowLookup:
         tick = ctx.mocks["tick_window"]
         assert tick.call_count == 1
         assert tick.call_args[0][4] is w_a
-
-
-class TestStatusPollLoopHandlesExternalSessions:
-    async def test_external_windows_in_lookup(self):
-        bot = AsyncMock(spec=Bot)
-        ext = _make_window("emdash-claude-main-abc:@0", "emdash")
-        bindings = [(1, 100, "emdash-claude-main-abc:@0")]
-
-        ctx = await _run_loop_once(bot, bindings=bindings, external=[ext])
-
-        tick = ctx.mocks["tick_window"]
-        assert tick.call_count == 1
-        assert tick.call_args[0][4] is ext
 
 
 class TestStatusPollLoopRespectsConfigInterval:
