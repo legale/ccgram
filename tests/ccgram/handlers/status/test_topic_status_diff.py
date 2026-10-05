@@ -17,10 +17,9 @@ def _reset_state(monkeypatch):
     topic_status_diff.reset_topic_status_diff_state()
 
 
-async def test_first_capture_sends_snapshot(monkeypatch) -> None:
+async def test_first_capture_only_sets_baseline(monkeypatch) -> None:
     client = AsyncMock()
-    sent = SimpleNamespace(message_id=10)
-    send = AsyncMock(return_value=sent)
+    send = AsyncMock()
     monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
     monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
 
@@ -33,15 +32,13 @@ async def test_first_capture_sends_snapshot(monkeypatch) -> None:
         active=True,
     )
 
-    send.assert_awaited_once()
-    assert send.await_args is not None
-    assert "hello" in send.await_args.args[2]
+    send.assert_not_awaited()
+    assert topic_status_diff._diff_states[(1, 2)].prev_lines == ["hello"]
 
 
-async def test_snapshot_strips_ansi(monkeypatch) -> None:
+async def test_first_capture_strips_ansi(monkeypatch) -> None:
     client = AsyncMock()
-    sent = SimpleNamespace(message_id=10)
-    send = AsyncMock(return_value=sent)
+    send = AsyncMock()
     monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
     monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
 
@@ -54,11 +51,8 @@ async def test_snapshot_strips_ansi(monkeypatch) -> None:
         active=True,
     )
 
-    assert send.await_args is not None
-    body = send.await_args.args[2]
-    assert "\x1b[" not in body
-    assert "hello" in body
-    assert "footer" in body
+    send.assert_not_awaited()
+    assert topic_status_diff._diff_states[(1, 2)].prev_lines == ["hello", "footer"]
 
 
 def test_delta_ignores_old_lines_shifted_by_terminal_scroll() -> None:
@@ -195,8 +189,8 @@ async def test_changed_after_interval_edits_when_last(monkeypatch) -> None:
         active=True,
     )
 
-    edit.assert_awaited_once()
-    send.assert_not_called()
+    edit.assert_not_called()
+    send.assert_awaited_once()
 
 
 async def test_new_message_timestamp_forces_new_diff_message(monkeypatch) -> None:
@@ -225,7 +219,7 @@ async def test_new_message_timestamp_forces_new_diff_message(monkeypatch) -> Non
         client, 1, 2, "@7", "b\n", active=True
     )
 
-    assert send.await_count == 2
+    assert send.await_count == 1
     edit.assert_not_called()
 
 
@@ -265,7 +259,7 @@ async def test_changed_after_interval_sends_new_when_not_last(monkeypatch) -> No
         active=True,
     )
 
-    assert send.await_count == 2
+    assert send.await_count == 1
     edit.assert_not_called()
 
 
@@ -305,8 +299,8 @@ async def test_edit_failure_sends_new(monkeypatch) -> None:
         active=True,
     )
 
-    assert send.await_count == 2
-    edit.assert_awaited_once()
+    assert send.await_count == 1
+    edit.assert_not_called()
 
 
 async def test_delta_shows_only_changed_lines(monkeypatch) -> None:
@@ -345,8 +339,8 @@ async def test_delta_shows_only_changed_lines(monkeypatch) -> None:
         active=True,
     )
 
-    assert edit.await_args is not None
-    body = edit.await_args.args[3]
+    assert send.await_args is not None
+    body = send.await_args.args[2]
     assert "line1" not in body
     assert "clock 12:01" in body
     assert "footer b" in body

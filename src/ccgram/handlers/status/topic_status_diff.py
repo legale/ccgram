@@ -22,7 +22,6 @@ from ..messaging_pipeline.message_sender import (
 )
 
 _BODY_LIMIT = TELEGRAM_MAX_MESSAGE_LENGTH - 256
-_SNAPSHOT_LINES = 30
 _RE_ANSI = re.compile(
     r"\x1b\[[0-?]*[ -/]*[@-~]|"
     r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
@@ -64,13 +63,6 @@ def _cap_lines(lines: list[str], limit: int) -> list[str]:
         out.append(line)
         used += cost
     return out
-
-
-def _format_snapshot(window_id: str, lines: list[str]) -> str:
-    if len(lines) > _SNAPSHOT_LINES:
-        lines = ["... snapshot truncated ...", *lines[-_SNAPSHOT_LINES:]]
-    body = "\n".join(_cap_lines(lines, _BODY_LIMIT))
-    return f"Screen snapshot {window_id} {time.strftime('%H:%M:%S')}\n```\n{body}\n```"
 
 
 def _format_delta(window_id: str, old: list[str], new: list[str]) -> str:
@@ -207,11 +199,8 @@ async def update_topic_status_diff(
     now = time.monotonic()
 
     if not state.prev_lines:
-        if await _send_new(
-            client, chat_id, thread_id, state, _format_snapshot(window_id, current)
-        ):
-            state.prev_lines = current
-            state.last_edit_ts = now
+        state.prev_lines = current
+        state.last_edit_ts = now
         return
 
     if current == state.prev_lines:
