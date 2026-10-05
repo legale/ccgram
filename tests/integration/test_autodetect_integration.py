@@ -14,7 +14,7 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not installed"),
 ]
 
-TEST_SESSION = "ccgram-autodetect-test"
+TEST_SESSION = "cc_autodetect_test"
 
 
 @pytest.fixture()
@@ -57,16 +57,16 @@ async def test_list_windows_skips_own_window(tmux, tmp_path, monkeypatch):
 
     windows_before = await tmux.list_windows()
     all_ids = [w.window_id for w in windows_before]
-    assert window_id in all_ids
-    assert own_id in all_ids
+    assert f"{TEST_SESSION}:{window_id}" in all_ids
+    assert f"{TEST_SESSION}:{own_id}" in all_ids
 
     from ccgram.config import config
 
-    monkeypatch.setattr(config, "own_window_id", own_id)
+    monkeypatch.setattr(config, "own_window_id", f"{TEST_SESSION}:{own_id}")
     windows_after = await tmux.list_windows()
     filtered_ids = [w.window_id for w in windows_after]
-    assert window_id in filtered_ids
-    assert own_id not in filtered_ids
+    assert f"{TEST_SESSION}:{window_id}" in filtered_ids
+    assert f"{TEST_SESSION}:{own_id}" not in filtered_ids
 
 
 async def test_check_duplicate_with_ccgram_process(tmux, tmp_path, monkeypatch):

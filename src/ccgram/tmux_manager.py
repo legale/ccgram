@@ -216,11 +216,7 @@ class TmuxManager:
             session_names = [
                 s.strip()
                 for s in result.stdout.splitlines()
-                if s.strip()
-                and (
-                    s.strip().startswith(config.tmux_session_prefix)
-                    or s.strip() == self.session_name
-                )
+                if s.strip() and s.strip().startswith(config.tmux_session_prefix)
             ]
             for session_name in session_names:
                 session = self.get_session(session_name)
@@ -228,11 +224,7 @@ class TmuxManager:
                     continue
                 for window in session.windows:
                     name = window.window_name or ""
-                    window_id = (
-                        f"{session_name}:{window.window_id or ''}"
-                        if session_name != self.session_name
-                        else (window.window_id or "")
-                    )
+                    window_id = f"{session_name}:{window.window_id or ''}"
                     if name == config.tmux_main_window_name:
                         continue
                     if config.own_window_id and window_id == config.own_window_id:
@@ -300,13 +292,12 @@ class TmuxManager:
             for line in result.stdout.splitlines():
                 parts = line.split("\t", 2)
                 session_name = parts[0].strip()
+                if not session_name or not session_name.startswith(config.tmux_session_prefix):
+                    continue
                 cwd = parts[1] if len(parts) > 1 else ""
                 topic_ref = self._parse_topic_ref(  # noqa: PLR2004
                     parts[2] if len(parts) > 2 else ""  # noqa: PLR2004
                 )
-                session_name = session_name.strip()
-                if not session_name:
-                    continue
                 session = self.get_session(session_name)
                 if not session or not session.windows:
                     continue

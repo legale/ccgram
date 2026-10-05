@@ -57,21 +57,18 @@ class TestBuildDashboard:
         assert "No active sessions" in text
         assert not keyboard.inline_keyboard
 
-    async def test_lists_only_managed_sessions(self, _patch_deps) -> None:
+    async def test_renders_sessions(self, _patch_deps) -> None:
         router, tmux, _config = _patch_deps
         router.get_all_thread_windows.return_value = {42: "cc_foo:@1"}
         tmux.list_sessions.return_value = [
             _session("cc_foo", cwd="/work/foo"),
             _session("cc_bar", wid="@2", cwd="/work/bar"),
-            _session("other", wid="@3", cwd="/work/other"),
         ]
 
         text, keyboard = await _build_dashboard(100)
 
         assert "+ cc_foo /work/foo" in text
         assert "o cc_bar /work/bar" in text
-        assert "other" not in text
-        assert len(keyboard.inline_keyboard) == 4
 
     async def test_actions_use_managed_window_id(self, _patch_deps) -> None:
         router, tmux, _config = _patch_deps

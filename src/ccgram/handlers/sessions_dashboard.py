@@ -60,11 +60,7 @@ _REFRESH_BTN = InlineKeyboardButton("Refresh", callback_data=CB_SESSIONS_REFRESH
 async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
     """Build dashboard text and keyboard for a user's sessions."""
     bindings = thread_router.get_all_thread_windows(user_id)
-    all_sessions = [
-        session
-        for session in await tmux_manager.list_sessions()
-        if session.window_name.startswith(config.tmux_session_prefix)
-    ]
+    all_sessions = await tmux_manager.list_sessions()
 
     if not all_sessions:
         return (

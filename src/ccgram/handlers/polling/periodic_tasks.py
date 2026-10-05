@@ -205,11 +205,7 @@ def _runtime_refs() -> set[tuple[int, int]]:
 
 
 async def _load_authoritative_sessions() -> list["TmuxWindow"]:
-    return [
-        s
-        for s in await tmux_manager.list_sessions()
-        if s.window_name.startswith(config.tmux_session_prefix)
-    ]
+    return await tmux_manager.list_sessions()
 
 
 def _prepare_bindings(

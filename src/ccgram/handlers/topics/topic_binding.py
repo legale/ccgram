@@ -29,11 +29,7 @@ def _valid_name(name: str) -> bool:
 
 
 async def _managed_sessions() -> list[TmuxWindow]:
-    return [
-        session
-        for session in await tmux_manager.list_sessions()
-        if session.window_name.startswith(config.tmux_session_prefix)
-    ]
+    return await tmux_manager.list_sessions()
 
 
 def bind_runtime(

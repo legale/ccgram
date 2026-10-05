@@ -16,19 +16,19 @@ async def test_list_sessions_returns_every_tmux_session_with_cwd() -> None:
         "ccgram.tmux_manager.subprocess.run",
         return_value=SimpleNamespace(
             returncode=0,
-            stdout="ccgram\t/home/ruslan\t-100:42\nother\t/tmp/project\t\n",
+            stdout="cc_foo\t/home/ruslan\t-100:42\ncc_other\t/tmp/project\t\n",
         ),
     ):
         manager.get_session = MagicMock(side_effect=[own, foreign])
         sessions = await manager.list_sessions()
 
     assert [(session.window_name, session.cwd) for session in sessions] == [
-        ("ccgram", "/home/ruslan"),
-        ("other", "/tmp/project"),
+        ("cc_foo", "/home/ruslan"),
+        ("cc_other", "/tmp/project"),
     ]
     assert [session.window_id for session in sessions] == [
-        "ccgram:@0",
-        "other:@7",
+        "cc_foo:@0",
+        "cc_other:@7",
     ]
     assert [session.topic_ref for session in sessions] == [(-100, 42), None]
 

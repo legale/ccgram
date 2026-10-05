@@ -12,7 +12,7 @@ pytestmark = [
     pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not installed"),
 ]
 
-TEST_SESSION = "ccgram-test-integration"
+TEST_SESSION = "cc_test_integration"
 
 
 @pytest.fixture()
@@ -35,9 +35,9 @@ async def test_create_and_list_windows(tmux, tmp_path) -> None:
 
     windows = await tmux.list_windows()
     ids = [w.window_id for w in windows]
-    assert window_id in ids
+    assert f"{TEST_SESSION}:{window_id}" in ids
 
-    match = next(w for w in windows if w.window_id == window_id)
+    match = next(w for w in windows if w.window_id == f"{TEST_SESSION}:{window_id}")
     assert match.window_name == "test-win"
 
 
@@ -100,7 +100,7 @@ async def test_kill_window(tmux, tmp_path) -> None:
 
     windows = await tmux.list_windows()
     ids = [w.window_id for w in windows]
-    assert window_id not in ids
+    assert f"{TEST_SESSION}:{window_id}" not in ids
 
 
 async def test_kill_session_removes_the_tmux_session(tmux, tmp_path) -> None:
@@ -130,7 +130,7 @@ async def test_reset_server_reconnects(tmux, tmp_path) -> None:
 
     windows = await tmux.list_windows()
     ids = [w.window_id for w in windows]
-    assert window_id in ids
+    assert f"{TEST_SESSION}:{window_id}" in ids
 
 
 async def test_capture_pane_raw_returns_tuple(tmux, tmp_path) -> None:
