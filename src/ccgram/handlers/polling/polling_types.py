@@ -118,7 +118,7 @@ class TickDecision:
 
     send_status: bool = False
     status_text: str | None = None
-    transition: Literal["idle", "done", "active", "starting"] | None = None
+    transition: Literal["idle", "done", "active"] | None = None
     show_recovery: bool = False
 
 

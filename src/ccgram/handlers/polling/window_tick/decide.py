@@ -29,20 +29,7 @@ def decide_tick(ctx: TickContext) -> TickDecision:
     if ctx.is_recently_active:
         return TickDecision(transition="active")
 
-    if ctx.is_shell_prompt:
-        return TickDecision(transition="idle")
-
-    if ctx.has_seen_status:
-        return TickDecision(transition="idle")
-
-    startup_expired = (
-        ctx.startup_time is not None
-        and (time.monotonic() - ctx.startup_time) >= STARTUP_TIMEOUT
-    )
-    if startup_expired:
-        return TickDecision(transition="idle")
-
-    return TickDecision(transition="starting")
+    return TickDecision(transition="idle")
 
 
 __all__ = ["build_status_line", "decide_tick", "is_shell_prompt"]

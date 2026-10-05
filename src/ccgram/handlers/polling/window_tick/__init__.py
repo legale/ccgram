@@ -27,7 +27,6 @@ from ..polling_types import TickContext, TickDecision, is_shell_prompt
 from .apply import (
     _apply_active_transition,
     _apply_done_transition,
-    _apply_starting_transition,
     _apply_tick_decision,
     _handle_dead_window_notification,
     _send_typing_throttled,
@@ -72,7 +71,6 @@ __all__ = [
     "TickDecision",
     "_apply_active_transition",
     "_apply_done_transition",
-    "_apply_starting_transition",
     "_apply_tick_decision",
     "_check_vim_insert",
     "_get_last_activity_ts",

@@ -71,15 +71,15 @@ class TestDecideTickIdleAndStarting:
         decision = decide_tick(ctx)
         assert decision.transition == "idle"
 
-    def test_no_signal_no_startup_yields_starting(self):
+    def test_no_signal_no_startup_yields_idle(self):
         ctx = _make_ctx(startup_time=None)
         decision = decide_tick(ctx)
-        assert decision.transition == "starting"
+        assert decision.transition == "idle"
 
-    def test_startup_within_grace_period_yields_starting(self):
+    def test_startup_within_grace_period_yields_idle(self):
         ctx = _make_ctx(startup_time=time.monotonic())
         decision = decide_tick(ctx)
-        assert decision.transition == "starting"
+        assert decision.transition == "idle"
 
     def test_startup_expired_yields_idle(self):
         old_start = time.monotonic() - STARTUP_TIMEOUT - 1.0

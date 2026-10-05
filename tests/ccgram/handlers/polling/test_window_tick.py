@@ -234,10 +234,10 @@ class TestDecideTickShellPrompt:
         decision = decide_tick(ctx)
         assert decision.transition == "idle"
 
-    def test_no_startup_time_yields_starting(self):
+    def test_no_startup_time_yields_idle(self):
         ctx = _make_ctx(startup_time=None)
         decision = decide_tick(ctx)
-        assert decision.transition == "starting"
+        assert decision.transition == "idle"
 
 
 class TestDeadWindowNotification:

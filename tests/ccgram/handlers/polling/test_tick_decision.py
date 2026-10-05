@@ -73,16 +73,16 @@ def test_has_seen_status_transitions_idle():
     assert decision.send_status is False
 
 
-def test_no_startup_time_transitions_starting():
+def test_no_startup_time_transitions_idle():
     ctx = _ctx(startup_time=None)
     decision = decide_tick(ctx)
-    assert decision.transition == "starting"
+    assert decision.transition == "idle"
 
 
-def test_recent_startup_time_transitions_starting():
+def test_recent_startup_time_transitions_idle():
     ctx = _ctx(startup_time=time.monotonic() - 5.0)
     decision = decide_tick(ctx)
-    assert decision.transition == "starting"
+    assert decision.transition == "idle"
 
 
 def test_expired_startup_time_transitions_idle():

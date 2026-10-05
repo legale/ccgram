@@ -150,24 +150,6 @@ async def _apply_done_transition(
     terminal_poll_state.mark_seen_status(window_id)
 
 
-async def _apply_starting_transition(
-    bot: "Bot",
-    user_id: int,
-    window_id: str,
-    thread_id: int | None,
-) -> None:
-    client = PTBTelegramClient(bot)
-    ws = terminal_poll_state.peek_state(window_id)
-    if ws is None or ws.startup_time is None:
-        terminal_poll_state.begin_startup_timer(window_id, time.monotonic())
-    await _send_typing_throttled(bot, user_id, thread_id)
-    if thread_id is not None:
-        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-        display = thread_router.get_display_name(window_id)
-        await update_topic_emoji(client, chat_id, thread_id, "active", display)
-        lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
-
-
 async def _apply_tick_decision(
     bot: "Bot",
     user_id: int,
@@ -195,8 +177,6 @@ async def _apply_tick_decision(
         )
     elif decision.transition == "done":
         await _apply_done_transition(bot, user_id, window_id, thread_id)
-    elif decision.transition == "starting":
-        await _apply_starting_transition(bot, user_id, window_id, thread_id)
 
 
 # ── Status-update orchestration ─────────────────────────────────────────
@@ -260,7 +240,6 @@ async def _update_status(
 __all__ = [
     "_apply_active_transition",
     "_apply_done_transition",
-    "_apply_starting_transition",
     "_apply_tick_decision",
     "_handle_dead_window_notification",
     "_send_typing_throttled",
