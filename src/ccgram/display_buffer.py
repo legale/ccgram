@@ -7,7 +7,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
-DEFAULT_TARGET = 3200
 DEFAULT_MAX = 3800
 
 _RE_ANSI = re.compile(
@@ -36,7 +35,6 @@ def screen_diff(old: list[str], new: list[str]) -> list[str]:
 
 @dataclass
 class DisplayBuffer:
-    target_chars: int = DEFAULT_TARGET
     max_chars: int = DEFAULT_MAX
     previous_screen: list[str] = field(default_factory=list)
     lines: deque[str] = field(default_factory=deque)
@@ -60,7 +58,7 @@ class DisplayBuffer:
         self.lines.extend(lines)
         if self.size <= self.max_chars:
             return
-        while self.lines and self.size > self.target_chars:
+        while self.lines and self.size > self.max_chars:
             self.lines.popleft()
 
     @property
@@ -84,13 +82,12 @@ def get_display_buffer(
     window_id: str,
     target: str = "main",
     *,
-    target_chars: int = DEFAULT_TARGET,
     max_chars: int = DEFAULT_MAX,
 ) -> DisplayBuffer:
     key = (chat_id, thread_id, window_id, target)
     buffer = _buffers.get(key)
     if buffer is None:
-        buffer = DisplayBuffer(target_chars=target_chars, max_chars=max_chars)
+        buffer = DisplayBuffer(max_chars=max_chars)
         _buffers[key] = buffer
     return buffer
 

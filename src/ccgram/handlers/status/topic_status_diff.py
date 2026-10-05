@@ -110,7 +110,6 @@ def start_sidecar_diff(
             thread_id,
             window_id,
             "sidecar",
-            target_chars=config.display_buffer_target,
             max_chars=config.display_buffer_max,
         ).prime(baseline_text)
     state.last_edit_ts = 0.0
@@ -236,7 +235,6 @@ async def update_topic_status_diff(
         thread_id,
         window_id,
         target,
-        target_chars=config.display_buffer_target,
         max_chars=config.display_buffer_max,
     )
     changed = display_buffer.update(pane_text)
@@ -289,7 +287,6 @@ def prime_topic_status_diff(
         thread_id,
         window_id,
         target,
-        target_chars=config.display_buffer_target,
         max_chars=config.display_buffer_max,
     ).prime(pane_text)
     state.last_edit_ts = time.monotonic()

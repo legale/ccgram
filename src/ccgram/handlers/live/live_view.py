@@ -155,7 +155,6 @@ async def _tick_one_view(
             view.thread_id,
             view.window_id,
             target="main",
-            target_chars=config.display_buffer_target,
             max_chars=config.display_buffer_max,
         )
         if not display_buffer.previous_screen:
