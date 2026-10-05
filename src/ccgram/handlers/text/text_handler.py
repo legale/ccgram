@@ -6,6 +6,7 @@ explicit ``//bind <name>``; the special ``cc_all`` topic creates new pairs.
 
 from __future__ import annotations
 
+from collections import deque
 from typing import TYPE_CHECKING
 
 import structlog
@@ -23,6 +24,7 @@ from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..sessions_dashboard import apply_session_rename
 
 logger = structlog.get_logger()
+_ALL_TOPIC_MESSAGES: deque[tuple[int, int]] = deque(maxlen=1024)
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat
@@ -69,6 +71,7 @@ async def _handle_all_topic(
     chat = message.chat
     if chat is None:
         return True
+    _ALL_TOPIC_MESSAGES.append((chat.id, message.message_id))
 
     # Lazy: topic creation is needed only for messages in the all topic.
     from ..topics.topic_binding import create_from_all
@@ -174,6 +177,16 @@ async def handle_text_message(
     message = update.message
     assert user is not None
     assert message is not None and message.text
+
+    chat_id = message.chat.id if message.chat else None
+    if chat_id is not None and (chat_id, message.message_id) in _ALL_TOPIC_MESSAGES:
+        logger.info(
+            "skip_reprocessed_all_topic_message",
+            chat_id=chat_id,
+            message_id=message.message_id,
+            text=message.text,
+        )
+        return
 
     thread_id = _get_thread_id(update)
     client = PTBTelegramClient(context.bot)
