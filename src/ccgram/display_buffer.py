@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 
-DEFAULT_MAX = 3200
+DEFAULT_MAX = 2000
 
 _RE_ANSI = re.compile(
     r"\x1b\[[0-?]*[ -/]*[@-~]|"
