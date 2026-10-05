@@ -513,6 +513,55 @@ class TmuxManager:
             )
             return None
 
+    async def capture_pane_display(self, window_id: str) -> str | None:
+        """Capture managed terminal history and the current screen."""
+        session_name, pane_id = self._split_qualified(window_id)
+        if session_name.startswith(config.tmux_session_prefix):
+            await self._ensure_managed_window_size(session_name, pane_id)
+        return await self._capture_display_target(f"{session_name}:{pane_id}")
+
+    async def capture_pane_display_by_id(
+        self, pane_id: str, *, window_id: str
+    ) -> str | None:
+        """Capture history and screen for a specific pane."""
+        session_name, window = self._split_qualified(window_id)
+        if session_name.startswith(config.tmux_session_prefix):
+            await self._ensure_managed_window_size(session_name, window)
+        return await self._capture_display_target(f"{session_name}:{pane_id}")
+
+    async def _ensure_managed_window_size(self, session_name: str, window_id: str) -> None:
+        target = f"{session_name}:{window_id}"
+        for command in (
+            ("set-window-option", "-t", target, "window-size", "manual"),
+            ("resize-window", "-t", target, "-x", "120", "-y", "100"),
+        ):
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", *command,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+
+    async def _capture_display_target(self, target: str) -> str | None:
+        proc: asyncio.subprocess.Process | None = None
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "capture-pane", "-e", "-p", "-J", "-S", "-", "-t", target,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            async with asyncio.timeout(5.0):
+                stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                return None
+            text = stdout.decode("utf-8", errors="replace").rstrip()
+            return text if text else None
+        except TimeoutError:
+            await _kill_timed_out_proc(proc)
+            return None
+        except OSError:
+            return None
+
     async def capture_pane_raw(self, window_id: str) -> tuple[str, int, int] | None:
         """Capture pane text with ANSI escapes and pane dimensions.
 

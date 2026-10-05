@@ -221,9 +221,6 @@ class Config:
         self.topic_status_diff_interval: int = max(
             1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
         )
-        self.display_buffer_max: int = max(
-            1, _parse_int_env("CCGRAM_DISPLAY_BUFFER_MAX", 2000)
-        )
 
     def _init_miniapp(self) -> None:
         # Mini App backend (Phase 3 / Theme 6) — disabled when base URL is empty.

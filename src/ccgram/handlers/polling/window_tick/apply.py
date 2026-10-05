@@ -228,14 +228,16 @@ async def _update_status(
 
     if thread_id is not None and config.topic_status_diff_enabled:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-        await update_topic_status_diff(
-            client, chat_id, thread_id, window_id, pane_text
-        )
+        display_text = await tmux_manager.capture_pane_display(w.window_id)
+        if display_text:
+            await update_topic_status_diff(
+                client, chat_id, thread_id, window_id, display_text
+            )
 
         sidecar_pane_id = tmux_manager.get_sidecar_pane_id(window_id)
         if isinstance(sidecar_pane_id, str) and sidecar_pane_id:
-            sidecar_text = await tmux_manager.capture_pane_by_id(
-                sidecar_pane_id, with_ansi=True, window_id=window_id
+            sidecar_text = await tmux_manager.capture_pane_display_by_id(
+                sidecar_pane_id, window_id=window_id
             )
             if sidecar_text is not None:
                 await update_topic_status_diff(

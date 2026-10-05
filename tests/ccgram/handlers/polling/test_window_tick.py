@@ -148,6 +148,7 @@ class TestUpdateStatusTopicDiff:
         ):
             mock_tm.find_window_by_id = AsyncMock(return_value=w)
             mock_tm.capture_pane = AsyncMock(return_value="pane text")
+            mock_tm.capture_pane_display = AsyncMock(return_value="pane text")
             mock_tr.resolve_chat_id.return_value = -100
 
             await _update_status(bot, 1, "@0", thread_id=100, _window=w)

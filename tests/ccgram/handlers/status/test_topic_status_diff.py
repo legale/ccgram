@@ -17,9 +17,9 @@ def _reset_state(monkeypatch):
     topic_status_diff.reset_topic_status_diff_state()
 
 
-async def test_first_capture_only_sets_baseline(monkeypatch) -> None:
+async def test_first_capture_renders_current_screen(monkeypatch) -> None:
     client = AsyncMock()
-    send = AsyncMock()
+    send = AsyncMock(return_value=SimpleNamespace(message_id=10))
     monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
     monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
 
@@ -32,13 +32,13 @@ async def test_first_capture_only_sets_baseline(monkeypatch) -> None:
         active=True,
     )
 
-    send.assert_not_awaited()
-    assert topic_status_diff._diff_states[(1, 2)].prev_lines == ["hello"]
+    send.assert_awaited_once()
+    assert "hello" in topic_status_diff._diff_states[(1, 2)].last_display_text
 
 
 async def test_first_capture_strips_ansi(monkeypatch) -> None:
     client = AsyncMock()
-    send = AsyncMock()
+    send = AsyncMock(return_value=SimpleNamespace(message_id=10))
     monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
     monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
 
@@ -51,34 +51,17 @@ async def test_first_capture_strips_ansi(monkeypatch) -> None:
         active=True,
     )
 
-    send.assert_not_awaited()
-    assert topic_status_diff._diff_states[(1, 2)].prev_lines == ["hello", "footer"]
+    send.assert_awaited_once()
+    assert "hello\nfooter" in topic_status_diff._diff_states[(1, 2)].last_display_text
 
 
-def test_delta_ignores_old_lines_shifted_by_terminal_scroll() -> None:
-    old = [
-        "wico-perftest",
-        "wifi_con_disc.c",
-        "ruslan@host:~$ echo 123",
-        "123",
-        "ruslan@host:~$",
-    ]
-    new = [
-        "wifi_con_disc.c",
-        "ruslan@host:~$ echo 123",
-        "123",
-        "ruslan@host:~$ echo wonderful",
-        "wonderful",
-        "ruslan@host:~$",
-    ]
+def test_screen_render_keeps_tail_on_complete_lines() -> None:
+    text = "old\n" + ("new line\n" * 500)
 
-    delta = topic_status_diff._format_delta("cc_ls:@1756", old, new)
+    rendered = topic_status_diff._format_screen("cc_ls:@1756", text)
 
-    assert "echo wonderful" in delta
-    assert "wonderful" in delta
-    assert "wico-perftest" not in delta
-    assert "wifi_con_disc.c" not in delta
-    assert delta.count("echo 123") == 0
+    assert rendered.endswith("new line\n```")
+    assert not rendered.startswith("Screen delta cc_ls:@1756\n```\nold")
 
 
 async def test_unchanged_capture_does_nothing(monkeypatch) -> None:
@@ -303,7 +286,7 @@ async def test_edit_failure_sends_new(monkeypatch) -> None:
     edit.assert_not_called()
 
 
-async def test_delta_shows_only_changed_lines(monkeypatch) -> None:
+async def test_render_uses_current_canonical_screen(monkeypatch) -> None:
     client = AsyncMock()
     sent1 = SimpleNamespace(message_id=10)
     sent2 = SimpleNamespace(message_id=11)
@@ -341,12 +324,11 @@ async def test_delta_shows_only_changed_lines(monkeypatch) -> None:
 
     assert send.await_args is not None
     body = send.await_args.args[2]
-    assert "line1" not in body
+    assert "line1" in body
     assert "clock 12:01" in body
     assert "footer b" in body
     assert "clock 12:00" not in body
     assert "footer a" not in body
-    assert "line1" not in body
 
 
 async def test_sidecar_diff_uses_custom_title_and_sends_new_message(
@@ -370,7 +352,6 @@ async def test_sidecar_diff_uses_custom_title_and_sends_new_message(
         thread_id=2,
         window_id="@7",
         title="⚡ Sidecar: ls -alh (12:00:00)",
-        baseline_text="initial prompt $\n",
     )
 
     monotonic.v = 11.0
@@ -416,7 +397,6 @@ async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None
         thread_id=2,
         window_id="@7",
         title="⚡ Sidecar: pwd (12:00:00)",
-        baseline_text="shell prompt $\n",
     )
 
     monotonic.v = 11.0
@@ -468,7 +448,6 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
         thread_id=2,
         window_id="@7",
         title="⚡ Sidecar: cmd1 (12:00:00)",
-        baseline_text="prompt $\n",
     )
     monotonic.v = 11.0
     await topic_status_diff.update_topic_status_diff(
@@ -482,7 +461,6 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
         thread_id=2,
         window_id="@7",
         title="⚡ Sidecar: cmd2 (12:00:10)",
-        baseline_text="prompt $\noutput1\nprompt $\n",
     )
     monotonic.v = 31.0
     await topic_status_diff.update_topic_status_diff(
@@ -504,4 +482,3 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
 
     assert "⚡ Sidecar: cmd2" in msg2_text
     assert "output2" in msg2_text
-

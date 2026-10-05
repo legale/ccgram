@@ -12,7 +12,6 @@ from ccgram.handlers.callback_data import (
     CB_LIVE_STOP,
     CB_SCREENSHOT_REFRESH,
 )
-from ccgram.display_buffer import reset_display_buffers
 from ccgram.handlers.live.live_view import (
     LiveViewState,
     _active_views,
@@ -36,10 +35,8 @@ from ccgram.handlers.toolbar import build_toolbar_keyboard
 @pytest.fixture(autouse=True)
 def _clear_views():
     _active_views.clear()
-    reset_display_buffers()
     yield
     _active_views.clear()
-    reset_display_buffers()
 
 
 def _make_view(
@@ -274,7 +271,7 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value="same text")
+            mock_tmux.capture_pane_display = AsyncMock(return_value="same text")
             await tick_live_views(bot)
         bot.edit_message_media.assert_not_awaited()
 
@@ -293,7 +290,7 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value="new text")
+            mock_tmux.capture_pane_display = AsyncMock(return_value="new text")
             await tick_live_views(bot)
         bot.edit_message_media.assert_awaited_once()
         assert view.last_hash == content_hash("new text")
@@ -331,7 +328,7 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value="new text")
+            mock_tmux.capture_pane_display = AsyncMock(return_value="new text")
             await tick_live_views(bot)
         assert not is_live(1, 42)
 
@@ -349,12 +346,12 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value=None)
+            mock_tmux.capture_pane_display = AsyncMock(return_value=None)
             await tick_live_views(bot)
         mock_img.assert_not_awaited()
         assert is_live(1, 42)
 
-    async def test_pane_id_uses_capture_pane_by_id(self):
+    async def test_pane_id_uses_capture_pane_display_by_id(self):
         view = _make_view(pane_id="%3", last_hash="old")
         start_live_view(view)
         bot = AsyncMock(spec=Bot)
@@ -369,10 +366,10 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane_by_id = AsyncMock(return_value="pane text")
+            mock_tmux.capture_pane_display_by_id = AsyncMock(return_value="pane text")
             await tick_live_views(bot)
-        mock_tmux.capture_pane_by_id.assert_awaited_once_with(
-            "%3", with_ansi=True, window_id="@0"
+        mock_tmux.capture_pane_display_by_id.assert_awaited_once_with(
+            "%3", window_id="@0"
         )
         bot.edit_message_media.assert_awaited_once()
 
@@ -393,7 +390,7 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value="changed")
+            mock_tmux.capture_pane_display = AsyncMock(return_value="changed")
             await tick_live_views(bot)
         assert bot.edit_message_media.await_count == 2
 
@@ -428,7 +425,7 @@ class TestTickLiveViews:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value="new text")
+            mock_tmux.capture_pane_display = AsyncMock(return_value="new text")
             await tick_live_views(bot)
         assert is_live(1, 42)
         assert view.next_edit_after > time.monotonic()
@@ -836,7 +833,7 @@ class TestRetryAfterTimedelta:
             mock_tmux.find_window_by_id = AsyncMock(
                 return_value=MagicMock(window_id="@0")
             )
-            mock_tmux.capture_pane = AsyncMock(return_value="new text")
+            mock_tmux.capture_pane_display = AsyncMock(return_value="new text")
             await tick_live_views(bot)
         assert is_live(1, 42)
         assert view.next_edit_after > time.monotonic()

@@ -228,10 +228,6 @@ async def _handle_sidecar_command(
         await safe_reply(message, "❌ Failed to create or access sidecar pane.")
         return
 
-    baseline = await tmux_manager.capture_pane_by_id(
-        sidecar_pane_id, with_ansi=True, window_id=window_id
-    )
-
     time_str = time.strftime("%H:%M:%S")
     title = f"⚡ Sidecar: {command} ({time_str})"
     assert message.chat is not None
@@ -241,7 +237,6 @@ async def _handle_sidecar_command(
         thread_id=thread_id,
         window_id=window_id,
         title=title,
-        baseline_text=baseline,
     )
 
     sent = await tmux_manager.send_keys_to_pane(
@@ -270,4 +265,3 @@ async def _handle_sidecar_command(
             )
 
     asyncio.create_task(_quick_sidecar_tick())
-
