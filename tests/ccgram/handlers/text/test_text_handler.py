@@ -61,7 +61,7 @@ async def test_forward_uses_reconcile_retry_path() -> None:
         await module._forward_message("cc_foo:@1", 1, 42, "hello", client, message)
 
     send.assert_awaited_once_with(
-        client, 1, 42, "cc_foo:@1", "hello", raw=False, send_fn=module.send_to_window
+        client, 1, 42, "cc_foo:@1", "hello", raw=True, send_fn=module.send_to_window
     )
     ack.assert_awaited_once()
 
