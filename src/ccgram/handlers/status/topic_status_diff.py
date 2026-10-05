@@ -25,7 +25,7 @@ _RE_ANSI = re.compile(
     r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
     r"\x1b[@-_]",
 )
-_RE_UNDERSCORES = re.compile(r"_{31,}")
+_RE_LONG_REPEATS = re.compile(r"([_─])\1{30,}")
 _RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 logger = structlog.get_logger()
 
@@ -48,7 +48,7 @@ _diff_states: dict[tuple[int, int, str], _DiffState] = {}
 def _normalize_screen_text(pane_text: str) -> list[str]:
     text = _RE_ANSI.sub("", pane_text)
     text = _RE_CONTROL.sub("", text)
-    text = _RE_UNDERSCORES.sub("_" * 30, text)
+    text = _RE_LONG_REPEATS.sub(lambda m: m.group(1) * 30, text)
     text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\t", "    ")
     return text.splitlines()
 

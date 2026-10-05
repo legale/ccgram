@@ -73,10 +73,13 @@ def test_screen_render_limits_body_to_1000_chars() -> None:
 
 def test_screen_render_collapses_long_underscores() -> None:
     long_underscores = "_" * 80
-    text = f"prefix\n{long_underscores}\nsuffix"
+    long_box_lines = "─" * 80
+    text = f"prefix\n{long_underscores}\n{long_box_lines}\nsuffix"
     rendered = topic_status_diff._format_screen("@1", text)
     assert "_" * 31 not in rendered
     assert "_" * 30 in rendered
+    assert "─" * 31 not in rendered
+    assert "─" * 30 in rendered
 
 
 async def test_unchanged_capture_does_nothing(monkeypatch) -> None:
