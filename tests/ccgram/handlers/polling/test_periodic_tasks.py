@@ -151,11 +151,10 @@ async def test_reconcile_checks_existing_binding_for_dead_topic() -> None:
     ):
         tmux.list_sessions = AsyncMock(return_value=[session])
         tmux.kill_session = AsyncMock(return_value=True)
-        tmux.topic_name_from_session_name.return_value = "cc_foo"
         config.tmux_session_prefix = "cc_"
         await periodic_tasks.reconcile(client)
 
-    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="cc_foo")
+    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="foo")
     tmux.kill_session.assert_awaited_once_with("cc_foo")
     assert router.get_window_for_thread(1, 42) is None
 

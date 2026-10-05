@@ -43,6 +43,12 @@ def _runtime_user(chat_id: int, thread_id: int) -> int | None:
     return min(config.allowed_users) if config.allowed_users else None
 
 
+def _topic_name(session: "TmuxWindow") -> str:
+    name = session.window_name
+    prefix = config.tmux_session_prefix
+    return name[len(prefix) :] if name.startswith(prefix) else name
+
+
 async def _clear_runtime_topic(
     client: TelegramClient,
     chat_id: int,
@@ -79,7 +85,7 @@ async def _bind_runtime(
     )
     users.add(user_id)
 
-    topic_name = tmux_manager.topic_name_from_session_name(session.window_name)
+    topic_name = _topic_name(session)
     for uid in users:
         if thread_router.get_window_for_thread(uid, thread_id) != session.window_id:
             thread_router.bind_thread(uid, thread_id, session.window_id, topic_name)
@@ -165,7 +171,7 @@ async def _sync_topic(
         )
         return
 
-    name = tmux_manager.topic_name_from_session_name(session.window_name)
+    name = _topic_name(session)
     try:
         await client.edit_forum_topic(chat_id, thread_id, name=name)
     except BadRequest as e:
@@ -272,9 +278,7 @@ async def _clear_dead_topics(
         if session.topic_ref is None or session.topic_ref in checked:
             continue
         chat_id, thread_id = session.topic_ref
-        name = get_stored_topic_name(chat_id, thread_id)
-        if not name:
-            name = tmux_manager.topic_name_from_session_name(session.window_name)
+        name = get_stored_topic_name(chat_id, thread_id) or _topic_name(session)
         try:
             await client.edit_forum_topic(chat_id, thread_id, name=name)
         except BadRequest as exc:
