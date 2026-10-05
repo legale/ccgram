@@ -14,7 +14,6 @@ from telegram.error import RetryAfter, TelegramError
 from ...config import config
 from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
-from ...topic_state_registry import topic_state
 from ...topic_tail import is_last
 from ..messaging_pipeline.message_sender import (
     edit_with_fallback,
@@ -247,7 +246,6 @@ async def update_topic_status_diff(
         state.last_edit_ts = time.monotonic()
 
 
-@topic_state.register("topic")
 def clear_topic_status_diff_state(_user_id: int, thread_id: int) -> None:
     for key in list(_diff_states):
         if key[1] == thread_id:

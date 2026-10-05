@@ -8,7 +8,6 @@ titles can still be normalized when state is loaded.
 import structlog
 
 from ...telegram_client import TelegramClient
-from ...topic_state_registry import topic_state
 
 logger = structlog.get_logger()
 
@@ -122,7 +121,6 @@ def get_stored_topic_name(chat_id: int, thread_id: int) -> str | None:
     return _topic_names.get((chat_id, thread_id))
 
 
-@topic_state.register("chat")
 def clear_topic_emoji_state(chat_id: int, thread_id: int) -> None:
     """Clear topic name tracking for a topic (called on topic cleanup)."""
     _topic_names.pop((chat_id, thread_id), None)

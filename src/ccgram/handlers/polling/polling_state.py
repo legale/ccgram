@@ -25,21 +25,16 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from .polling_types import StatusUpdate
-from ...topic_state_registry import topic_state
 from .polling_types import (
+    ACTIVITY_THRESHOLD as _ACTIVITY_THRESHOLD,
     MAX_PROBE_FAILURES,
     PANE_COUNT_TTL,
     STARTUP_TIMEOUT,
     TYPING_INTERVAL,
-    BlockedAlertCallback,
-    PaneOutputCallback,
-    PaneStateName,
-    PaneTransition,
+    StatusUpdate,
     TopicPollState,
     WindowPollState,
 )
-from .polling_types import ACTIVITY_THRESHOLD as _ACTIVITY_THRESHOLD
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -53,7 +48,6 @@ logger = structlog.get_logger()
 
 # ── TerminalScreenBuffer ───────────────────────────────────────────────
 
-
 class TerminalScreenBuffer:
     """Pyte screen buffer, RC debounce, pane count cache, content-hash cache.
 
@@ -64,7 +58,6 @@ class TerminalScreenBuffer:
 
     def __init__(self, poll_state: TerminalPollState) -> None:
         self._poll_state = poll_state
-        topic_state.register_bound("window", self.clear_screen_buffer)
 
     def clear_screen_buffer(self, window_id: str) -> None:
         """Remove a window's ScreenBuffer, caches, and pyte results."""
@@ -181,15 +174,11 @@ class TerminalScreenBuffer:
             ws.last_pyte_result = result
             return result
 
-
-
         ws.last_pane_hash = content_hash
         ws.last_pyte_result = None
         return None
 
-
 # ── TerminalPollState ──────────────────────────────────────────────────
-
 
 class TerminalPollState:
     """Per-window poll state: seen-status, startup grace, probe failures, unbound timers.
@@ -200,7 +189,6 @@ class TerminalPollState:
 
     def __init__(self) -> None:
         self._states: dict[str, WindowPollState] = {}
-        topic_state.register_bound("window", self.clear_state)
 
     def get_state(self, window_id: str) -> WindowPollState:
         """Get or create WindowPollState for a window."""
@@ -322,9 +310,7 @@ class TerminalPollState:
         ws.has_seen_status = True
         ws.startup_time = None
 
-
 # ── InteractiveUIStrategy ───────────────────────────────────────────────
-
 
 class InteractiveUIStrategy:
     """Pane alert hash state for multi-pane interactive prompt deduplication.
@@ -335,7 +321,6 @@ class InteractiveUIStrategy:
 
     def __init__(self) -> None:
         self._pane_alert_hashes: dict[str, tuple[str, float, str]] = {}
-        topic_state.register_bound("window", self.clear_pane_alerts)
 
     def has_pane_alert(self, pane_id: str) -> bool:
         """Check whether a pane currently has an active alert."""
@@ -375,9 +360,7 @@ class InteractiveUIStrategy:
         """Clear all pane alert state (for testing)."""
         self._pane_alert_hashes.clear()
 
-
 # ── TopicLifecycleStrategy ──────────────────────────────────────────────
-
 
 class TopicLifecycleStrategy:
     """Autoclose timers, dead notification tracking, probe failure state.
@@ -391,8 +374,6 @@ class TopicLifecycleStrategy:
         self._poll_state = poll_state
         self._states: dict[tuple[int, int], TopicPollState] = {}
         self._dead_notified: set[tuple[int, int, str]] = set()
-        topic_state.register_bound("topic", self.clear_state)
-        topic_state.register_bound("topic", self.clear_dead_notification)
 
     def get_state(self, user_id: int, thread_id: int) -> TopicPollState:
         """Get or create TopicPollState for a topic."""
@@ -490,404 +471,12 @@ class TopicLifecycleStrategy:
         return count
 
 
-# ── PaneStatusStrategy ───────────────────────────────────────────────────
-
-
-class PaneStatusStrategy:
-    """Multi-pane enumeration, classification, and transition tracking.
-
-    Owns the per-pane runtime state model that lives in
-    ``WindowState.panes`` (via ``window_store``):
-
-    * Enumerates panes via tmux and classifies each as active/idle/blocked/dead.
-    * Updates ``WindowState.panes`` (upsert + remove for dead panes).
-    * Detects transitions between scans and returns them so callers (e.g.
-      lifecycle notifications in v2.13) can react.
-    * Surfaces blocked panes (interactive prompts) via an injected callback,
-      preserving the existing ``InteractiveUIStrategy`` deduplication.
-
-    The async ``scan_window`` method is the public entry point. Pure helpers
-    (``classify_pane``, ``reconcile_dead_panes``, ``record_pane_state``) are
-    independently testable without tmux/Telegram.
-    """
-
-    # Minimum seconds between Telegram forwards for the same pane. Prevents
-    # flooding when a subscribed pane streams continuously-changing output.
-    PANE_FORWARD_MIN_INTERVAL = 5.0
-
-    def __init__(
-        self,
-        screen_buffer: TerminalScreenBuffer,
-        interactive: InteractiveUIStrategy,
-    ) -> None:
-        self._screen_buffer = screen_buffer
-        self._interactive = interactive
-        self._pane_content_hash: dict[str, int] = {}
-        # Per-pane forward timestamps gate Telegram flood when a subscribed
-        # pane streams continuously-changing output (build/log).
-        self._pane_forward_ts: dict[str, float] = {}
-        # Windows whose first scan completed — used to suppress lifecycle
-        # "created" notifications for panes already alive at bot startup.
-        self._scanned_windows: set[str] = set()
-        topic_state.register_bound("window", self._clear_pane_content_state)
-
-    def _clear_pane_content_state(self, window_id: str) -> None:
-        """Drop cached pane content hashes for a window's panes (cleanup)."""
-        # Lazy: window_state_store wiring runs after polling_state is
-        # imported by the registry; keep at call site so the strategy can
-        # be unit-tested without a live store.
-        # Lazy: window_state_store proxy not yet wired at module load
-        from ...window_state_store import window_store
-
-        state = window_store.window_states.get(window_id)
-        pane_ids = set(state.panes) if state else set()
-        for pid in pane_ids:
-            self._pane_content_hash.pop(pid, None)
-            self._pane_forward_ts.pop(pid, None)
-        self._scanned_windows.discard(window_id)
-
-    def has_scanned_window(self, window_id: str) -> bool:
-        """Return True after the first ``scan_window`` for ``window_id``.
-
-        Lifecycle notifications gate "created" events on this so a fresh
-        bot process doesn't announce every existing pane on its first poll.
-        """
-        return window_id in self._scanned_windows
-
-    @staticmethod
-    def classify_pane(active: bool, status: StatusUpdate | None) -> PaneStateName:
-        """Pure classification: tmux active flag + parsed status → pane state.
-
-        Order matters: an interactive prompt always wins (a blocked pane may
-        also be the active pane), then the tmux ``active`` flag, otherwise idle.
-        """
-        if status is not None and status.is_interactive:
-            return "blocked"
-        if active:
-            return "active"
-        return "idle"
-
-    def reconcile_dead_panes(
-        self, window_id: str, live_pane_ids: set[str]
-    ) -> list[tuple[str, str | None]]:
-        """Drop ``WindowState.panes`` entries for panes no longer in tmux.
-
-        Returns ``(pane_id, name)`` pairs for panes that disappeared so callers
-        can emit lifecycle notifications using the user-assigned name even
-        after the ``PaneInfo`` entry has been removed. Also purges any cached
-        interactive alerts so they don't linger if the pane is later recreated.
-        """
-        # Lazy: same wiring rationale as _clear_pane_content_state.
-        from ...window_state_store import window_store
-
-        state = window_store.window_states.get(window_id)
-        if state is None:
-            return []
-        gone = [
-            (pid, state.panes[pid].name)
-            for pid in state.panes
-            if pid not in live_pane_ids
-        ]
-        for pid, _ in gone:
-            window_store.remove_pane(window_id, pid)
-            self._interactive.remove_pane_alert(pid)
-            self._pane_content_hash.pop(pid, None)
-        return gone
-
-    def record_pane_state(
-        self,
-        window_id: str,
-        pane_id: str,
-        new_state: PaneStateName,
-        *,
-        provider: str = "",
-        last_active_ts: float | None = None,
-    ) -> PaneStateName | None:
-        """Upsert ``WindowState.panes`` entry; return the prior state or None."""
-        # Lazy: same wiring rationale as _clear_pane_content_state.
-        from ...window_state_store import window_store
-
-        existing = window_store.get_pane(window_id, pane_id)
-        prev_state = existing.state if existing else None
-        window_store.upsert_pane(
-            window_id,
-            pane_id,
-            provider=provider or None,
-            last_active_ts=last_active_ts,
-            state=new_state,
-        )
-        return prev_state
-
-    def _track(
-        self,
-        transitions: list[PaneTransition],
-        pane_id: str,
-        prev: PaneStateName | None,
-        new: PaneStateName,
-    ) -> None:
-        if prev != new:
-            transitions.append(
-                PaneTransition(pane_id=pane_id, prev_state=prev, new_state=new)
-            )
-
-    async def _classify_non_active(
-        self, window_id: str, pane: TmuxPaneInfo
-    ) -> tuple[PaneStateName, StatusUpdate | None, str]:
-        """Capture a non-active pane and classify its state.
-
-        Returns ``("idle", None, "")`` when capture fails (pane briefly empty);
-        otherwise the parsed StatusUpdate and the captured pane text are
-        included so the caller can both surface an interactive alert and
-        forward the text to subscribers.
-        """
-        # Lazy: tmux_manager → providers → polling_state cycle.
-        from ...tmux_manager import tmux_manager
-
-        pane_text = await tmux_manager.capture_pane_by_id(
-            pane.pane_id, window_id=window_id
-        )
-        if not pane_text:
-            return "idle", None, ""
-        status = None
-        return self.classify_pane(pane.active, status), status, pane_text
-
-    async def _maybe_surface_alert(
-        self,
-        bot: Bot,
-        user_id: int,
-        window_id: str,
-        thread_id: int,
-        pane_id: str,
-        prompt_text: str,
-        now_mono: float,
-        on_blocked: BlockedAlertCallback,
-    ) -> None:
-        existing = self._interactive.get_pane_alert(pane_id)
-        if existing and existing[0] == prompt_text:
-            return
-        self._interactive.set_pane_alert(pane_id, prompt_text, now_mono, window_id)
-        logger.info(
-            "Pane %s in window %s has interactive UI, surfacing alert",
-            pane_id,
-            window_id,
-        )
-        await on_blocked(bot, user_id, window_id, thread_id, pane_id)
-
-    async def scan_window(
-        self,
-        bot: Bot,
-        user_id: int,
-        window_id: str,
-        thread_id: int,
-        *,
-        on_blocked: BlockedAlertCallback,
-        on_pane_output: PaneOutputCallback | None = None,
-    ) -> list[PaneTransition]:
-        """Enumerate panes for a window and reconcile state.
-
-        Side effects:
-        * Updates the screen-buffer pane-count cache.
-        * Prunes stale ``InteractiveUIStrategy`` alerts.
-        * Upserts ``WindowState.panes`` for every live pane and removes
-          entries for vanished panes.
-        * Calls ``on_blocked(bot, user_id, window_id, thread_id, pane_id)``
-          when a non-active pane shows a fresh interactive prompt.
-        * Calls ``on_pane_output(bot, user_id, window_id, thread_id,
-          pane_id, pane_text)`` for non-active panes whose ``subscribed``
-          flag is set when the captured text differs from the previous scan.
-
-        Returns the list of pane transitions detected this scan (empty when
-        all panes kept their previous state). The fast-path (single-pane
-        windows whose count is cached) returns an empty list without any
-        tmux subprocess work.
-        """
-        # Lazy: same tmux_manager ↔ providers cycle as
-        # _classify_non_active; also avoids registry-import side effects.
-        # Lazy: providers package pulls PTB; defer per-call resolution
-
-        # Lazy: tmux_manager imports providers eagerly; resolved per-call
-        from ...tmux_manager import tmux_manager
-
-        # Lazy: window_query proxy resolved per-call
-
-        if self._screen_buffer.is_single_pane_cached(window_id):
-            return []
-
-        is_first_scan = window_id not in self._scanned_windows
-
-        panes = await tmux_manager.list_panes(window_id)
-        self._screen_buffer.update_pane_count_cache(window_id, len(panes))
-        live_pane_ids = {p.pane_id for p in panes}
-        self._interactive.prune_stale_pane_alerts(window_id, live_pane_ids)
-
-        transitions: list[PaneTransition] = []
-        for gone_pid, gone_name in self.reconcile_dead_panes(window_id, live_pane_ids):
-            transitions.append(
-                PaneTransition(
-                    pane_id=gone_pid,
-                    prev_state=None,
-                    new_state="dead",
-                    name=gone_name,
-                )
-            )
-
-        if len(panes) <= 1:
-            self._record_single_pane(window_id, panes, transitions)
-            self._scanned_windows.add(window_id)
-            if is_first_scan:
-                transitions[:] = [
-                    t
-                    for t in transitions
-                    if t.new_state == "dead" or t.prev_state is not None
-                ]
-            return transitions
-
-        now_mono = time.monotonic()
-        now_wall = time.time()
-
-        for pane in panes:
-            pane_provider = "shell"
-            await self._scan_one_pane(
-                bot,
-                user_id,
-                thread_id,
-                window_id,
-                pane,
-                now_mono,
-                now_wall,
-                transitions,
-                on_blocked,
-                on_pane_output,
-            )
-        self._scanned_windows.add(window_id)
-        if is_first_scan:
-            # Drop "created" transitions on the very first scan so a bot
-            # restart doesn't announce every existing pane as freshly born.
-            # Dead-pane transitions are kept — those genuinely happened.
-            transitions[:] = [
-                t
-                for t in transitions
-                if t.new_state == "dead" or t.prev_state is not None
-            ]
-        return transitions
-
-    def _record_single_pane(
-        self,
-        window_id: str,
-        panes: list[TmuxPaneInfo],
-        transitions: list[PaneTransition],
-    ) -> None:
-        for pane in panes:
-            pane_provider = "shell"
-            new_state: PaneStateName = "active" if pane.active else "idle"
-            prev = self.record_pane_state(
-                window_id,
-                pane.pane_id,
-                new_state,
-                last_active_ts=time.time() if pane.active else None,
-            )
-            self._track(transitions, pane.pane_id, prev, new_state)
-
-    async def _scan_one_pane(
-        self,
-        bot: Bot,
-        user_id: int,
-        thread_id: int,
-        window_id: str,
-        pane: TmuxPaneInfo,
-        now_mono: float,
-        now_wall: float,
-        transitions: list[PaneTransition],
-        on_blocked: BlockedAlertCallback,
-        on_pane_output: PaneOutputCallback | None = None,
-    ) -> None:
-        if pane.active:
-            prev = self.record_pane_state(
-                window_id,
-                pane.pane_id,
-                "active",
-                last_active_ts=now_wall,
-            )
-            self._track(transitions, pane.pane_id, prev, "active")
-            return
-
-        new_state, status, pane_text = await self._classify_non_active(
-            window_id, pane
-        )
-        prev = self.record_pane_state(window_id, pane.pane_id, new_state, provider="shell")
-        self._track(transitions, pane.pane_id, prev, new_state)
-
-        if pane_text and on_pane_output is not None:
-            await self._maybe_forward_subscribed(
-                bot,
-                user_id,
-                window_id,
-                thread_id,
-                pane.pane_id,
-                pane_text,
-                on_pane_output,
-            )
-
-        if new_state != "blocked":
-            self._interactive.remove_pane_alert(pane.pane_id)
-            return
-
-        prompt_text = (status.raw_text if status else "") or ""
-        await self._maybe_surface_alert(
-            bot,
-            user_id,
-            window_id,
-            thread_id,
-            pane.pane_id,
-            prompt_text,
-            now_mono,
-            on_blocked,
-        )
-
-    async def _maybe_forward_subscribed(
-        self,
-        bot: Bot,
-        user_id: int,
-        window_id: str,
-        thread_id: int,
-        pane_id: str,
-        pane_text: str,
-        on_pane_output: PaneOutputCallback,
-    ) -> None:
-        """Forward freshly-captured pane text to subscribers when content changed."""
-        # Lazy: same wiring rationale as _clear_pane_content_state.
-        from ...window_state_store import window_store
-
-        pane = window_store.get_pane(window_id, pane_id)
-        if pane is None or not pane.subscribed:
-            self._pane_content_hash.pop(pane_id, None)
-            self._pane_forward_ts.pop(pane_id, None)
-            return
-        # zlib.crc32 is stable across processes — Python's built-in hash() is
-        # PYTHONHASHSEED-randomized so a restart re-forwards every subscribed
-        # pane's first capture, not just genuinely changed content.
-        content_hash = zlib.crc32(pane_text.encode("utf-8", errors="replace"))
-        if self._pane_content_hash.get(pane_id) == content_hash:
-            return
-        now = time.monotonic()
-        last_forward = self._pane_forward_ts.get(pane_id)
-        if (
-            last_forward is not None
-            and now - last_forward < self.PANE_FORWARD_MIN_INTERVAL
-        ):
-            return
-        self._pane_content_hash[pane_id] = content_hash
-        self._pane_forward_ts[pane_id] = now
-        await on_pane_output(bot, user_id, window_id, thread_id, pane_id, pane_text)
-
-
 # ── Module-level strategy singletons ────────────────────────────────────
 
 terminal_poll_state = TerminalPollState()
 terminal_screen_buffer = TerminalScreenBuffer(terminal_poll_state)
 interactive_strategy = InteractiveUIStrategy()
 lifecycle_strategy = TopicLifecycleStrategy(terminal_poll_state)
-pane_status_strategy = PaneStatusStrategy(terminal_screen_buffer, interactive_strategy)
 
 
 def reset_window_polling_state(window_id: str) -> None:

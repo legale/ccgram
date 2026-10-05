@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from .topic_state_registry import topic_state
 
 _last_message_ids: dict[tuple[int, int], int] = {}
 
@@ -37,7 +36,6 @@ def is_last(chat_id: int, thread_id: int, message_id: int) -> bool:
     return latest is None or int(message_id) >= latest
 
 
-@topic_state.register("chat")
 def clear_topic_tail_state(chat_id: int, thread_id: int) -> None:
     _last_message_ids.pop((chat_id, thread_id), None)
 

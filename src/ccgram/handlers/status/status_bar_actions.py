@@ -34,7 +34,6 @@ from ...session import session_manager
 from ...telegram_client import PTBTelegramClient
 from ...thread_router import thread_router
 from ...tmux_manager import send_to_window, tmux_manager
-from ...topic_state_registry import topic_state
 from ..callback_data import (
     CB_KEYS_PREFIX,
     CB_STATUS_ESC,
@@ -65,7 +64,6 @@ def build_dashboard_button(window_id: str, user_id: int) -> InlineKeyboardButton
     return None
 
 
-@topic_state.register("window")
 def _clear_key_refreshes(window_id: str) -> None:
     """Cancel in-flight debounced key-refresh tasks for a closing window."""
     stale = [
@@ -77,6 +75,9 @@ def _clear_key_refreshes(window_id: str) -> None:
         task = _pending_key_refreshes.pop(k, None)
         if task and not task.done():
             task.cancel()
+
+
+clear_key_refreshes = _clear_key_refreshes
 
 
 async def _handle_notify_toggle(query: CallbackQuery, user_id: int, data: str) -> None:

@@ -11,8 +11,10 @@ Functions:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+import structlog
 from telegram.error import TelegramError
 
 from ..telegram_client import PTBTelegramClient, TelegramClient
@@ -23,14 +25,98 @@ if TYPE_CHECKING:
 
 from ..config import config
 from ..mailbox import Mailbox
+from ..msg_discovery import clear_declared
+from ..spawn_request import clear_spawn_state
 from ..thread_router import thread_router
-from ..topic_state_registry import topic_state
-from ..tmux_manager import tmux_manager
+from ..tmux_manager import clear_vim_state, tmux_manager
+from ..topic_tail import clear_topic_tail_state
 from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
 from .callback_helpers import get_thread_id
-from .messaging_pipeline.message_queue import enqueue_status_update
+from .command_history import clear_history
+from .live.live_view import clear_live_view
+from .messaging.msg_delivery import clear_delivery_state
+from .messaging.msg_telegram import clear_loop_alerts
+from .messaging_pipeline.message_queue import (
+    clear_tool_msg_ids_for_topic,
+    enqueue_status_update,
+)
 from .messaging_pipeline.message_sender import safe_reply
+from .messaging_pipeline.tool_batch import clear_batch_for_topic
+from .polling.polling_state import (
+    interactive_strategy,
+    lifecycle_strategy,
+    terminal_poll_state,
+    terminal_screen_buffer,
+)
+from .shell.shell_capture import clear_shell_monitor_state
+from .shell.shell_commands import clear_shell_hint_seen, clear_shell_pending
+from .status.status_bar_actions import clear_key_refreshes
 from .status.status_bubble import clear_status_msg_info
+from .status.topic_emoji import clear_topic_emoji_state
+from .status.topic_status_diff import clear_topic_status_diff_state
+from .toolbar.toolbar_keyboard import clear_toolbar_labels
+
+logger = structlog.get_logger()
+
+
+def _safe_call(fn: Callable[..., Any], *args: Any) -> None:
+    try:
+        fn(*args)
+    except (
+        OSError,
+        ValueError,
+        LookupError,
+        TypeError,
+        RuntimeError,
+        AttributeError,
+        ImportError,
+    ):
+        name = getattr(fn, "__qualname__", repr(fn))
+        logger.warning("cleanup_function_failed", fn=name, exc_info=True)
+
+
+def _clear_all_topic_state(
+    user_id: int,
+    thread_id: int,
+    *,
+    window_id: str | None = None,
+    qualified_id: str | None = None,
+    chat_id: int | None = None,
+) -> None:
+    """Explicitly clean up all per-topic, per-chat, per-window, and per-qualified state."""
+    # Topic scope (user_id, thread_id)
+    _safe_call(clear_history, user_id, thread_id)
+    _safe_call(clear_live_view, user_id, thread_id)
+    _safe_call(clear_tool_msg_ids_for_topic, user_id, thread_id)
+    _safe_call(clear_batch_for_topic, user_id, thread_id)
+    _safe_call(clear_topic_status_diff_state, user_id, thread_id)
+    _safe_call(lifecycle_strategy.clear_state, user_id, thread_id)
+    _safe_call(lifecycle_strategy.clear_dead_notification, user_id, thread_id)
+
+    # Chat scope (chat_id, thread_id)
+    if chat_id is not None:
+        _safe_call(clear_shell_pending, chat_id, thread_id)
+        _safe_call(clear_shell_hint_seen, chat_id, thread_id)
+        _safe_call(clear_topic_emoji_state, chat_id, thread_id)
+        _safe_call(clear_topic_tail_state, chat_id, thread_id)
+
+    # Window scope (window_id)
+    if window_id:
+        _safe_call(terminal_screen_buffer.clear_screen_buffer, window_id)
+        _safe_call(terminal_poll_state.clear_state, window_id)
+        _safe_call(interactive_strategy.clear_pane_alerts, window_id)
+        _safe_call(clear_shell_monitor_state, window_id)
+        _safe_call(clear_key_refreshes, window_id)
+        _safe_call(clear_toolbar_labels, window_id)
+        _safe_call(clear_vim_state, window_id)
+        _safe_call(tmux_manager.forget_sidecar_pane, window_id)
+
+    # Qualified scope (qualified_id)
+    if qualified_id:
+        _safe_call(clear_delivery_state, qualified_id)
+        _safe_call(clear_loop_alerts, qualified_id)
+        _safe_call(clear_declared, qualified_id)
+        _safe_call(clear_spawn_state, qualified_id)
 
 
 async def clear_topic_state(
@@ -44,9 +130,8 @@ async def clear_topic_state(
 ) -> None:
     """Clear all memory state associated with a topic.
 
-    Dispatches registered cleanups via TopicStateRegistry, then handles
-    bot-specific async cleanup and infrastructure I/O that cannot be
-    registered as simple callbacks.
+    Explicitly calls all state cleanup functions, then handles
+    bot-specific async cleanup and infrastructure I/O.
 
     Args:
         window_dead: When False, skip mailbox/qualified-scope cleanup because
@@ -62,7 +147,7 @@ async def clear_topic_state(
     if window_id and window_dead:
         qualified_id = f"{config.tmux_session_name}:{window_id}"
 
-    # Enqueue status-message delete BEFORE registry clears the message ID
+    # Enqueue status-message delete BEFORE clearing message ID
     if client is not None:
         await enqueue_status_update(
             client,
@@ -74,12 +159,11 @@ async def clear_topic_state(
     else:
         clear_status_msg_info(user_id, thread_id)
 
-    # Registry dispatch — all module-specific per-topic/window/chat state.
-    # Always pass window_id so window-scope callbacks (toolbar, screen buffer,
-    # monitor state, etc.) run even when the window is still alive.
-    # Shell prompt orchestrator state is excluded from the registry and handled
-    # below so it only clears on true window death.
-    topic_state.clear_all(
+    # Direct explicit dispatch — all module-specific per-topic/window/chat state.
+    # Always pass window_id so window-scope state (toolbar, screen buffer,
+    # monitor state, etc.) clears even when the window is still alive.
+    # Shell prompt orchestrator state is handled below so it only clears on true window death.
+    _clear_all_topic_state(
         user_id,
         thread_id,
         window_id=window_id,

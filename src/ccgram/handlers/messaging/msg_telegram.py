@@ -26,7 +26,6 @@ from telegram import (
 
 from ...telegram_client import TelegramClient
 from ...thread_router import thread_router
-from ...topic_state_registry import topic_state
 from ...utils import tmux_session_name
 from ..callback_registry import register
 from .msg_delivery import delivery_strategy
@@ -58,7 +57,6 @@ _MAX_LOOP_ALERT_PAIRS = 100
 _loop_alert_pairs: dict[str, tuple[str, str]] = {}
 
 
-@topic_state.register("qualified")
 def clear_loop_alerts(qualified_id: str) -> None:
     """Remove loop alert pairs involving this window."""
     stale = [

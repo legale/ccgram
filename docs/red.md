@@ -233,7 +233,7 @@
 
 Многое из текущего polling state можно будет удалить, но сначала надо решить, сохраняем ли status emoji, live view и multi-pane функции.
 
-## 10. Удалить multi-pane/agent-team слой — менее бесспорно
+## 10. Удалить multi-pane/agent-team слой — ВЫПОЛНЕНО
 
 Файлы и символы:
 
@@ -255,7 +255,7 @@
 
 Для модели «одна `cc_*` session → один рабочий pane» это лишняя подсистема.
 
-## 11. Удалить отдельный `topic_state_registry` и callback cleanup-архитектуру — менее бесспорно
+## 11. Удалить отдельный `topic_state_registry` и callback cleanup-архитектуру — ВЫПОЛНЕНО
 
 Файлы:
 

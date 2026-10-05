@@ -13,7 +13,6 @@ Key components:
 import time
 from dataclasses import dataclass, field
 
-from ...topic_state_registry import topic_state
 
 
 # ── Constants ──────────────────────────────────────────────────────────
@@ -134,7 +133,6 @@ class MessageDeliveryStrategy:
 delivery_strategy = MessageDeliveryStrategy()
 
 
-@topic_state.register("qualified")
 def clear_delivery_state(window_id: str) -> None:
     delivery_strategy.clear_state(window_id)
 

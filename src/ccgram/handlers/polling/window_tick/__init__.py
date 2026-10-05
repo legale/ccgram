@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING
 
 from ..polling_state import (
     lifecycle_strategy,
-    pane_status_strategy,
     terminal_poll_state,
     terminal_screen_buffer,
 )
@@ -30,12 +29,8 @@ from .apply import (
     _apply_done_transition,
     _apply_starting_transition,
     _apply_tick_decision,
-    _forward_pane_output,
     _handle_dead_window_notification,
-    _notify_pane_lifecycle,
-    _scan_window_panes,
     _send_typing_throttled,
-    _surface_pane_alert,
     _transition_to_idle,
     _update_status,
 )
@@ -70,7 +65,6 @@ async def tick_window(
         return
 
     await _update_status(bot, user_id, window_id, thread_id=thread_id, _window=window)
-    await _scan_window_panes(bot, user_id, window_id, thread_id)
 
 
 __all__ = [
@@ -81,15 +75,11 @@ __all__ = [
     "_apply_starting_transition",
     "_apply_tick_decision",
     "_check_vim_insert",
-    "_forward_pane_output",
     "_get_last_activity_ts",
     "_handle_dead_window_notification",
-    "_notify_pane_lifecycle",
     "_parse_with_pyte",
     "_resolve_status",
-    "_scan_window_panes",
     "_send_typing_throttled",
-    "_surface_pane_alert",
     "_transition_to_idle",
     "_update_status",
     "build_context",
@@ -97,7 +87,6 @@ __all__ = [
     "decide_tick",
     "is_shell_prompt",
     "lifecycle_strategy",
-    "pane_status_strategy",
     "terminal_poll_state",
     "terminal_screen_buffer",
     "tick_window",

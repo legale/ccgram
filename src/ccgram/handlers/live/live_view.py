@@ -27,7 +27,6 @@ from ...config import config
 from ...screenshot import text_to_image
 from ...telegram_client import TelegramClient
 from ...tmux_manager import tmux_manager
-from ...topic_state_registry import topic_state
 from ..callback_data import CB_KEYS_PREFIX, CB_LIVE_STOP
 from ..messaging_pipeline.message_sender import rate_limit_send
 
@@ -104,9 +103,11 @@ def build_live_keyboard(
     )
 
 
-@topic_state.register("topic")
 def _clear_live_view(user_id: int, thread_id: int) -> None:
     _active_views.pop((user_id, thread_id), None)
+
+
+clear_live_view = _clear_live_view
 
 
 async def tick_live_views(client: TelegramClient) -> None:

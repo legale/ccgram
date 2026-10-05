@@ -49,7 +49,6 @@ from ..messaging_pipeline.message_sender import (
 )
 from ..messaging_pipeline.message_queue import enqueue_status_update
 from ..polling.polling_state import lifecycle_strategy
-from ...topic_state_registry import topic_state
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
@@ -120,17 +119,18 @@ def has_shell_pending(chat_id: int, thread_id: int) -> bool:
     return (chat_id, thread_id) in _shell_pending
 
 
-@topic_state.register("chat")
 def clear_shell_pending(chat_id: int, thread_id: int) -> None:
     """Clear any pending shell command for this topic (used by cleanup)."""
     _shell_pending.pop((chat_id, thread_id), None)
     _generation_counter.pop((chat_id, thread_id), None)
 
 
-@topic_state.register("chat")
 def _clear_shell_hint_seen(chat_id: int, thread_id: int) -> None:
     """Forget the once-per-session bang hint when the topic is torn down."""
     _shell_hint_seen.discard((chat_id, thread_id))
+
+
+clear_shell_hint_seen = _clear_shell_hint_seen
 
 
 async def _ensure_prompt_marker(window_id: str) -> None:

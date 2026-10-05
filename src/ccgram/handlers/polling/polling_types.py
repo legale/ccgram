@@ -125,24 +125,3 @@ class TickDecision:
 # ── Pane state types ─────────────────────────────────────────────────────
 
 PaneStateName = Literal["active", "idle", "blocked", "dead"]
-
-
-@dataclass(frozen=True, slots=True)
-class PaneTransition:
-    """Per-pane state transition emitted during a scan."""
-
-    pane_id: str
-    prev_state: PaneStateName | None
-    new_state: PaneStateName
-    # Captured at transition time so a dead pane's name is preserved for
-    # downstream notifications even after the PaneInfo entry is removed.
-    name: str | None = None
-
-
-# Surfaces an interactive prompt to the user. Wired by window_tick.
-BlockedAlertCallback = Callable[["Bot", int, str, int, str], Awaitable[None]]
-
-# Forwards subscribed pane output. Wired by window_tick when a pane is marked
-# ``subscribed`` in WindowState.panes; arguments mirror BlockedAlertCallback
-# with the freshly-captured pane text appended.
-PaneOutputCallback = Callable[["Bot", int, str, int, str, str], Awaitable[None]]

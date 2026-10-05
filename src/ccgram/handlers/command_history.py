@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from ..config import config
-from ..topic_state_registry import topic_state
 from ..utils import handle_general_topic_message, is_general_topic
 from .callback_helpers import get_thread_id
 from .messaging_pipeline.message_sender import safe_reply
@@ -64,7 +63,6 @@ def get_history(user_id: int, thread_id: int, *, limit: int = 20) -> list[str]:
     return list(reversed(dq))[:limit]
 
 
-@topic_state.register("topic")
 def clear_history(user_id: int, thread_id: int) -> None:
     """Remove history entry for a topic."""
     _history.pop((user_id, thread_id), None)

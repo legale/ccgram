@@ -111,7 +111,7 @@ def _find_handler(data: str) -> CallbackHandler | None:
 
 
 def load_handlers() -> None:
-    """Import handler modules to trigger @register and @topic_state.register decorators.
+    """Import handler modules to trigger @register decorators.
 
     The imports below are intentionally inside this function: their sole
     purpose is the side effect of running the decorators at module-load

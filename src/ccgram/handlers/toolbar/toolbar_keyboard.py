@@ -12,7 +12,6 @@ from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from ...config import config
 from ... import window_query
-from ...topic_state_registry import topic_state
 from ...toolbar_config import (
     ToolbarAction,
     ToolbarConfig,
@@ -56,9 +55,11 @@ def _get_action_label(window_id: str, action_name: str) -> str | None:
     return _window_action_labels.get(window_id, {}).get(action_name)
 
 
-@topic_state.register("window")
 def _clear_toolbar_labels(window_id: str) -> None:
     _window_action_labels.pop(window_id, None)
+
+
+clear_toolbar_labels = _clear_toolbar_labels
 
 
 # ──────────────────────────────────────────────────────────────────────

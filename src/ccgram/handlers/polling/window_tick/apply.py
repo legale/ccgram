@@ -24,15 +24,14 @@ from ....window_state_store import window_store
 from ...messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
 )
-from ...messaging_pipeline.message_sender import rate_limit_send_message, safe_send
+from ...messaging_pipeline.message_sender import rate_limit_send_message
 from ...status.topic_emoji import update_topic_emoji
 from ...status.topic_status_diff import update_topic_status_diff
 from ..polling_state import (
     lifecycle_strategy,
-    pane_status_strategy,
     terminal_poll_state,
 )
-from ..polling_types import PaneTransition, TickDecision
+from ..polling_types import TickDecision
 from .decide import decide_tick
 from .observe import _check_vim_insert, _resolve_status, build_context
 
@@ -80,108 +79,6 @@ async def _transition_to_idle(
     await update_topic_emoji(client, chat_id, thread_id, "idle", display)
     lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
     lifecycle_strategy.clear_typing_state(user_id, thread_id)
-
-
-# ── Multi-pane scanning (agent teams) ─────────────────────────────────
-
-
-async def _surface_pane_alert(
-    _bot: "Bot", _user_id: int, _window_id: str, _thread_id: int, _pane_id: str
-) -> None:
-    return
-
-
-_PANE_OUTPUT_PREVIEW_LINES = 12
-
-
-async def _forward_pane_output(
-    bot: "Bot",
-    user_id: int,
-    window_id: str,
-    thread_id: int,
-    pane_id: str,
-    pane_text: str,
-) -> None:
-    """Forward a subscribed pane's freshly-captured text to its bound topic."""
-    pane = window_store.get_pane(window_id, pane_id)
-    if pane is None or not pane.subscribed:
-        return
-    cleaned = pane_text.strip()
-    if not cleaned:
-        return
-    lines = cleaned.splitlines()
-    if len(lines) > _PANE_OUTPUT_PREVIEW_LINES:
-        lines = lines[-_PANE_OUTPUT_PREVIEW_LINES:]
-    label = f"{pane.name} ({pane_id})" if pane.name else pane_id
-    body = "\n".join(lines)
-    text = f"\U0001f4e1 {label}\n```\n{body}\n```"
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-    client = PTBTelegramClient(bot)
-    try:
-        await safe_send(client, chat_id, text, message_thread_id=thread_id)
-    except TelegramError as exc:
-        logger.warning(
-            "pane output forward failed",
-            window_id=window_id,
-            pane_id=pane_id,
-            error=str(exc),
-        )
-
-
-async def _scan_window_panes(
-    bot: "Bot",
-    user_id: int,
-    window_id: str,
-    thread_id: int,
-) -> None:
-    """Delegate multi-pane scanning to ``PaneStatusStrategy``."""
-    transitions = await pane_status_strategy.scan_window(
-        bot,
-        user_id,
-        window_id,
-        thread_id,
-        on_blocked=_surface_pane_alert,
-        on_pane_output=_forward_pane_output,
-    )
-    if transitions:
-        await _notify_pane_lifecycle(bot, user_id, window_id, thread_id, transitions)
-
-
-async def _notify_pane_lifecycle(
-    bot: "Bot",
-    user_id: int,
-    window_id: str,
-    thread_id: int,
-    transitions: list[PaneTransition],
-) -> None:
-    """Emit one-line "pane created"/"pane closed" notifications when enabled."""
-    enabled = window_store.get_pane_lifecycle_notify(
-        window_id, config.pane_lifecycle_notify
-    )
-    if not enabled:
-        return
-
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-    client = PTBTelegramClient(bot)
-    for t in transitions:
-        if t.prev_state is not None:
-            continue
-        if t.new_state == "dead":
-            label = f"{t.name} ({t.pane_id})" if t.name else t.pane_id
-            text = f"pane {label} closed"
-        else:
-            pane = window_store.get_pane(window_id, t.pane_id)
-            label = f"{pane.name} ({t.pane_id})" if pane and pane.name else t.pane_id
-            text = f"pane {label} created"
-        try:
-            await safe_send(client, chat_id, text, message_thread_id=thread_id)
-        except TelegramError as exc:
-            logger.warning(
-                "pane lifecycle notify failed",
-                window_id=window_id,
-                pane_id=t.pane_id,
-                error=str(exc),
-            )
 
 
 # ── Dead window notification ─────────────────────────────────────────────
@@ -367,12 +264,8 @@ __all__ = [
     "_apply_done_transition",
     "_apply_starting_transition",
     "_apply_tick_decision",
-    "_forward_pane_output",
     "_handle_dead_window_notification",
-    "_notify_pane_lifecycle",
-    "_scan_window_panes",
     "_send_typing_throttled",
-    "_surface_pane_alert",
     "_transition_to_idle",
     "_update_status",
 ]

@@ -23,7 +23,6 @@ import structlog
 from ...telegram_client import TelegramClient, unwrap_bot
 from ...telegram_draft import DraftStream
 from ...thread_router import thread_router
-from ...topic_state_registry import topic_state
 from ...window_query import get_batch_mode
 from .message_task import ContentTask, thread_key
 
@@ -526,7 +525,6 @@ def has_active_batch(user_id: int, thread_id_or_0: int) -> bool:
     return (user_id, thread_id_or_0) in _active_batches
 
 
-@topic_state.register("topic")
 def clear_batch_for_topic(user_id: int, thread_id: int | None = None) -> None:
     """Clear active batch for a specific topic (called on topic cleanup)."""
     _active_batches.pop((user_id, thread_key(thread_id)), None)

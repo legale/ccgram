@@ -29,7 +29,6 @@ from libtmux.exc import LibTmuxException
 
 from .config import config
 from .thread_router import thread_router
-from .topic_state_registry import topic_state
 
 logger = structlog.get_logger()
 
@@ -66,7 +65,6 @@ def notify_vim_insert_seen(window_id: str) -> None:
     _vim_state[window_id] = True
 
 
-@topic_state.register("window")
 def clear_vim_state(window_id: str) -> None:
     """Remove vim state cache entry and lock for a window (called on cleanup)."""
     _vim_state.pop(window_id, None)

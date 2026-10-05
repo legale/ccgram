@@ -15,7 +15,6 @@ from telegram.error import RetryAfter, TelegramError
 
 from ...telegram_client import TelegramClient
 from ...thread_router import thread_router
-from ...topic_state_registry import topic_state
 from ...utils import task_done_callback
 from ...window_query import is_tool_calls_hidden
 from ..status.status_bubble import (
@@ -438,7 +437,6 @@ async def enqueue_status_update(
     queue.put_nowait(task)
 
 
-@topic_state.register("topic")
 def clear_tool_msg_ids_for_topic(user_id: int, thread_id: int | None = None) -> None:
     """Clear tool message ID tracking for a specific topic.
 

@@ -22,7 +22,6 @@ from pathlib import Path
 
 import structlog
 
-from .topic_state_registry import topic_state
 from .utils import atomic_write_json, ccgram_dir
 
 logger = structlog.get_logger()
@@ -95,7 +94,6 @@ def reset_spawn_state() -> None:
     _pending_requests.clear()
 
 
-@topic_state.register("qualified")
 def clear_spawn_state(window_id: str) -> None:
     to_remove = [
         rid

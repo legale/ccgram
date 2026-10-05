@@ -212,9 +212,6 @@ class Config:
         self.autoclose_dead_minutes: int = int(
             os.getenv("AUTOCLOSE_DEAD_MINUTES", "10")
         )
-        self.pane_lifecycle_notify: bool = os.getenv(
-            "CCGRAM_PANE_LIFECYCLE_NOTIFY", ""
-        ).lower() in ("1", "true", "yes")
         self._init_miniapp()
 
     def _init_topic_status(self) -> None:
