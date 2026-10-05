@@ -19,7 +19,6 @@ import asyncio
 import contextlib
 import fnmatch
 import re
-import shlex
 import structlog
 import subprocess
 from dataclasses import dataclass
@@ -1367,29 +1366,25 @@ class TmuxManager:
                 new_window_id = window.window_id or ""
                 pane = window.active_pane
 
-                # Set CCGRAM_WINDOW_ID so agents can self-identify
                 qualified_id = f"{session.session_name}:{new_window_id}"
                 returned_window_id = (
                     qualified_id
                     if session.session_name != self.session_name
                     else new_window_id
                 )
-                if pane and new_window_id:
-                    pane.send_keys(
-                        f"export CCGRAM_WINDOW_ID={shlex.quote(qualified_id)}",
-                        enter=True,
-                    )
-                    # Disable interactive editors — Telegram users can't see
-                    # tmux popups or terminal overlays opened by plugins
-                    pane.send_keys(
-                        "export EDITOR=true VISUAL=true",
-                        enter=True,
-                    )
-
                 if not (start_agent and launch_command):
                     window.set_option("automatic-rename", "off")
                 elif pane:
                     self._start_agent_in_pane(pane, launch_command, agent_args)
+
+                logger.info(
+                    "tmux_window_created",
+                    session_name=session.session_name,
+                    window_id=new_window_id,
+                    window_name=final_window_name,
+                    start_agent=start_agent,
+                    launch_command=launch_command,
+                )
 
                 logger.info(
                     "Created window '%s' (id=%s) at %s",

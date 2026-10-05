@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+import structlog
 from telegram import Update
 from telegram.error import BadRequest, TelegramError
 
 from ...config import config
 from ...telegram_client import PTBTelegramClient
-from pathlib import Path
 
 from ...session import session_manager
 from ...thread_router import ThreadRouter, thread_router
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
     from ...telegram_client import TelegramClient
+
+logger = structlog.get_logger()
 
 
 def _valid_name(name: str) -> bool:
@@ -236,25 +239,44 @@ async def create_from_all(
 ) -> tuple[str | None, str | None]:
     """Create a new ``cc_<name>`` session and its Telegram topic."""
     name = name.strip()
+    logger.info("create_from_all_start", user_id=user_id, chat_id=chat_id, name=name)
     if not _valid_name(name):
+        logger.warning("create_from_all_invalid_name", name=name)
         return None, "Invalid session name."
 
     target = tmux_manager.topic_session_name(name)
     if any(session.window_name == target for session in await _managed_sessions()):
+        logger.warning("create_from_all_duplicate_session", target=target)
         return None, f"Session {target} already exists."
 
     session, error = await _create_session(name)
+    logger.info(
+        "create_from_all_session_created",
+        target=target,
+        window_id=session.window_id if session else None,
+        error=error,
+    )
     if error or session is None:
         return None, error or f"Failed to create tmux session {target}."
 
     try:
         topic = await client.create_forum_topic(chat_id, name=name)
+        logger.info(
+            "create_from_all_topic_created",
+            target=target,
+            thread_id=topic.message_thread_id,
+            name=name,
+        )
     except TelegramError as exc:
+        logger.warning("create_from_all_topic_failed", target=target, error=str(exc))
         await tmux_manager.kill_session(target)
         return None, f"Failed to create Telegram topic {name}: {exc}"
 
     thread_id = topic.message_thread_id
     if not await tmux_manager.set_session_topic(target, chat_id, thread_id):
+        logger.warning(
+            "create_from_all_bind_failed", target=target, thread_id=thread_id
+        )
         try:  # noqa: SIM105 - topic deletion is best effort
             await client.delete_forum_topic(chat_id, thread_id)
         except TelegramError:
@@ -263,4 +285,12 @@ async def create_from_all(
         return None, f"Failed to bind tmux session {target}."
 
     session.topic_ref = (chat_id, thread_id)
-    return bind_runtime(user_id, chat_id, thread_id, session, router=router), None
+    window_id = bind_runtime(user_id, chat_id, thread_id, session, router=router)
+    logger.info(
+        "create_from_all_complete",
+        target=target,
+        window_id=window_id,
+        thread_id=thread_id,
+        name=name,
+    )
+    return window_id, None

@@ -2,7 +2,7 @@
 
 Provides ``ccgram msg`` with subcommands for peer discovery, message
 send/receive, broadcast, registration, and mailbox maintenance.
-Window self-identification via ``CCGRAM_WINDOW_ID`` env var or tmux fallback.
+Window self-identification via the current tmux pane.
 
 Key entry point: msg_group (Click group registered in cli.py).
 
@@ -26,7 +26,7 @@ import click
 import structlog
 
 from .mailbox import Mailbox, Message
-from .utils import ccgram_dir, tmux_session_name
+from .utils import ccgram_dir
 
 if TYPE_CHECKING:
     from .msg_discovery import PeerInfo, WindowInfo
@@ -45,29 +45,19 @@ def _get_mailbox_dir() -> Path:
 def _infer_tmux_session() -> str:
     """Infer the tmux session name for qualifying bare window IDs.
 
-    Uses CCGRAM_WINDOW_ID session prefix (most reliable in agent context),
-    falls back to TMUX_SESSION_NAME env var, then 'ccgram' default.
+    Read the authoritative session name from the current tmux pane.
     """
-    env_id = os.environ.get("CCGRAM_WINDOW_ID", "")
-    if env_id and ":" in env_id:
-        return env_id.rsplit(":", 1)[0]
-    return tmux_session_name()
+    return _get_my_window_id().rsplit(":", 1)[0]
 
 
 def _get_my_window_id() -> str:
     """Resolve this window's qualified ID.
 
-    Priority: CCGRAM_WINDOW_ID env var > tmux runtime detection.
+    Read ``session_name:window_id`` from the current tmux pane.
     """
-    env_id = os.environ.get("CCGRAM_WINDOW_ID", "")
-    if env_id:
-        return env_id
-
     tmux_pane = os.environ.get("TMUX_PANE", "")
     if not tmux_pane:
-        click.echo(
-            "Error: not in a tmux session and CCGRAM_WINDOW_ID not set", err=True
-        )
+        click.echo("Error: not in a tmux session", err=True)
         sys.exit(1)
 
     try:

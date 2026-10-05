@@ -303,20 +303,21 @@ async def test_ansi_capture_through_pyte(tmux, tmp_path) -> None:
     assert "\x1b" not in rendered
 
 
-async def test_create_window_sets_ccgram_window_id(tmux, tmp_path) -> None:
+async def test_create_window_does_not_inject_environment_commands(
+    tmux, tmp_path
+) -> None:
     ok, _msg, _name, window_id = await tmux.create_window(
         str(tmp_path), window_name="env-test", start_agent=False
     )
     assert ok
 
     await asyncio.sleep(0.5)
-    await tmux.send_keys(window_id, "echo $CCGRAM_WINDOW_ID")
+    await tmux.send_keys(window_id, "echo ${CCGRAM_WINDOW_ID-unset}")
     await asyncio.sleep(0.5)
 
     output = await tmux.capture_pane(window_id)
     assert output is not None
-    expected = f"{TEST_SESSION}:{window_id}"
-    assert expected in output
+    assert "unset" in output
 
 
 async def test_create_window_with_special_char_launch_command(tmux, tmp_path) -> None:

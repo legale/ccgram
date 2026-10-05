@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import structlog
 from telegram import Message, Update
 from telegram.constants import ChatAction
 
@@ -20,6 +21,8 @@ from ..callback_helpers import get_thread_id as _get_thread_id
 from ..live.pane_callbacks import apply_pane_rename
 from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..sessions_dashboard import apply_session_rename
+
+logger = structlog.get_logger()
 
 if TYPE_CHECKING:
     from telegram import Bot, Chat
@@ -70,7 +73,23 @@ async def _handle_all_topic(
     # Lazy: topic creation is needed only for messages in the all topic.
     from ..topics.topic_binding import create_from_all
 
+    logger.info(
+        "all_topic_create_requested",
+        user_id=user_id,
+        chat_id=chat.id,
+        message_id=message.message_id,
+        text=text,
+    )
     _window_id, error = await create_from_all(user_id, chat.id, text, client)
+    logger.info(
+        "all_topic_create_finished",
+        user_id=user_id,
+        chat_id=chat.id,
+        message_id=message.message_id,
+        text=text,
+        window_id=_window_id,
+        error=error,
+    )
     if error:
         await safe_reply(message, error)
         return True
@@ -87,6 +106,14 @@ async def _forward_message(
     message: Message,
 ) -> None:
     """Forward one text message to the bound tmux window."""
+    logger.info(
+        "topic_text_forward",
+        user_id=user_id,
+        thread_id=thread_id,
+        window_id=window_id,
+        message_id=message.message_id,
+        text=text,
+    )
     await message.chat.send_action(ChatAction.TYPING)  # type: ignore[union-attr]
 
     # Lazy: periodic tasks imports the polling and messaging orchestration.
@@ -154,6 +181,15 @@ async def handle_text_message(
         thread_router.get_window_for_thread(user.id, thread_id)
         if thread_id is not None
         else None
+    )
+    logger.info(
+        "topic_text_received",
+        user_id=user.id,
+        chat_id=message.chat.id if message.chat else None,
+        thread_id=thread_id,
+        window_id=window_id,
+        message_id=message.message_id,
+        text=message.text,
     )
     if window_id and message.chat is not None and thread_id is not None:
         # Lazy: status diff state is needed only for Telegram activity updates.

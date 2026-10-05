@@ -40,7 +40,13 @@ def _patch_dirs(state_dir: Path, mailbox_dir: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("ccgram.msg_cmd._get_mailbox_dir", lambda: mailbox_dir)
     monkeypatch.setattr("ccgram.spawn_request.ccgram_dir", lambda: state_dir)
     monkeypatch.setattr("ccgram.msg_discovery.ccgram_dir", lambda: state_dir)
-    monkeypatch.setenv("CCGRAM_WINDOW_ID", "ccgram:@0")
+    monkeypatch.setenv("TMUX_PANE", "%0")
+    monkeypatch.setattr(
+        "ccgram.msg_cmd.subprocess.run",
+        lambda *args, **kwargs: type(
+            "R", (), {"returncode": 0, "stdout": "ccgram:@0\n"}
+        )(),
+    )
 
 
 def _write_state(state_dir: Path, window_states: dict) -> None:
@@ -547,13 +553,12 @@ class TestSweep:
 
 
 class TestWindowSelfIdentification:
-    def test_env_var_primary(
+    def test_tmux_identity(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch, mailbox: Mailbox
     ):
-        monkeypatch.setenv("CCGRAM_WINDOW_ID", "custom:@99")
         mailbox.send(
             from_id="ccgram:@5",
-            to_id="custom:@99",
+            to_id="ccgram:@0",
             body="hi",
             msg_type="request",
         )
@@ -567,7 +572,6 @@ class TestWindowSelfIdentification:
         monkeypatch: pytest.MonkeyPatch,
         mailbox: Mailbox,
     ):
-        monkeypatch.delenv("CCGRAM_WINDOW_ID", raising=False)
         monkeypatch.setenv("TMUX_PANE", "%5")
         mock_result = type("R", (), {"returncode": 0, "stdout": "myses:@3\n"})()
         with patch("ccgram.msg_cmd.subprocess.run", return_value=mock_result):
@@ -584,7 +588,6 @@ class TestWindowSelfIdentification:
     def test_tmux_fallback_failure(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.delenv("CCGRAM_WINDOW_ID", raising=False)
         monkeypatch.setenv("TMUX_PANE", "%5")
         mock_result = type("R", (), {"returncode": 1, "stdout": ""})()
         with patch("ccgram.msg_cmd.subprocess.run", return_value=mock_result):
@@ -595,7 +598,6 @@ class TestWindowSelfIdentification:
     def test_no_env_no_tmux_fails(
         self, runner: CliRunner, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.delenv("CCGRAM_WINDOW_ID", raising=False)
         monkeypatch.delenv("TMUX_PANE", raising=False)
         result = runner.invoke(cli, ["msg", "inbox"])
         assert result.exit_code != 0
