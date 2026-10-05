@@ -14,11 +14,10 @@ def _update(name: str = "telegram-name") -> MagicMock:
     return update
 
 
-async def test_bound_topic_name_is_restored_from_tmux() -> None:
+async def test_bound_topic_rename_renames_tmux_session() -> None:
     from ccgram.handlers.topics import topic_lifecycle
 
     context = MagicMock()
-    context.bot.edit_forum_topic = AsyncMock()
     session = TmuxWindow("cc_foo:@1", "cc_foo", "/tmp", topic_ref=(-100, 42))
     with (
         patch("ccgram.config.Config.is_user_allowed", return_value=True),
@@ -27,13 +26,35 @@ async def test_bound_topic_name_is_restored_from_tmux() -> None:
         ),
         patch.object(topic_lifecycle, "tmux_manager") as tmux,
     ):
-        tmux.topic_name_from_session_name.return_value = "foo"
+        tmux.topic_session_name.return_value = "cc_bar"
+        tmux.rename_session = AsyncMock(return_value=True)
         await topic_lifecycle.topic_edited_handler(_update("bar"), context)
 
+    tmux.rename_session.assert_awaited_once_with("cc_foo", "cc_bar")
+    assert session.window_name == "cc_bar"
+
+
+async def test_reconcile_prefix_is_removed_from_topic_name() -> None:
+    from ccgram.handlers.topics import topic_lifecycle
+
+    context = MagicMock()
+    context.bot.edit_forum_topic = AsyncMock()
+    session = TmuxWindow("cc_antig:@1", "cc_antig", "/tmp", topic_ref=(-100, 42))
+    with (
+        patch("ccgram.config.Config.is_user_allowed", return_value=True),
+        patch.object(
+            topic_lifecycle, "find_topic_session", new=AsyncMock(return_value=session)
+        ),
+        patch.object(topic_lifecycle, "tmux_manager") as tmux,
+    ):
+        tmux.topic_session_name.return_value = "cc_antig"
+        await topic_lifecycle.topic_edited_handler(_update("cc_antig"), context)
+
     context.bot.edit_forum_topic.assert_awaited_once_with(
-        chat_id=-100, message_thread_id=42, name="foo"
+        chat_id=-100, message_thread_id=42, name="antig"
     )
     tmux.rename_session.assert_not_called()
+    assert session.window_name == "cc_antig"
 
 
 async def test_unbound_renamed_topic_is_ignored() -> None:

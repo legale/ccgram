@@ -14,7 +14,7 @@ from ...thread_router import thread_router
 from ...tmux_manager import tmux_manager
 from ..cleanup import clear_topic_state
 from ..messaging_pipeline.message_sender import is_thread_gone
-from .topic_binding import ensure_topic_session, find_topic_session
+from .topic_binding import _valid_name, ensure_topic_session, find_topic_session
 from ..polling.polling_state import (
     lifecycle_strategy,
 )
@@ -203,10 +203,10 @@ async def topic_created_handler(
     )
 
 
-async def topic_edited_handler(
+async def topic_edited_handler(  # noqa: C901
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    """Restore a managed Telegram topic name from its tmux session name."""
+    """Rename the bound tmux session after a Telegram topic rename."""
     user = update.effective_user
     message = update.message
     chat = update.effective_chat
@@ -219,7 +219,7 @@ async def topic_edited_handler(
     from ..callback_helpers import get_thread_id
 
     # Lazy: topic name cache is needed only on topic edits.
-    from ..status.topic_emoji import update_stored_topic_name
+    from ..status.topic_emoji import strip_emoji_prefix, update_stored_topic_name
 
     thread_id = get_thread_id(update)
     if thread_id is None:
@@ -228,12 +228,38 @@ async def topic_edited_handler(
     if session is None:
         return
 
-    name = tmux_manager.topic_name_from_session_name(session.window_name)
+    raw_name = strip_emoji_prefix(message.forum_topic_edited.name).strip()
+    name = raw_name.removeprefix(config.tmux_session_prefix)
+    if not _valid_name(name):
+        logger.warning("Ignoring invalid renamed topic %d name=%r", thread_id, name)
+        return
+
+    target = tmux_manager.topic_session_name(name)
+    if session.window_name != target:
+        if not await tmux_manager.rename_session(session.window_name, target):
+            logger.warning(
+                "Failed to rename tmux session %s to %s for topic %d",
+                session.window_name,
+                target,
+                thread_id,
+            )
+            return
+        session.window_name = target
+    if raw_name != name:
+        try:
+            await PTBTelegramClient(context.bot).edit_forum_topic(
+                chat.id, thread_id, name=name
+            )
+        except BadRequest as exc:
+            if "topic_not_modified" not in exc.message.lower():
+                logger.warning("Failed to remove tmux prefix from topic %d: %s", thread_id, exc)
+        except TelegramError as exc:
+            logger.warning("Failed to remove tmux prefix from topic %d: %s", thread_id, exc)
     update_stored_topic_name(chat.id, thread_id, name)
-    try:
-        await PTBTelegramClient(context.bot).edit_forum_topic(
-            chat.id, thread_id, name=name
-        )
-    except BadRequest as e:
-        if "topic_not_modified" not in e.message.lower():
-            logger.warning("Failed to restore topic %d name: %s", thread_id, e)
+    logger.info(
+        "Renamed bound topic session %s -> %s (chat=%d, thread=%d)",
+        session.window_name,
+        target,
+        chat.id,
+        thread_id,
+    )
