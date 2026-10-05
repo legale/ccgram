@@ -471,69 +471,20 @@ class TmuxManager:
             The captured text (stripped of trailing whitespace),
             or None on failure or empty content.
         """
+        session_name, pane_id = self._split_qualified(window_id)
+        if session_name.startswith(config.tmux_session_prefix):
+            await self._ensure_managed_window_size(session_name, pane_id)
+
         if with_ansi:
             return await self._capture_pane_ansi(window_id)
 
         return await self._capture_pane_plain(window_id)
 
-    async def capture_pane_scrollback(
-        self, window_id: str, history: int = 200
-    ) -> str | None:
-        """Capture pane text including scrollback history.
-
-        Uses ``tmux capture-pane -p -J -S -{history}``. The ``-J`` flag joins
-        wrapped lines so prompt markers are never split across lines on narrow
-        terminals. Returns stripped text or None on failure.
-        """
-        proc: asyncio.subprocess.Process | None = None
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "tmux",
-                "capture-pane",
-                "-p",
-                "-J",
-                "-S",
-                f"-{history}",
-                "-t",
-                window_id,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            async with asyncio.timeout(5.0):
-                stdout, _ = await proc.communicate()
-            text = stdout.decode("utf-8", errors="replace").rstrip()
-            return text if text else None
-        except TimeoutError:
-            await _kill_timed_out_proc(proc)
-            logger.debug("capture_pane_scrollback timed out", window_id=window_id)
-            return None
-        except OSError as exc:
-            logger.debug(
-                "capture_pane_scrollback failed", window_id=window_id, error=str(exc)
-            )
-            return None
-
-    async def capture_pane_display(self, window_id: str) -> str | None:
-        """Capture managed terminal history and the current screen."""
-        session_name, pane_id = self._split_qualified(window_id)
-        if session_name.startswith(config.tmux_session_prefix):
-            await self._ensure_managed_window_size(session_name, pane_id)
-        return await self._capture_display_target(f"{session_name}:{pane_id}")
-
-    async def capture_pane_display_by_id(
-        self, pane_id: str, *, window_id: str
-    ) -> str | None:
-        """Capture history and screen for a specific pane."""
-        session_name, window = self._split_qualified(window_id)
-        if session_name.startswith(config.tmux_session_prefix):
-            await self._ensure_managed_window_size(session_name, window)
-        return await self._capture_display_target(f"{session_name}:{pane_id}")
-
     async def _ensure_managed_window_size(self, session_name: str, window_id: str) -> None:
         target = f"{session_name}:{window_id}"
         for command in (
             ("set-window-option", "-t", target, "window-size", "manual"),
-            ("resize-window", "-t", target, "-x", "30", "-y", "50"),
+            ("resize-window", "-t", target, "-x", "80", "-y", "120"),
         ):
             proc = await asyncio.create_subprocess_exec(
                 "tmux", *command,
@@ -541,26 +492,6 @@ class TmuxManager:
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await proc.wait()
-
-    async def _capture_display_target(self, target: str) -> str | None:
-        proc: asyncio.subprocess.Process | None = None
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "tmux", "capture-pane", "-e", "-p", "-J", "-S", "-", "-t", target,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            async with asyncio.timeout(5.0):
-                stdout, _ = await proc.communicate()
-            if proc.returncode != 0:
-                return None
-            text = stdout.decode("utf-8", errors="replace").rstrip()
-            return text if text else None
-        except TimeoutError:
-            await _kill_timed_out_proc(proc)
-            return None
-        except OSError:
-            return None
 
     async def capture_pane_raw(self, window_id: str) -> tuple[str, int, int] | None:
         """Capture pane text with ANSI escapes and pane dimensions.
@@ -1110,6 +1041,11 @@ class TmuxManager:
         When window_id is given, the pane must belong to that window (prevents
         cross-window access via crafted pane IDs).
         """
+        if window_id:
+            session_name, window = self._split_qualified(window_id)
+            if session_name.startswith(config.tmux_session_prefix):
+                await self._ensure_managed_window_size(session_name, window)
+
         if with_ansi:
             if window_id:
                 panes = await self.list_panes(window_id)

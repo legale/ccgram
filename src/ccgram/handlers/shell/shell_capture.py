@@ -110,14 +110,9 @@ _MAX_FIX_OUTPUT_CHARS = 800
 # BMP PUA: U+E000–U+F8FF, Supplement PUA-A: U+F0000–U+FFFFD
 _GLYPH_RE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U000ffffd]")
 
-_SCROLLBACK_LINES = 200
-
-
-async def _capture_with_scrollback(
-    window_id: str, history: int = _SCROLLBACK_LINES
-) -> str | None:
-    """Capture pane text including scrollback history via tmux_manager."""
-    return await tmux_manager.capture_pane_scrollback(window_id, history)
+async def _capture_current_screen(window_id: str) -> str | None:
+    """Capture only the current terminal screen."""
+    return await tmux_manager.capture_pane(window_id)
 
 
 @dataclass
@@ -488,8 +483,7 @@ async def check_passive_shell_output(
 
     Called every poll cycle from status_polling for shell provider windows.
     Uses ``rendered_text`` (cheap, from pyte) for change detection, then
-    ``_capture_with_scrollback`` for reliable output extraction so that
-    command echoes scrolled off the visible pane are still found.
+    ``_capture_current_screen`` for output extraction.
     """
     text_hash = hash(rendered_text)
     state = _shell_monitor_state.setdefault(window_id, _ShellMonitorState())
@@ -503,12 +497,11 @@ async def check_passive_shell_output(
             _reset_monitor(state)
         return
 
-    # Capture with scrollback for reliable command echo finding
-    scrollback = await _capture_with_scrollback(window_id)
-    if not scrollback:
+    screen = await _capture_current_screen(window_id)
+    if not screen:
         return
 
-    passive = _extract_passive_output(scrollback)
+    passive = _extract_passive_output(screen)
     if passive is None:
         if not (state.last_command_echo and state.msg_id is not None):
             _reset_monitor(state)

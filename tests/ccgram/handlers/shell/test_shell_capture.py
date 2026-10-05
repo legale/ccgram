@@ -312,7 +312,7 @@ class TestCheckPassiveShellOutput:
             ) as mock_send,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -342,7 +342,7 @@ class TestCheckPassiveShellOutput:
             ),
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -356,7 +356,7 @@ class TestCheckPassiveShellOutput:
             ) as mock_send2,
             patch(f"{_MOD}.thread_router") as mock_sm2,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -387,7 +387,7 @@ class TestCheckPassiveShellOutput:
             patch(f"{_MOD}.edit_with_fallback", new_callable=AsyncMock) as mock_edit,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -421,7 +421,7 @@ class TestCheckPassiveShellOutput:
             ),
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane1,
             ),
@@ -441,7 +441,7 @@ class TestCheckPassiveShellOutput:
             ),
             patch(f"{_MOD}.thread_router") as mock_sm2,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane2,
             ),
@@ -454,7 +454,7 @@ class TestCheckPassiveShellOutput:
         assert state.msg_id == mock_sent2.message_id
 
     @pytest.mark.asyncio()
-    async def test_long_output_with_scrollback(self) -> None:
+    async def test_long_output_on_current_screen(self) -> None:
         from ccgram.handlers.shell.shell_capture import (
             _shell_monitor_state,
             check_passive_shell_output,
@@ -465,7 +465,7 @@ class TestCheckPassiveShellOutput:
         mock_sent.message_id = 88
 
         visible = "\n".join([f"file{i}.txt" for i in range(20)] + ["ccgram:0❯"])
-        scrollback = "ccgram:0❯ ls -al\n" + visible
+        screen = "ccgram:0❯ ls -al\n" + visible
 
         with (
             patch(
@@ -475,9 +475,9 @@ class TestCheckPassiveShellOutput:
             ) as mock_send,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
-                return_value=scrollback,
+                return_value=screen,
             ),
         ):
             mock_sm.resolve_chat_id.return_value = -100
@@ -543,7 +543,7 @@ class TestPassiveEdgeCases:
             ),
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane1,
             ),
@@ -562,7 +562,7 @@ class TestPassiveEdgeCases:
             ),
             patch(f"{_MOD}.thread_router") as mock_sm2,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane2,
             ),
@@ -594,7 +594,7 @@ class TestPassiveEdgeCases:
             ) as mock_send,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 side_effect=[pane, changed_pane],
             ),
         ):
@@ -714,7 +714,7 @@ class TestPassiveRelayFormatting:
             ) as mock_send,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -744,7 +744,7 @@ class TestPassiveRelayFormatting:
             ) as mock_send,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -777,7 +777,7 @@ class TestPassiveRelayFormatting:
             patch(f"{_MOD}.edit_with_fallback", new_callable=AsyncMock) as mock_edit,
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -816,7 +816,7 @@ class TestPassiveRelayFormatting:
             patch(f"{_MOD}.edit_with_fallback", new_callable=AsyncMock),
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -853,7 +853,7 @@ class TestPassiveRelayFormatting:
             patch(f"{_MOD}.edit_with_fallback", new_callable=AsyncMock),
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -891,7 +891,7 @@ class TestPassiveRelayFormatting:
             patch(f"{_MOD}.edit_with_fallback", new_callable=AsyncMock),
             patch(f"{_MOD}.thread_router") as mock_sm,
             patch(
-                f"{_MOD}._capture_with_scrollback",
+                f"{_MOD}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -902,54 +902,45 @@ class TestPassiveRelayFormatting:
         reset_shell_monitor_state()
 
 
-class TestCaptureWithScrollback:
+class TestCaptureCurrentScreen:
     @pytest.mark.asyncio()
     async def test_returns_text_on_success(self) -> None:
-        from ccgram.handlers.shell.shell_capture import _capture_with_scrollback
+        from ccgram.handlers.shell.shell_capture import _capture_current_screen
 
         with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock
-        ) as mock_exec:
-            mock_proc = AsyncMock()
-            mock_proc.communicate.return_value = (b"line1\nline2\n", b"")
-            mock_exec.return_value = mock_proc
-            result = await _capture_with_scrollback("@4")
+            f"{_MOD}.tmux_manager.capture_pane",
+            new_callable=AsyncMock,
+            return_value="line1\nline2",
+        ):
+            result = await _capture_current_screen("@4")
 
         assert result == "line1\nline2"
 
     @pytest.mark.asyncio()
     async def test_returns_none_on_empty(self) -> None:
-        from ccgram.handlers.shell.shell_capture import _capture_with_scrollback
+        from ccgram.handlers.shell.shell_capture import _capture_current_screen
 
         with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock
-        ) as mock_exec:
-            mock_proc = AsyncMock()
-            mock_proc.communicate.return_value = (b"  \n  \n", b"")
-            mock_exec.return_value = mock_proc
-            result = await _capture_with_scrollback("@4")
+            f"{_MOD}.tmux_manager.capture_pane",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await _capture_current_screen("@4")
 
         assert result is None
 
     @pytest.mark.asyncio()
     async def test_uses_correct_tmux_flags(self) -> None:
-        from ccgram.handlers.shell.shell_capture import _capture_with_scrollback
+        from ccgram.handlers.shell.shell_capture import _capture_current_screen
 
         with patch(
-            "asyncio.create_subprocess_exec", new_callable=AsyncMock
-        ) as mock_exec:
-            mock_proc = AsyncMock()
-            mock_proc.communicate.return_value = (b"output", b"")
-            mock_exec.return_value = mock_proc
-            await _capture_with_scrollback("@4", history=100)
+            f"{_MOD}.tmux_manager.capture_pane",
+            new_callable=AsyncMock,
+            return_value="output",
+        ) as mock_capture:
+            await _capture_current_screen("@4")
 
-        args = mock_exec.call_args[0]
-        assert "tmux" in args
-        assert "capture-pane" in args
-        assert "-J" in args
-        assert "-S" in args
-        assert "-100" in args
-        assert "@4" in args
+        mock_capture.assert_awaited_once_with("@4")
 
 
 class TestMarkTelegramCommand:

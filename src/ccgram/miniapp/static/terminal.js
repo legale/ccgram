@@ -179,7 +179,7 @@
                 let msg;
                 try { msg = JSON.parse(ev.data); } catch (e) { return; }
                 if (msg.type === "frame" && typeof msg.text === "string") {
-                    // Whole-screen replacement: clear, write, no scrollback churn.
+                    // Whole-screen replacement: clear and write the current screen.
                     term.reset();
                     term.write(msg.text);
                 } else if (msg.type === "hello") {

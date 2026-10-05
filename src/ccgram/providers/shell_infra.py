@@ -322,7 +322,7 @@ async def setup_shell_prompt(
 
     No-op if the marker is already present in the pane (idempotent).
     Set ``clear=False`` when attaching to an existing session to
-    preserve scrollback context.
+    preserve terminal context.
 
     ``capture_fn`` and ``send_keys_fn`` are optional and injectable for
     tests — default to ``tmux_manager.capture_pane`` and

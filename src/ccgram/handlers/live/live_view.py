@@ -184,10 +184,10 @@ async def _tick_one_view(
 async def _capture_pane(view: LiveViewState, window_id: str) -> str | None:
     """Capture pane text for a live view."""
     if view.pane_id:
-        return await tmux_manager.capture_pane_display_by_id(
-            view.pane_id, window_id=view.window_id
+        return await tmux_manager.capture_pane_by_id(
+            view.pane_id, with_ansi=True, window_id=view.window_id
         )
-    return await tmux_manager.capture_pane_display(window_id)
+    return await tmux_manager.capture_pane(window_id, with_ansi=True)
 
 
 async def _edit_caption(client: TelegramClient, view: LiveViewState, text: str) -> None:
