@@ -138,7 +138,7 @@ async def test_reconcile_removes_session_when_telegram_topic_is_missing() -> Non
 async def test_reconcile_checks_existing_binding_for_dead_topic() -> None:
     session = _session()
     client = AsyncMock()
-    client.edit_forum_topic.side_effect = BadRequest("Message thread not found")
+    client.reopen_forum_topic.side_effect = BadRequest("Message thread not found")
     router = _router()
     router.bind_thread(1, 42, "cc_foo:@1", "foo")
     router.set_group_chat_id(1, 42, -100)
@@ -154,7 +154,7 @@ async def test_reconcile_checks_existing_binding_for_dead_topic() -> None:
         config.tmux_session_prefix = "cc_"
         await periodic_tasks.reconcile(client)
 
-    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="foo")
+    client.reopen_forum_topic.assert_awaited_once_with(-100, 42)
     tmux.kill_session.assert_awaited_once_with("cc_foo")
     assert router.get_window_for_thread(1, 42) is None
 

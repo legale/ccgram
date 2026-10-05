@@ -271,18 +271,14 @@ async def _clear_dead_topics(
     checked: set[tuple[int, int]],
 ) -> None:
     """Kill tmux sessions whose Telegram thread IDs no longer exist."""
-    # Lazy: topic name cache is only needed for the no-op Telegram check.
-    from ..status.topic_emoji import get_stored_topic_name
-
     for session in sessions:
         if session.topic_ref is None or session.topic_ref in checked:
             continue
         chat_id, thread_id = session.topic_ref
-        name = get_stored_topic_name(chat_id, thread_id) or _topic_name(session)
         try:
-            await client.edit_forum_topic(chat_id, thread_id, name=name)
+            await client.reopen_forum_topic(chat_id, thread_id)
         except BadRequest as exc:
-            if is_thread_gone(exc) or "topic_not_modified" not in exc.message.lower():
+            if is_thread_gone(exc):
                 await _remove_missing_topic(client, session, chat_id, thread_id)
         except TelegramError as exc:
             log_throttled(
