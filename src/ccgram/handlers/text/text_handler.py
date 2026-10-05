@@ -6,6 +6,8 @@ explicit ``//bind <name>``.
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import TYPE_CHECKING
 
 import structlog
@@ -173,6 +175,22 @@ async def handle_text_message(
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     assert window_id is not None
+
+    if message.text.startswith("!!"):
+        command = message.text[2:].strip()
+        if not command:
+            await safe_reply(message, "Usage: `!!<command>`")
+            return
+        await _handle_sidecar_command(
+            window_id=window_id,
+            user_id=user.id,
+            thread_id=thread_id,
+            command=command,
+            client=client,
+            message=message,
+        )
+        return
+
     await _forward_message(
         window_id,
         user.id,
@@ -181,3 +199,75 @@ async def handle_text_message(
         client,
         message,
     )
+
+
+async def _handle_sidecar_command(
+    window_id: str,
+    user_id: int,
+    thread_id: int,
+    command: str,
+    client: TelegramClient,
+    message: Message,
+) -> None:
+    """Execute a shell command in the sidecar pane without interrupting main pane."""
+    logger.info(
+        "sidecar_command_received",
+        user_id=user_id,
+        thread_id=thread_id,
+        window_id=window_id,
+        command=command,
+    )
+    from ...tmux_manager import tmux_manager
+    from ..status.topic_status_diff import (
+        start_sidecar_diff,
+        update_topic_status_diff,
+    )
+
+    sidecar_pane_id = await tmux_manager.ensure_sidecar_pane(window_id)
+    if not sidecar_pane_id:
+        await safe_reply(message, "❌ Failed to create or access sidecar pane.")
+        return
+
+    baseline = await tmux_manager.capture_pane_by_id(
+        sidecar_pane_id, with_ansi=True, window_id=window_id
+    )
+
+    time_str = time.strftime("%H:%M:%S")
+    title = f"⚡ Sidecar: {command} ({time_str})"
+    assert message.chat is not None
+    chat_id = message.chat.id
+    start_sidecar_diff(
+        chat_id=chat_id,
+        thread_id=thread_id,
+        window_id=window_id,
+        title=title,
+        baseline_text=baseline,
+    )
+
+    sent = await tmux_manager.send_keys_to_pane(
+        sidecar_pane_id,
+        command,
+        enter=True,
+        literal=True,
+        window_id=window_id,
+    )
+    if not sent:
+        await safe_reply(
+            message, f"❌ Failed to send command to sidecar pane {sidecar_pane_id}."
+        )
+        return
+
+    await ack_reaction(client, chat_id, message.message_id)
+
+    async def _quick_sidecar_tick() -> None:
+        await asyncio.sleep(0.3)
+        text = await tmux_manager.capture_pane_by_id(
+            sidecar_pane_id, with_ansi=True, window_id=window_id
+        )
+        if text:
+            await update_topic_status_diff(
+                client, chat_id, thread_id, window_id, text, target="sidecar"
+            )
+
+    asyncio.create_task(_quick_sidecar_tick())
+

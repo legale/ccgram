@@ -347,3 +347,161 @@ async def test_delta_shows_only_changed_lines(monkeypatch) -> None:
     assert "clock 12:00" not in body
     assert "footer a" not in body
     assert "line1" not in body
+
+
+async def test_sidecar_diff_uses_custom_title_and_sends_new_message(
+    monkeypatch,
+) -> None:
+    client = AsyncMock()
+    sent = SimpleNamespace(message_id=42)
+    send = AsyncMock(return_value=sent)
+    edit = AsyncMock(return_value=True)
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", edit)
+    monkeypatch.setattr(topic_status_diff, "is_last", lambda *_args, **_kw: True)
+
+    monotonic = SimpleNamespace(v=0.0)
+    monkeypatch.setattr(
+        topic_status_diff.time, "monotonic", lambda: float(monotonic.v)
+    )
+
+    topic_status_diff.start_sidecar_diff(
+        chat_id=1,
+        thread_id=2,
+        window_id="@7",
+        title="⚡ Sidecar: ls -alh (12:00:00)",
+        baseline_text="initial prompt $\n",
+    )
+
+    monotonic.v = 11.0
+    await topic_status_diff.update_topic_status_diff(
+        client,
+        chat_id=1,
+        thread_id=2,
+        window_id="@7",
+        pane_text="initial prompt $\nfile1.txt\nfile2.txt\n",
+        target="sidecar",
+        active=True,
+    )
+
+    send.assert_awaited_once()
+    msg_text = send.await_args.args[2]
+    assert "⚡ Sidecar: ls -alh (12:00:00)" in msg_text
+    assert "file1.txt" in msg_text
+    assert "file2.txt" in msg_text
+
+
+async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None:
+    client = AsyncMock()
+    sent_main = SimpleNamespace(message_id=100)
+    sent_sidecar = SimpleNamespace(message_id=200)
+    send = AsyncMock(side_effect=[sent_main, sent_sidecar])
+    edit = AsyncMock(return_value=True)
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", edit)
+    monkeypatch.setattr(topic_status_diff, "is_last", lambda *_args, **_kw: True)
+
+    monotonic = SimpleNamespace(v=0.0)
+    monkeypatch.setattr(
+        topic_status_diff.time, "monotonic", lambda: float(monotonic.v)
+    )
+
+    # 1. Main pane activity
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "main initial\n", target="main", active=True
+    )
+    # 2. Sidecar command started
+    topic_status_diff.start_sidecar_diff(
+        chat_id=1,
+        thread_id=2,
+        window_id="@7",
+        title="⚡ Sidecar: pwd (12:00:00)",
+        baseline_text="shell prompt $\n",
+    )
+
+    monotonic.v = 11.0
+    # Update main
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "main initial\nagent step 1\n", target="main", active=True
+    )
+    # Update sidecar
+    await topic_status_diff.update_topic_status_diff(
+        client,
+        1,
+        2,
+        "@7",
+        "shell prompt $\n/home/ruslan\n",
+        target="sidecar",
+        active=True,
+    )
+
+    assert send.await_count == 2
+    main_call = send.await_args_list[0].args[2]
+    sidecar_call = send.await_args_list[1].args[2]
+
+    assert "agent step 1" in main_call
+    assert "⚡ Sidecar: pwd" not in main_call
+
+    assert "⚡ Sidecar: pwd (12:00:00)" in sidecar_call
+    assert "/home/ruslan" in sidecar_call
+    assert "agent step 1" not in sidecar_call
+
+
+async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> None:
+    client = AsyncMock()
+    sent1 = SimpleNamespace(message_id=301)
+    sent2 = SimpleNamespace(message_id=302)
+    send = AsyncMock(side_effect=[sent1, sent2])
+    edit = AsyncMock(return_value=True)
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", edit)
+    monkeypatch.setattr(topic_status_diff, "is_last", lambda *_args, **_kw: True)
+
+    monotonic = SimpleNamespace(v=0.0)
+    monkeypatch.setattr(
+        topic_status_diff.time, "monotonic", lambda: float(monotonic.v)
+    )
+
+    # First sidecar command
+    topic_status_diff.start_sidecar_diff(
+        chat_id=1,
+        thread_id=2,
+        window_id="@7",
+        title="⚡ Sidecar: cmd1 (12:00:00)",
+        baseline_text="prompt $\n",
+    )
+    monotonic.v = 11.0
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "prompt $\noutput1\n", target="sidecar", active=True
+    )
+
+    # Second sidecar command (Option B: must create a new message)
+    monotonic.v = 20.0
+    topic_status_diff.start_sidecar_diff(
+        chat_id=1,
+        thread_id=2,
+        window_id="@7",
+        title="⚡ Sidecar: cmd2 (12:00:10)",
+        baseline_text="prompt $\noutput1\nprompt $\n",
+    )
+    monotonic.v = 31.0
+    await topic_status_diff.update_topic_status_diff(
+        client,
+        1,
+        2,
+        "@7",
+        "prompt $\noutput1\nprompt $\noutput2\n",
+        target="sidecar",
+        active=True,
+    )
+
+    assert send.await_count == 2
+    msg1_text = send.await_args_list[0].args[2]
+    msg2_text = send.await_args_list[1].args[2]
+
+    assert "⚡ Sidecar: cmd1" in msg1_text
+    assert "output1" in msg1_text
+
+    assert "⚡ Sidecar: cmd2" in msg2_text
+    assert "output2" in msg2_text
+

@@ -1,6 +1,6 @@
 """Tests for direct Telegram topic -> tmux routing."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from ccgram.handlers.text import text_handler as module
 from ccgram.tmux_manager import TmuxWindow
@@ -93,3 +93,102 @@ async def test_existing_binding_goes_directly_to_forward() -> None:
 
     ensure.assert_awaited_once()
     forward.assert_awaited_once()
+
+
+async def test_sidecar_command_routes_to_sidecar_handler() -> None:
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.effective_chat = update.message.chat
+    update.message.text = "!!ls -la"
+    update.message.message_thread_id = 42
+    update.message.chat.id = -100
+    context = MagicMock()
+    router = MagicMock()
+    router.get_window_for_thread.return_value = "cc_foo:@1"
+
+    with (
+        patch.object(module, "thread_router", router),
+        patch.object(module, "_get_thread_id", return_value=42),
+        patch.object(
+            module, "_handle_rename_captures", new=AsyncMock(return_value=False)
+        ),
+        patch.object(
+            module, "_handle_unbound_topic", new=AsyncMock(return_value=False)
+        ),
+        patch.object(module, "_forward_message", new_callable=AsyncMock) as forward,
+        patch.object(
+            module, "_handle_sidecar_command", new_callable=AsyncMock
+        ) as sidecar_handler,
+        patch("ccgram.handlers.status.topic_status_diff.mark_topic_status_activity"),
+    ):
+        await module.handle_text_message(update, context)
+
+    forward.assert_not_called()
+    sidecar_handler.assert_awaited_once_with(
+        window_id="cc_foo:@1",
+        user_id=1,
+        thread_id=42,
+        command="ls -la",
+        client=ANY,
+        message=update.message,
+    )
+
+
+async def test_empty_sidecar_command_replies_usage() -> None:
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.effective_chat = update.message.chat
+    update.message.text = "!!   "
+    update.message.message_thread_id = 42
+    update.message.chat.id = -100
+    context = MagicMock()
+    router = MagicMock()
+    router.get_window_for_thread.return_value = "cc_foo:@1"
+
+    with (
+        patch.object(module, "thread_router", router),
+        patch.object(module, "_get_thread_id", return_value=42),
+        patch.object(
+            module, "_handle_rename_captures", new=AsyncMock(return_value=False)
+        ),
+        patch.object(
+            module, "_handle_unbound_topic", new=AsyncMock(return_value=False)
+        ),
+        patch.object(module, "safe_reply", new_callable=AsyncMock) as reply,
+        patch("ccgram.handlers.status.topic_status_diff.mark_topic_status_activity"),
+    ):
+        await module.handle_text_message(update, context)
+
+    reply.assert_awaited_once_with(update.message, "Usage: `!!<command>`")
+
+
+async def test_handle_sidecar_command_execution() -> None:
+    message = MagicMock()
+    message.chat.id = -100
+    message.message_id = 999
+    client = MagicMock()
+
+    with (
+        patch("ccgram.tmux_manager.tmux_manager.ensure_sidecar_pane", new=AsyncMock(return_value="%2")) as ensure_pane,
+        patch("ccgram.tmux_manager.tmux_manager.capture_pane_by_id", new=AsyncMock(return_value="baseline prompt")) as capture,
+        patch("ccgram.tmux_manager.tmux_manager.send_keys_to_pane", new=AsyncMock(return_value=True)) as send_keys,
+        patch("ccgram.handlers.status.topic_status_diff.start_sidecar_diff") as start_diff,
+        patch.object(module, "ack_reaction", new_callable=AsyncMock) as ack,
+    ):
+        await module._handle_sidecar_command(
+            window_id="cc_foo:@1",
+            user_id=1,
+            thread_id=42,
+            command="git status",
+            client=client,
+            message=message,
+        )
+
+    ensure_pane.assert_awaited_once_with("cc_foo:@1")
+    capture.assert_awaited_once_with("%2", with_ansi=True, window_id="cc_foo:@1")
+    start_diff.assert_called_once()
+    assert "⚡ Sidecar: git status" in start_diff.call_args.kwargs["title"]
+    assert start_diff.call_args.kwargs["baseline_text"] == "baseline prompt"
+    send_keys.assert_awaited_once_with("%2", "git status", enter=True, literal=True, window_id="cc_foo:@1")
+    ack.assert_awaited_once_with(client, -100, 999)
+

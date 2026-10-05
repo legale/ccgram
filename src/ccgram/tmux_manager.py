@@ -139,6 +139,7 @@ class TmuxManager:
         """
         self.session_name = session_name or config.tmux_session_name
         self._server: libtmux.Server | None = None
+        self._sidecar_panes: dict[str, str] = {}
 
     @property
     def server(self) -> libtmux.Server:
@@ -857,6 +858,7 @@ class TmuxManager:
                 logger.exception("Failed to kill window %s", window_id)
                 return False
 
+        self.forget_sidecar_pane(window_id)
         return await asyncio.to_thread(_sync_kill)
 
     async def kill_session(self, session_name: str) -> bool:
@@ -864,6 +866,10 @@ class TmuxManager:
         if session_name == self.session_name:
             logger.warning("Refusing to kill the main tmux session %s", session_name)
             return False
+
+        for wid in list(self._sidecar_panes):
+            if wid.startswith(f"{session_name}:"):
+                self.forget_sidecar_pane(wid)
 
         def _sync_kill() -> bool:
             session = self.get_session(session_name)
@@ -926,6 +932,86 @@ class TmuxManager:
 
     # ── Pane-level operations ──────────────────────────────────────────
 
+    def get_sidecar_pane_id(self, window_id: str) -> str | None:
+        """Get tracked sidecar pane ID for a window if any."""
+        return self._sidecar_panes.get(window_id)
+
+    def forget_sidecar_pane(self, window_id: str) -> None:
+        """Remove tracked sidecar pane for a window."""
+        self._sidecar_panes.pop(window_id, None)
+
+    async def ensure_sidecar_pane(self, window_id: str) -> str | None:
+        """Ensure a sidecar pane exists for the window, strictly enforcing max 2 panes.
+
+        Returns the sidecar pane ID (e.g. '%2'), or None on failure.
+        """
+        panes = await self.list_panes(window_id)
+        if not panes:
+            return None
+
+        # If already 2 or more panes exist:
+        if len(panes) >= 2:
+            tracked = self._sidecar_panes.get(window_id)
+            if tracked and any(p.pane_id == tracked for p in panes):
+                sidecar_id = tracked
+            else:
+                sidecar_id = panes[1].pane_id
+                self._sidecar_panes[window_id] = sidecar_id
+
+            # Strictly enforce invariant: kill any excess panes beyond main and sidecar
+            if len(panes) > 2:
+                for p in panes[2:]:
+                    try:
+                        proc = await asyncio.create_subprocess_exec(
+                            "tmux", "kill-pane", "-t", p.pane_id
+                        )
+                        await proc.wait()
+                    except Exception:
+                        pass
+            return sidecar_id
+
+        # Only 1 pane exists: split window in background (-d) keeping current path
+        session_name, wid = self._split_qualified(window_id)
+        target = f"{session_name}:{wid}" if session_name else wid
+        proc: asyncio.subprocess.Process | None = None
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux",
+                "split-window",
+                "-d",
+                "-t",
+                target,
+                "-c",
+                "#{pane_current_path}",
+                "-P",
+                "-F",
+                "#{pane_id}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            async with asyncio.timeout(5.0):
+                stdout, stderr = await proc.communicate()
+            if proc.returncode != 0:
+                logger.warning(
+                    "Failed to split window %s for sidecar: %s",
+                    target,
+                    stderr.decode("utf-8", errors="replace"),
+                )
+                return None
+            new_pane_id = stdout.decode("utf-8", errors="replace").strip()
+            if new_pane_id:
+                self._sidecar_panes[window_id] = new_pane_id
+                return new_pane_id
+        except TimeoutError:
+            logger.warning("Timed out splitting window %s for sidecar", target)
+            await _kill_timed_out_proc(proc)
+            return None
+        except OSError:
+            logger.exception("Unexpected error splitting window %s for sidecar", target)
+            return None
+
+        return None
+
     async def list_panes(self, window_id: str) -> list[PaneInfo]:
         """List all panes in a window.
 
@@ -933,11 +1019,12 @@ class TmuxManager:
         """
 
         def _sync_list_panes() -> list[PaneInfo]:
-            session = self.get_session()
+            session_name, wid = self._split_qualified(window_id)
+            session = self.get_session(session_name)
             if not session:
                 return []
             try:
-                window = session.windows.get(window_id=window_id, default=None)
+                window = session.windows.get(window_id=wid, default=None)
                 if not window:
                     return []
                 result: list[PaneInfo] = []
@@ -978,7 +1065,6 @@ class TmuxManager:
         """
         if with_ansi:
             if window_id:
-                # Validate pane belongs to the specified window before capture
                 panes = await self.list_panes(window_id)
                 if not any(p.pane_id == pane_id for p in panes):
                     logger.warning("Pane %s not found in window %s", pane_id, window_id)
@@ -986,11 +1072,14 @@ class TmuxManager:
             return await self._capture_pane_ansi(pane_id)
 
         def _sync_capture() -> str | None:
-            session = self.get_session()
+            session_name, wid = (
+                self._split_qualified(window_id) if window_id else (None, None)
+            )
+            session = self.get_session(session_name)
             if not session:
                 return None
             try:
-                pane = self._find_pane(pane_id, session, window_id=window_id)
+                pane = self._find_pane(pane_id, session, window_id=wid)
                 if not pane:
                     return None
                 lines = pane.capture_pane()
@@ -1023,11 +1112,14 @@ class TmuxManager:
         """
 
         def _sync_send() -> bool:
-            session = self.get_session()
+            session_name, wid = (
+                self._split_qualified(window_id) if window_id else (None, None)
+            )
+            session = self.get_session(session_name)
             if not session:
                 return False
             try:
-                pane = self._find_pane(pane_id, session, window_id=window_id)
+                pane = self._find_pane(pane_id, session, window_id=wid)
                 if not pane:
                     logger.warning("Pane %s not found", pane_id)
                     return False
