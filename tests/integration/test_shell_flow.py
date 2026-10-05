@@ -106,7 +106,7 @@ class TestRawCommandFlow:
             ) as mock_send,
             patch(f"{_MOD_CAP}.thread_router") as mock_sm,
             patch(
-                f"{_MOD_CAP}._capture_with_scrollback",
+                f"{_MOD_CAP}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -151,7 +151,7 @@ class TestRawCommandFlow:
             ) as mock_edit,
             patch(f"{_MOD_CAP}.thread_router") as mock_sm,
             patch(
-                f"{_MOD_CAP}._capture_with_scrollback",
+                f"{_MOD_CAP}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -287,7 +287,7 @@ class TestErrorRecovery:
             patch(f"{_MOD_CAP}.edit_with_fallback", new_callable=AsyncMock),
             patch(f"{_MOD_CAP}.thread_router") as mock_sm,
             patch(
-                f"{_MOD_CAP}._capture_with_scrollback",
+                f"{_MOD_CAP}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -341,7 +341,7 @@ class TestErrorRecovery:
             patch(f"{_MOD_CAP}.edit_with_fallback", new_callable=AsyncMock),
             patch(f"{_MOD_CAP}.thread_router") as mock_sm,
             patch(
-                f"{_MOD_CAP}._capture_with_scrollback",
+                f"{_MOD_CAP}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane,
             ),
@@ -383,7 +383,7 @@ class TestPassiveMonitoringRoundTrip:
             ) as mock_send,
             patch(f"{_MOD_CAP}.thread_router") as mock_sm,
             patch(
-                f"{_MOD_CAP}._capture_with_scrollback",
+                f"{_MOD_CAP}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane_in_progress,
             ),
@@ -409,7 +409,7 @@ class TestPassiveMonitoringRoundTrip:
             ) as mock_edit,
             patch(f"{_MOD_CAP}.thread_router") as mock_sm2,
             patch(
-                f"{_MOD_CAP}._capture_with_scrollback",
+                f"{_MOD_CAP}._capture_current_screen",
                 new_callable=AsyncMock,
                 return_value=pane_completed,
             ),

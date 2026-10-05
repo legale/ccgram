@@ -79,6 +79,17 @@ class Config:
                 load_dotenv(env_path)
                 logger.debug("Loaded env from %s", env_path.resolve())
 
+        # Load .env-default as fallback: cwd, config_dir, or project root
+        repo_default = Path(__file__).resolve().parents[2] / ".env-default"
+        for default_path in (
+            Path(".env-default"),
+            self.config_dir / ".env-default",
+            repo_default,
+        ):
+            if default_path.is_file():
+                load_dotenv(default_path, override=False)
+                logger.debug("Loaded default env from %s", default_path.resolve())
+
         self.telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN") or ""
         if not self.telegram_bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
@@ -180,6 +191,9 @@ class Config:
         self.live_view_timeout: int = max(
             1, _parse_int_env("CCGRAM_LIVE_VIEW_TIMEOUT", 300)
         )
+        self.live_view_limit: int = max(
+            100, _parse_int_env("CCGRAM_LIVE_VIEW_LIMIT", 1000)
+        )
 
     def _init_shell_and_llm(self) -> None:
         self.prompt_mode = os.getenv("CCGRAM_PROMPT_MODE", "wrap")
@@ -220,6 +234,9 @@ class Config:
         )
         self.topic_status_diff_interval: int = max(
             1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
+        )
+        self.screen_diff_limit: int = max(
+            100, _parse_int_env("CCGRAM_SCREEN_DIFF_LIMIT", 1000)
         )
 
     def _init_miniapp(self) -> None:

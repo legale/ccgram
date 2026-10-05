@@ -68,7 +68,7 @@ def _format_screen(
     window_id: str, pane_text: str, title: str | None = None
 ) -> str:
     header = title or f"Screen delta {window_id}"
-    body = _tail_lines(pane_text, _BODY_LIMIT)
+    body = _tail_lines(pane_text, config.screen_diff_limit)
     return f"{header}\n```\n{body}\n```"
 
 

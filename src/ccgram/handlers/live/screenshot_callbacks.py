@@ -131,12 +131,14 @@ async def _handle_live_start(
         return
 
     # Lazy: live_view ↔ screenshot_callbacks bidirectional cycle.
+    from ...config import config
     from .live_view import (
         LiveViewState,
         build_live_keyboard,
         content_hash,
         is_live,
         start_live_view,
+        tail_lines_ansi,
     )
 
     if is_live(user_id, thread_id):
@@ -158,6 +160,7 @@ async def _handle_live_start(
         await query.answer("Failed to capture pane", show_alert=True)
         return
 
+    text = tail_lines_ansi(text, config.live_view_limit)
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
     png_bytes = await text_to_image(text, with_ansi=True, live_mode=True)
     keyboard = build_live_keyboard(window_id, pane_id=pane_id)
@@ -515,6 +518,7 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
         content_hash,
         is_live,
         start_live_view,
+        tail_lines_ansi,
     )
 
     user = update.effective_user
@@ -554,6 +558,7 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
         await safe_reply(update.message, "Failed to capture terminal.")
         return
 
+    text = tail_lines_ansi(text, config.live_view_limit)
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
     png_bytes = await text_to_image(text, with_ansi=True, live_mode=True)
     keyboard = build_live_keyboard(window_id)

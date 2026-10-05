@@ -251,3 +251,26 @@ class TestPollingConfig:
         assert getattr(Config(), attr) == expected
         monkeypatch.setenv(env_var, clamp_str)
         assert getattr(Config(), attr) == clamped
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestLimitsConfig:
+    def test_default_limits(self):
+        cfg = Config()
+        assert cfg.live_view_limit == 1000
+        assert cfg.screen_diff_limit == 1000
+
+    def test_custom_limits(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_LIVE_VIEW_LIMIT", "500")
+        monkeypatch.setenv("CCGRAM_SCREEN_DIFF_LIMIT", "800")
+        cfg = Config()
+        assert cfg.live_view_limit == 500
+        assert cfg.screen_diff_limit == 800
+
+    def test_env_default_file_fallback(self, monkeypatch, tmp_path):
+        default_file = tmp_path / ".env-default"
+        default_file.write_text("CCGRAM_LIVE_VIEW_LIMIT=1234\n")
+        monkeypatch.delenv("CCGRAM_LIVE_VIEW_LIMIT", raising=False)
+        monkeypatch.chdir(tmp_path)
+        cfg = Config()
+        assert cfg.live_view_limit == 1234

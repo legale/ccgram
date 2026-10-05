@@ -15,6 +15,7 @@ Key functions:
 import contextlib
 import hashlib
 import io
+import re
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -121,6 +122,32 @@ async def tick_live_views(client: TelegramClient) -> None:
         await _tick_one_view(client, key, view, now, effective_timeout, interval)
 
 
+_RE_ANSI = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]|"
+    r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
+    r"\x1b[@-_]",
+)
+
+
+def tail_lines_ansi(text: str, limit: int) -> str:
+    """Keep the bottom lines of text so that visible chars <= limit."""
+    try:
+        eff_limit = int(limit)
+    except (TypeError, ValueError):
+        eff_limit = 1000
+    lines = text.splitlines()
+    kept: list[str] = []
+    used = 0
+    for line in reversed(lines):
+        clean = _RE_ANSI.sub("", line)
+        cost = len(clean) + 1
+        if used + cost > eff_limit and kept:
+            break
+        kept.append(line)
+        used += cost
+    return "\n".join(reversed(kept))
+
+
 async def _tick_one_view(
     client: TelegramClient,
     key: tuple[int, int],
@@ -145,10 +172,11 @@ async def _tick_one_view(
             await _edit_caption(client, view, "Live view ended (window closed)")
             return
 
-        text = await _capture_pane(view, window.window_id)
-        if not text:
+        raw_text = await _capture_pane(view, window.window_id)
+        if not raw_text:
             return
 
+        text = tail_lines_ansi(raw_text, config.live_view_limit)
         h = content_hash(text)
         if h == view.last_hash:
             return
