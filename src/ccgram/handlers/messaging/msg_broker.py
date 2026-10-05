@@ -223,18 +223,12 @@ async def broker_delivery_cycle(
     from ...window_query import get_window_provider
 
     # Lazy: providers / window_query proxies wired by SessionManager constructor
-    from ...window_resolver import is_foreign_window
-
     _recover_stale_pending(mailbox)
 
     delivered_count = 0
 
     for window_id in list(window_ids):
-        # Foreign windows (emdash) are already fully qualified
-        if is_foreign_window(window_id):
-            qualified_id = window_id
-        else:
-            qualified_id = f"{tmux_session}:{window_id}"
+        qualified_id = f"{tmux_session}:{window_id}"
 
         try:
             sanitize_dir_name(qualified_id)

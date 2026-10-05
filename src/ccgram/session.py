@@ -30,7 +30,6 @@ from .user_preferences import (
     install_user_preferences,
     user_preferences,
 )
-from .window_resolver import is_foreign_window, is_window_id
 from .window_view import WindowView
 from .window_state_store import (
     APPROVAL_MODES,
@@ -45,64 +44,6 @@ from .window_state_store import (
 )
 
 logger = structlog.get_logger()
-
-
-@dataclass
-class AuditIssue:
-    """A single issue found during state audit."""
-
-    category: str  # ghost_binding | orphaned_display_name | orphaned_group_chat_id | stale_window_state | stale_offset | display_name_drift
-    detail: str
-    fixable: bool
-
-
-@dataclass
-class AuditResult:
-    """Result of a state audit."""
-
-    issues: list[AuditIssue]
-    total_bindings: int
-    live_binding_count: int
-
-    @property
-    def fixable_count(self) -> int:
-        return sum(1 for i in self.issues if i.fixable)
-
-    @property
-    def has_issues(self) -> bool:
-        return len(self.issues) > 0
-
-
-def _migrate_mailbox_ids(
-    old_display: dict[str, str],
-    new_states: dict[str, "WindowState"],
-    tmux_session: str,
-) -> None:
-    """Migrate mailbox directories when window IDs change after tmux restart.
-
-    Builds a remap dict by matching old→new IDs via display name, then
-    renames mailbox directories to match.
-    """
-    # Build new key→display_name from current window_display_names
-    new_display = {
-        wid: thread_router.window_display_names.get(wid, "") for wid in new_states
-    }
-    # Invert new display → new_id
-    display_to_new: dict[str, str] = {}
-    for wid, name in new_display.items():
-        if name:
-            display_to_new[name] = wid
-
-    remap: dict[str, str] = {}
-    for old_id, name in old_display.items():
-        if not name or old_id in new_states:
-            continue
-        new_id = display_to_new.get(name)
-        if new_id and new_id != old_id:
-            remap[f"{tmux_session}:{old_id}"] = f"{tmux_session}:{new_id}"
-
-    if remap:
-        Mailbox(config.mailbox_dir).migrate_ids(remap)
 
 
 @dataclass
@@ -174,7 +115,7 @@ class SessionManager:
 
     def _is_window_id(self, key: str) -> bool:
         """Check if a key looks like a tmux window ID (e.g. '@0', '@12')."""
-        return is_window_id(key)
+        return key.startswith("@") and len(key) > 1 and key[1:].isdigit()
 
     def _load_state(self) -> None:
         """Load state during initialization.
@@ -195,16 +136,15 @@ class SessionManager:
         thread_router.from_dict(state)
 
         # Detect old format: keys that don't look like window IDs
-        # Foreign windows (emdash) use qualified IDs — not old format.
         needs_migration = False
         for k in window_store.window_states:
-            if not self._is_window_id(k) and not is_foreign_window(k):
+            if not self._is_window_id(k) :
                 needs_migration = True
                 break
         if not needs_migration:
             for bindings in thread_router.thread_bindings.values():
                 for wid in bindings.values():
-                    if not self._is_window_id(wid) and not is_foreign_window(wid):
+                    if not self._is_window_id(wid) :
                         needs_migration = True
                         break
                 if needs_migration:
@@ -216,57 +156,6 @@ class SessionManager:
                 "will re-resolve on startup"
             )
 
-    async def resolve_stale_ids(self) -> None:
-        """Re-resolve persisted window IDs against live tmux windows.
-
-        Called on startup. Delegates to window_resolver for the heavy lifting.
-        Dead window bindings and states are preserved for /restore recovery.
-        Also migrates mailbox directories when window IDs change.
-        """
-        # Lazy: window_resolver imports session-state types; hoisting forms
-        # session → window_resolver → session.WindowState cycle.
-        # Lazy: window_resolver pulls back into session manager
-        from .window_resolver import LiveWindow, resolve_stale_ids as _resolve
-
-        windows = await tmux_manager.list_windows()
-        live = [
-            LiveWindow(window_id=w.window_id, window_name=w.window_name)
-            for w in windows
-        ]
-
-        # Snapshot old key→display_name mapping for mailbox migration
-        tmux_session = config.tmux_session_name
-        old_display = {
-            wid: thread_router.window_display_names.get(wid, "")
-            for wid in self.window_states
-        }
-
-        changed = _resolve(
-            live,
-            self.window_states,
-            thread_router.thread_bindings,
-            user_preferences.user_window_offsets,
-            thread_router.window_display_names,
-        )
-
-        if changed:
-            thread_router._rebuild_reverse_index()
-            self._save_state()
-            logger.info("Startup re-resolution complete")
-
-            # Migrate mailbox directories for remapped window IDs
-            _migrate_mailbox_ids(old_display, self.window_states, tmux_session)
-
-        live_ids = {w.window_id for w in live}
-
-        # Sync display names from live tmux windows (detect external renames)
-        live_pairs = [(w.window_id, w.window_name) for w in live]
-        self.sync_display_names(live_pairs)
-
-        self.prune_stale_state(live_ids)
-
-    # --- Display name management (delegated to thread_router) ---
-
     def set_display_name(self, window_id: str, window_name: str) -> None:
         """Update display name for a window_id."""
         thread_router.set_display_name(window_id, window_name)
@@ -274,197 +163,6 @@ class SessionManager:
         ws = self.window_states.get(window_id)
         if ws:
             ws.window_name = window_name
-
-    def sync_display_names(self, live_windows: list[tuple[str, str]]) -> bool:
-        """Sync display names from live tmux windows. Returns True if changed."""
-        router_changed = thread_router.sync_display_names(live_windows)
-        # Always reconcile WindowState.window_name — the router may already
-        # have the correct name while WindowState is still stale from older
-        # persisted state.
-        ws_changed = False
-        for window_id, window_name in live_windows:
-            ws = self.window_states.get(window_id)
-            if ws and ws.window_name != window_name:
-                ws.window_name = window_name
-                ws_changed = True
-        # Router saves itself when router_changed; persist WindowState repairs
-        # even when the router side was already correct.
-        if ws_changed and not router_changed:
-            self._save_state()
-        return router_changed or ws_changed
-
-    def prune_stale_state(self, live_window_ids: set[str]) -> bool:
-        """Remove orphaned display names and runtime chat IDs."""
-        # Collect window_ids that are "in use" (bound or have window_states)
-        in_use = set(self.window_states.keys())
-        for bindings in thread_router.thread_bindings.values():
-            in_use.update(bindings.values())
-
-        # Prune window_display_names for dead windows not in use and not live
-        stale_display = [
-            wid
-            for wid in thread_router.window_display_names
-            if wid not in live_window_ids and wid not in in_use
-        ]
-
-        # Collect all bound thread keys "user_id:thread_id"
-        bound_keys: set[str] = set()
-        for user_id, bindings in thread_router.thread_bindings.items():
-            for thread_id in bindings:
-                bound_keys.add(f"{user_id}:{thread_id}")
-
-        stale_chat = [k for k in thread_router.group_chat_ids if k not in bound_keys]
-
-        # Prune stale byte offsets (independent of display/chat pruning)
-        all_known = live_window_ids | in_use
-        offsets_changed = user_preferences.prune_stale_offsets(all_known)
-
-        # Prune dead mailbox directories
-        qualified_live: set[str] = set()
-        for wid in all_known:
-            if is_foreign_window(wid):
-                qualified_live.add(wid)
-            else:
-                qualified_live.add(f"{config.tmux_session_name}:{wid}")
-
-        Mailbox(config.mailbox_dir).prune_dead(qualified_live)
-
-        if not stale_display and not stale_chat:
-            return offsets_changed
-
-        for wid in stale_display:
-            name = thread_router.pop_display_name(wid)
-            logger.info("Pruning stale display name: %s (%s)", wid, name)
-        for key in stale_chat:
-            logger.info("Pruning stale group_chat_id: %s", key)
-            del thread_router.group_chat_ids[key]
-
-        self._save_state()
-        return True
-
-    def audit_state(
-        self,
-        live_window_ids: set[str],
-        live_windows: list[tuple[str, str]],
-    ) -> AuditResult:
-        """Read-only audit of all state maps against live tmux windows.
-
-        Args:
-            live_window_ids: Set of currently alive tmux window IDs.
-            live_windows: List of (window_id, window_name) for live windows.
-
-        Returns:
-            AuditResult with discovered issues.
-        """
-        issues: list[AuditIssue] = []
-
-        # Collect all bound window IDs
-        bound_window_ids: set[str] = set()
-        total_bindings = 0
-        live_binding_count = 0
-        for _uid, bindings in thread_router.thread_bindings.items():
-            for _tid, wid in bindings.items():
-                total_bindings += 1
-                bound_window_ids.add(wid)
-                if wid in live_window_ids:
-                    live_binding_count += 1
-
-        # 1. Ghost bindings (thread → dead window) — fixable (close topic)
-        for uid, bindings in thread_router.thread_bindings.items():
-            for tid, wid in bindings.items():
-                if wid not in live_window_ids:
-                    display = thread_router.get_display_name(wid)
-                    issues.append(
-                        AuditIssue(
-                            category="ghost_binding",
-                            detail=f"user:{uid} thread:{tid} window:{wid} ({display})",
-                            fixable=True,
-                        )
-                    )
-
-        # 2. Orphaned display names
-        in_use = set(self.window_states.keys()) | bound_window_ids
-        for wid in thread_router.window_display_names:
-            if wid not in live_window_ids and wid not in in_use:
-                name = thread_router.get_display_name(wid)
-                issues.append(
-                    AuditIssue(
-                        category="orphaned_display_name",
-                        detail=f"{wid} ({name})",
-                        fixable=True,
-                    )
-                )
-
-        # 3. Orphaned group_chat_ids
-        bound_keys: set[str] = set()
-        for user_id, bindings in thread_router.thread_bindings.items():
-            for thread_id in bindings:
-                bound_keys.add(f"{user_id}:{thread_id}")
-        for key in thread_router.group_chat_ids:
-            if key not in bound_keys:
-                issues.append(
-                    AuditIssue(
-                        category="orphaned_group_chat_id",
-                        detail=f"key {key}",
-                        fixable=True,
-                    )
-                )
-
-        # 4. Stale window_states (not bound and not live)
-        for wid in self.window_states:
-            if wid not in bound_window_ids and wid not in live_window_ids:
-                display = self.window_states[wid].window_name or wid
-                issues.append(
-                    AuditIssue(
-                        category="stale_window_state",
-                        detail=f"{wid} ({display})",
-                        fixable=True,
-                    )
-                )
-
-        # 5. Stale user_window_offsets
-        known_wids = live_window_ids | bound_window_ids | set(self.window_states.keys())
-        for uid, offsets in user_preferences.user_window_offsets.items():
-            for wid in offsets:
-                if wid not in known_wids:
-                    issues.append(
-                        AuditIssue(
-                            category="stale_offset",
-                            detail=f"user {uid}, window {wid}",
-                            fixable=True,
-                        )
-                    )
-
-        # 6. Display name drift (stored != tmux)
-        for wid, tmux_name in live_windows:
-            stored_name = thread_router.window_display_names.get(wid)
-            if stored_name and stored_name != tmux_name:
-                issues.append(
-                    AuditIssue(
-                        category="display_name_drift",
-                        detail=f"{wid}: stored={stored_name!r} tmux={tmux_name!r}",
-                        fixable=True,
-                    )
-                )
-
-        # 7. Orphaned tmux windows (live, known to ccgram, but not bound to any topic)
-        known_wids = set(self.window_states.keys())
-        for wid in live_window_ids:
-            if wid not in bound_window_ids and wid in known_wids:
-                name = dict(live_windows).get(wid, wid)
-                issues.append(
-                    AuditIssue(
-                        category="orphaned_window",
-                        detail=f"{wid} ({name})",
-                        fixable=True,
-                    )
-                )
-
-        return AuditResult(
-            issues=issues,
-            total_bindings=total_bindings,
-            live_binding_count=live_binding_count,
-        )
 
     def prune_stale_window_states(self, live_window_ids: set[str]) -> bool:
         """Remove window_states not bound and not live.
@@ -512,8 +210,6 @@ class SessionManager:
             transcript_path=Path(ws.transcript_path) if ws.transcript_path else None,
             window_name=ws.window_name,
             session_id=ws.session_id,
-            external=ws.external,
-            origin=ws.origin,
         )
 
     @property

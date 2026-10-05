@@ -16,7 +16,6 @@ from ..live.live_view import tick_live_views
 from ..messaging.msg_broker import BROKER_CYCLE_INTERVAL, SWEEP_INTERVAL
 from ..messaging_pipeline.message_sender import is_thread_gone
 from ..status.topic_status_diff import prime_topic_status_diff
-from ..topics.topic_lifecycle import check_autoclose_timers, prune_stale_state
 
 if TYPE_CHECKING:
     from ...tmux_manager import TmuxWindow
@@ -421,7 +420,6 @@ async def run_periodic_tasks(
 
     if verify_topics:
         timers["topic_check"] = now
-        await prune_stale_state(all_windows)
         log_throttle_sweep()
 
     if now - timers["broker"] >= BROKER_CYCLE_INTERVAL:

@@ -65,7 +65,6 @@ def start_status_polling(application: Application) -> asyncio.Task[None]:
 async def bootstrap_application(application: Application) -> None:
     """Run the full post_init sequence in the prescribed order."""
     install_global_exception_handler()
-    await session_manager.resolve_stale_ids()
     start_status_polling(application)
 
     # Lazy: main imports bot at top, bot imports bootstrap; hoisting forms

@@ -27,7 +27,6 @@ from ..thread_router import thread_router
 from ..topic_state_registry import topic_state
 from ..tmux_manager import tmux_manager
 from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
-from ..window_resolver import is_foreign_window
 from .callback_helpers import get_thread_id
 from .messaging_pipeline.message_queue import enqueue_status_update
 from .messaging_pipeline.message_sender import safe_reply
@@ -61,11 +60,7 @@ async def clear_topic_state(
 
     qualified_id: str | None = None
     if window_id and window_dead:
-        qualified_id = (
-            window_id
-            if is_foreign_window(window_id)
-            else f"{config.tmux_session_name}:{window_id}"
-        )
+        qualified_id = f"{config.tmux_session_name}:{window_id}"
 
     # Enqueue status-message delete BEFORE registry clears the message ID
     if client is not None:

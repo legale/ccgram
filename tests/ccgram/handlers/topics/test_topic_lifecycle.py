@@ -83,12 +83,4 @@ async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:
     router.unbind_thread.assert_called_once_with(1, 42)
 
 
-async def test_prune_stale_state_only_syncs_live_windows() -> None:
-    from ccgram.handlers.topics import topic_lifecycle
 
-    window = MagicMock(window_id="cc_foo:@1", window_name="foo")
-    with patch.object(topic_lifecycle, "session_manager") as sessions:
-        await topic_lifecycle.prune_stale_state([window])
-
-    sessions.sync_display_names.assert_called_once_with([("cc_foo:@1", "foo")])
-    sessions.prune_stale_state.assert_called_once_with({"cc_foo:@1"})

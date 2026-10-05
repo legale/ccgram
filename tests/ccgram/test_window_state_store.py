@@ -373,36 +373,6 @@ class TestBatchMode:
         assert store.get_batch_mode("@1") == "batched"
 
 
-class TestSetWindowOrigin:
-    def test_set_ccgram_created(self, store: WindowStateStore) -> None:
-        store.set_window_origin("@1", "ccgram_created")
-        assert store.window_states["@1"].origin == "ccgram_created"
-
-    def test_set_external_also_sets_external_flag(
-        self, store: WindowStateStore
-    ) -> None:
-        store.set_window_origin("@1", "external")
-        state = store.window_states["@1"]
-        assert state.origin == "external"
-        assert state.external is True
-
-    def test_non_external_origin_does_not_set_external_flag(
-        self, store: WindowStateStore
-    ) -> None:
-        store.set_window_origin("@1", "ccgram_created")
-        assert store.window_states["@1"].external is False
-
-    def test_invalid_origin_raises(self, store: WindowStateStore) -> None:
-        with pytest.raises(ValueError):
-            store.set_window_origin("@1", "unknown_origin")
-
-    def test_set_same_origin_skips_save(self, store: WindowStateStore) -> None:
-        store.set_window_origin("@1", "ccgram_created")
-        store._save_calls.clear()  # type: ignore[attr-defined]
-        store.set_window_origin("@1", "ccgram_created")
-        assert store._save_calls == []  # type: ignore[attr-defined]
-
-
 class TestSetWindowProvider:
     def test_sets_provider(self, store: WindowStateStore) -> None:
         store.set_window_provider("@1", "codex", new_provider_supports_hook=True)

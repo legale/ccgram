@@ -30,7 +30,6 @@ async def test_bootstrap_starts_polling_before_miniapp() -> None:
             new=AsyncMock(side_effect=lambda: order.append("miniapp")),
         ),
     ):
-        manager.resolve_stale_ids = AsyncMock()
         await bootstrap.bootstrap_application(_app())
     assert order == ["polling", "miniapp"]
 

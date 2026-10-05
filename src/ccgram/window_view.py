@@ -31,5 +31,3 @@ class WindowView:
     transcript_path: Path | None
     window_name: str
     session_id: str
-    external: bool
-    origin: str

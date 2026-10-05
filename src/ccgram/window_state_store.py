@@ -39,12 +39,11 @@ TOOL_CALL_VISIBILITY_MODES: tuple[str, ...] = ("default", "shown", "hidden")
 DEFAULT_TOOL_CALL_VISIBILITY: str = "default"
 
 WINDOW_ORIGINS: frozenset[str] = frozenset(
-    {"manual_discovered", "ccgram_created", "external"}
+    {"manual_discovered", "ccgram_created"}
 )
 DEFAULT_WINDOW_ORIGIN = "manual_discovered"
 CCGRAM_CREATED_WINDOW_ORIGIN = "ccgram_created"
 MANUAL_DISCOVERED_WINDOW_ORIGIN = "manual_discovered"
-EXTERNAL_WINDOW_ORIGIN = "external"
 
 PaneState = Literal["active", "idle", "blocked", "dead"]
 PANE_STATES: frozenset[str] = frozenset({"active", "idle", "blocked", "dead"})
@@ -122,7 +121,6 @@ class WindowState:
         approval_mode: "normal" | "yolo"
         batch_mode: "batched" | "verbose"
         tool_call_visibility: "default" | "shown" | "hidden"
-        external: True for windows owned by external tools (emdash) — never killed by ccgram
         origin: Lifecycle origin. Manual/external windows are never auto-killed by ccgram.
         panes: Per-pane runtime state, keyed by tmux pane id (e.g. ``%5``).
         pane_lifecycle_notify: Per-window override for pane created/closed
@@ -138,7 +136,6 @@ class WindowState:
     approval_mode: str = DEFAULT_APPROVAL_MODE
     batch_mode: str = DEFAULT_BATCH_MODE
     tool_call_visibility: str = DEFAULT_TOOL_CALL_VISIBILITY
-    external: bool = False
     origin: str = DEFAULT_WINDOW_ORIGIN
     panes: dict[str, PaneInfo] = field(default_factory=dict)
     pane_lifecycle_notify: bool | None = None
@@ -162,8 +159,6 @@ class WindowState:
             d["batch_mode"] = self.batch_mode
         if self.tool_call_visibility != DEFAULT_TOOL_CALL_VISIBILITY:
             d["tool_call_visibility"] = self.tool_call_visibility
-        if self.external:
-            d["external"] = True
         if self.origin != DEFAULT_WINDOW_ORIGIN:
             d["origin"] = self.origin
         if self.panes:
@@ -196,7 +191,6 @@ class WindowState:
             tool_call_visibility=data.get(
                 "tool_call_visibility", DEFAULT_TOOL_CALL_VISIBILITY
             ),
-            external=data.get("external", False),
             origin=(
                 data.get("origin", DEFAULT_WINDOW_ORIGIN)
                 if data.get("origin", DEFAULT_WINDOW_ORIGIN) in WINDOW_ORIGINS
@@ -276,8 +270,6 @@ class WindowStateStore:
         if state.origin == origin:
             return
         state.origin = origin
-        if origin == EXTERNAL_WINDOW_ORIGIN:
-            state.external = True
         self._schedule_save()
 
     def clear_session_fields(self, window_id: str) -> None:
