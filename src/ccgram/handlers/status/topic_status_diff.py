@@ -19,7 +19,7 @@ from ..messaging_pipeline.message_sender import (
     rate_limit_send_message,
 )
 
-_BODY_LIMIT = TELEGRAM_MAX_MESSAGE_LENGTH - 256
+_BODY_LIMIT = 1000
 _RE_ANSI = re.compile(
     r"\x1b\[[0-?]*[ -/]*[@-~]|"
     r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
