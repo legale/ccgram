@@ -80,3 +80,37 @@ class TestCtrlCCommand:
         mock_sidecar_send.assert_awaited_once_with("%5", "C-c", enter=False, literal=False, window_id="@1")
         mock_send.assert_awaited_once_with("@1", "C-c", enter=False, literal=False)
         mock_ack.assert_awaited_once()
+
+
+class TestEnterAndEscCommands:
+    async def test_enter_command_sends_enter(self, update, context):
+        from ccgram.handlers.commands import enter_command
+
+        with (
+            patch("ccgram.config.config.is_user_allowed", return_value=True),
+            patch("ccgram.thread_router.thread_router.get_window_for_thread", return_value="@1"),
+            patch("ccgram.thread_router.thread_router.resolve_chat_id", return_value=-100),
+            patch("ccgram.tmux_manager.tmux_manager.get_sidecar_pane_id", return_value=None),
+            patch("ccgram.tmux_manager.tmux_manager.send_keys", new_callable=AsyncMock, return_value=True) as mock_send,
+            patch("ccgram.handlers.messaging_pipeline.message_sender.ack_reaction", new_callable=AsyncMock) as mock_ack,
+        ):
+            await enter_command(update, context)
+
+        mock_send.assert_awaited_once_with("@1", "Enter", enter=False, literal=False)
+        mock_ack.assert_awaited_once()
+
+    async def test_esc_command_sends_escape(self, update, context):
+        from ccgram.handlers.commands import esc_command
+
+        with (
+            patch("ccgram.config.config.is_user_allowed", return_value=True),
+            patch("ccgram.thread_router.thread_router.get_window_for_thread", return_value="@1"),
+            patch("ccgram.thread_router.thread_router.resolve_chat_id", return_value=-100),
+            patch("ccgram.tmux_manager.tmux_manager.get_sidecar_pane_id", return_value=None),
+            patch("ccgram.tmux_manager.tmux_manager.send_keys", new_callable=AsyncMock, return_value=True) as mock_send,
+            patch("ccgram.handlers.messaging_pipeline.message_sender.ack_reaction", new_callable=AsyncMock) as mock_ack,
+        ):
+            await esc_command(update, context)
+
+        mock_send.assert_awaited_once_with("@1", "Escape", enter=False, literal=False)
+        mock_ack.assert_awaited_once()

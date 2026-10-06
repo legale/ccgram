@@ -38,7 +38,7 @@ from .arg_parser import ArgIter, matches
 from .callback_registry import dispatch as _dispatch_callback
 from .callback_registry import load_handlers as _load_callback_handlers
 from .cleanup import killme_command, unbind_command
-from .commands import commands_command, ctrl_c_command
+from .commands import commands_command, ctrl_c_command, enter_command, esc_command
 from .file_handler import handle_document_message, handle_photo_message
 from .live import live_command, screenshot_command
 from .send import send_command
@@ -79,6 +79,9 @@ _DISPATCH_TABLE: list[tuple[str, HandlerFn]] = [
     ("killme", killme_command),
     ("ctrl-c", ctrl_c_command),
     ("ctrlc", ctrl_c_command),
+    ("enter", enter_command),
+    ("esc", esc_command),
+    ("escape", esc_command),
     ("screenshot", screenshot_command),
     ("screen", screenshot_command),
     ("live", live_command),

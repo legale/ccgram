@@ -36,6 +36,8 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//unbind` — закрыть топик, сохранив tmux-сессию",
         "• `//killme` — завершить сессию и закрыть топик",
         "• `//ctrl-c` — отправить Ctrl+C в сессию",
+        "• `//enter` — отправить Enter в сессию",
+        "• `//esc` — отправить Escape в сессию",
         "• `//send` — отправить файл в tmux",
         "",
         "_Команды и пути, начинающиеся с `/` (например `/bin/ls`), отправляются напрямую в tmux._",
@@ -43,8 +45,13 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
     await safe_reply(update.message, "\n".join(lines))
 
 
-async def ctrl_c_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """``//ctrl-c`` — send Ctrl+C (SIGINT) to the bound tmux session."""
+async def _send_special_key(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    key: str,
+    key_name: str,
+) -> None:
+    """Helper to send a special key to the bound tmux session."""
     user = update.effective_user
     if not user or not config.is_user_allowed(user.id):
         return
@@ -91,20 +98,37 @@ async def ctrl_c_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     sidecar_pane_id = tmux_manager.get_sidecar_pane_id(window_id)
     if sidecar_pane_id:
         await tmux_manager.send_keys_to_pane(
-            sidecar_pane_id, "C-c", enter=False, literal=False, window_id=window_id
+            sidecar_pane_id, key, enter=False, literal=False, window_id=window_id
         )
 
-    sent = await tmux_manager.send_keys(window_id, "C-c", enter=False, literal=False)
+    sent = await tmux_manager.send_keys(window_id, key, enter=False, literal=False)
     if not sent:
-        await safe_reply(update.message, "❌ Failed to send `Ctrl+C` to tmux.")
+        await safe_reply(update.message, f"❌ Failed to send `{key_name}` to tmux.")
         return
 
     await ack_reaction(client, chat_id, update.message.message_id)
     if not config.ack_reaction:
-        await safe_reply(update.message, "Sent `Ctrl+C`")
+        await safe_reply(update.message, f"Sent `{key_name}`")
+
+
+async def ctrl_c_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//ctrl-c`` — send Ctrl+C (SIGINT) to the bound tmux session."""
+    await _send_special_key(update, context, "C-c", "Ctrl+C")
+
+
+async def enter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//enter`` — send Enter to the bound tmux session."""
+    await _send_special_key(update, context, "Enter", "Enter")
+
+
+async def esc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//esc`` — send Escape to the bound tmux session."""
+    await _send_special_key(update, context, "Escape", "Escape")
 
 
 __all__ = [
     "commands_command",
     "ctrl_c_command",
+    "enter_command",
+    "esc_command",
 ]
