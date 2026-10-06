@@ -122,7 +122,6 @@ async def _apply_active_transition(
     notif_mode: str,
 ) -> None:
     client = PTBTelegramClient(bot)
-    await _send_typing_throttled(bot, user_id, thread_id)
     if thread_id is not None:
         chat_id = thread_router.resolve_chat_id(user_id, thread_id)
         display = thread_router.get_display_name(window_id)

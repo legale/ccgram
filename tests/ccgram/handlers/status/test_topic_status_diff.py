@@ -500,3 +500,46 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
 
     assert "⚡ Sidecar: cmd2" in msg2_text
     assert "output2" in msg2_text
+
+
+async def test_screen_change_triggers_send_typing(monkeypatch) -> None:
+    from telegram.constants import ChatAction
+
+    client = AsyncMock()
+    send = AsyncMock(return_value=SimpleNamespace(message_id=10))
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
+
+    monotonic = SimpleNamespace(v=10.0)
+    monkeypatch.setattr(
+        topic_status_diff.time, "monotonic", lambda: float(monotonic.v)
+    )
+
+    # Initial capture (change from empty to text1) -> should send typing
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "line1\n", active=True
+    )
+    client.send_chat_action.assert_awaited_once_with(
+        chat_id=1,
+        message_thread_id=2,
+        action=ChatAction.TYPING,
+    )
+    client.send_chat_action.reset_mock()
+
+    # No change in screen -> typing should not be sent
+    monotonic.v = 11.0
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "line1\n", active=True
+    )
+    client.send_chat_action.assert_not_called()
+
+    # Change in screen after 5s from last typing -> should send typing again
+    monotonic.v = 16.0
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "line1\nline2\n", active=True
+    )
+    client.send_chat_action.assert_awaited_once_with(
+        chat_id=1,
+        message_thread_id=2,
+        action=ChatAction.TYPING,
+    )

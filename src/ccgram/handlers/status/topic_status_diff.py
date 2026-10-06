@@ -8,6 +8,9 @@ import re
 from dataclasses import dataclass
 import structlog
 
+import contextlib
+
+from telegram.constants import ChatAction
 from telegram.error import RetryAfter, TelegramError
 
 from ...config import config
@@ -40,6 +43,8 @@ class _DiffState:
     edit_task: asyncio.Task[bool] | None = None
     title: str | None = None
     last_display_text: str = ""
+    last_change_ts: float = 0.0
+    last_typing_ts: float = 0.0
 
 
 _diff_states: dict[tuple[int, int, str], _DiffState] = {}
@@ -218,6 +223,21 @@ async def update_topic_status_diff(
     state = _get_state(chat_id, thread_id, window_id, target=target)
     now = time.monotonic()
     text = _format_screen(window_id, pane_text, title=state.title)
+
+    # When screen content changes, record the timestamp of activity
+    if text != state.last_display_text:
+        state.last_change_ts = now
+
+    # Send typing indicator within 5 seconds of screen changes for this session
+    if (now - state.last_change_ts) <= 5.0 and (now - state.last_typing_ts) >= 4.0:
+        state.last_typing_ts = now
+        with contextlib.suppress(Exception):
+            await client.send_chat_action(
+                chat_id=chat_id,
+                message_thread_id=thread_id,
+                action=ChatAction.TYPING,
+            )
+
     if text == state.last_display_text:
         return
 
