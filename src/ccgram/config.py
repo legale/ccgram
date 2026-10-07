@@ -159,8 +159,8 @@ class Config:
 
         # Global default for hiding tool_use/tool_result content in Telegram.
         # Per-window override via WindowState.tool_call_visibility takes precedence.
-        self.hide_tool_calls: bool = os.getenv(
-            "CCGRAM_HIDE_TOOL_CALLS", "true"
+        self.hide_tool_calls: bool = _env_with_fallback(
+            "CCGRAM_HIDE_TOOL_CALLS", "HIDE_TOOL_CALLS", "true"
         ).lower() in ("1", "true", "yes")
 
         logger.debug(

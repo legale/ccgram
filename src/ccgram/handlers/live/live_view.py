@@ -129,12 +129,12 @@ _RE_ANSI = re.compile(
 )
 
 
-def tail_lines_ansi(text: str, limit: int) -> str:
+def tail_lines_ansi(text: str, limit: int | None = None) -> str:
     """Keep the bottom lines of text so that visible chars <= limit."""
     try:
-        eff_limit = int(limit)
+        eff_limit = config.live_view_limit if limit is None else int(limit)
     except (TypeError, ValueError):
-        eff_limit = 2500
+        eff_limit = config.live_view_limit
     lines = text.splitlines()
     kept: list[str] = []
     used = 0

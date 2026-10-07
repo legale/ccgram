@@ -22,7 +22,6 @@ from ..messaging_pipeline.message_sender import (
     rate_limit_send_message,
 )
 
-_BODY_LIMIT = 2000
 _RE_ANSI = re.compile(
     r"\x1b\[[0-?]*[ -/]*[@-~]|"
     r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"
@@ -59,13 +58,14 @@ def _normalize_screen_text(pane_text: str) -> list[str]:
     return text.splitlines()
 
 
-def _tail_lines(text: str, limit: int) -> str:
+def _tail_lines(text: str, limit: int | None = None) -> str:
+    eff_limit = config.screen_diff_limit if limit is None else int(limit)
     lines = _normalize_screen_text(text)
     kept: list[str] = []
     used = 0
     for line in reversed(lines):
         cost = len(line) + 1
-        if used + cost > limit:
+        if used + cost > eff_limit:
             break
         kept.append(line)
         used += cost
