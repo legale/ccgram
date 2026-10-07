@@ -22,7 +22,7 @@ from ..messaging_pipeline.message_sender import (
     rate_limit_send_message,
 )
 
-_BODY_LIMIT = 1000
+_BODY_LIMIT = 2000
 _RE_ANSI = re.compile(
     r"\x1b\[[0-?]*[ -/]*[@-~]|"
     r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|"

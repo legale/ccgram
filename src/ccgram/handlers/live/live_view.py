@@ -134,7 +134,7 @@ def tail_lines_ansi(text: str, limit: int) -> str:
     try:
         eff_limit = int(limit)
     except (TypeError, ValueError):
-        eff_limit = 1000
+        eff_limit = 2500
     lines = text.splitlines()
     kept: list[str] = []
     used = 0

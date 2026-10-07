@@ -67,11 +67,11 @@ def test_screen_render_keeps_tail_on_complete_lines() -> None:
     assert not rendered.startswith("Screen delta cc_ls:@1756\n```\nold")
 
 
-def test_screen_render_limits_body_to_1000_chars() -> None:
-    text = "\n".join(f"line {i:04d}" for i in range(200))
+def test_screen_render_limits_body_to_2000_chars() -> None:
+    text = "\n".join(f"line {i:04d}" for i in range(400))
     rendered = topic_status_diff._format_screen("@1", text)
     body = rendered.split("```\n")[1].rsplit("\n```", 1)[0]
-    assert len(body) <= 1000
+    assert len(body) <= 2000
 
 
 def test_screen_render_collapses_long_underscores() -> None:

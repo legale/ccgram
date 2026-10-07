@@ -283,8 +283,8 @@ class TestPollingConfig:
 class TestLimitsConfig:
     def test_default_limits(self):
         cfg = Config()
-        assert cfg.live_view_limit == 1000
-        assert cfg.screen_diff_limit == 1000
+        assert cfg.live_view_limit == 2500
+        assert cfg.screen_diff_limit == 2000
 
     def test_custom_limits(self, monkeypatch):
         monkeypatch.setenv("CCGRAM_LIVE_VIEW_LIMIT", "500")

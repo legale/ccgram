@@ -192,7 +192,7 @@ class Config:
             1, _parse_int_env("CCGRAM_LIVE_VIEW_TIMEOUT", 300)
         )
         self.live_view_limit: int = max(
-            100, _parse_int_env("CCGRAM_LIVE_VIEW_LIMIT", 1000)
+            100, _parse_int_env("CCGRAM_LIVE_VIEW_LIMIT", 2500)
         )
 
     def _init_shell_and_llm(self) -> None:
@@ -236,7 +236,7 @@ class Config:
             1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
         )
         self.screen_diff_limit: int = max(
-            100, _parse_int_env("CCGRAM_SCREEN_DIFF_LIMIT", 1000)
+            100, _parse_int_env("CCGRAM_SCREEN_DIFF_LIMIT", 2000)
         )
         self.topic_idle_enabled: bool = _parse_bool_env(
             "CCGRAM_TOPIC_IDLE_ENABLED", True
