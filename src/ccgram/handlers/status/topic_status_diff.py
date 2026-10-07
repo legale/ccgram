@@ -16,7 +16,7 @@ from telegram.error import RetryAfter, TelegramError
 from ...config import config
 from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
-from ...topic_tail import is_last
+from ...topic_tail import is_last, record_message
 from ..messaging_pipeline.message_sender import (
     edit_with_fallback,
     rate_limit_send_message,
@@ -45,6 +45,7 @@ class _DiffState:
     last_display_text: str = ""
     last_change_ts: float = 0.0
     last_typing_ts: float = 0.0
+    last_idle_message_id: int = 0
 
 
 _diff_states: dict[tuple[int, int, str], _DiffState] = {}
@@ -115,10 +116,13 @@ def mark_topic_status_activity(
     """Record a Telegram message before the rest of its handler awaits."""
     if not isinstance(message_id, int) or not message_id:
         return
+    record_message(chat_id, thread_id, message_id)
     now = time.time_ns()
+    now_mono = time.monotonic()
     for key, state in _diff_states.items():
         if key[0] == chat_id and key[1] == thread_id:
             state.last_msg_ts = max(now, state.last_msg_ts + 1)
+            state.last_change_ts = now_mono
             if state.edit_task is not None and not state.edit_task.done():
                 state.edit_task.cancel()
     logger.info(
@@ -147,6 +151,7 @@ async def _send_new(
     if message_id is None:
         return False
     state.message_id = int(message_id)
+    record_message(chat_id, thread_id, state.message_id)
     state.diff_ts = state.last_msg_ts
     return True
 
@@ -237,6 +242,35 @@ async def update_topic_status_diff(
                 message_thread_id=thread_id,
                 action=ChatAction.TYPING,
             )
+
+    if (
+        config.topic_idle_enabled
+        and target == "main"
+        and state.last_change_ts > 0.0
+        and (now - state.last_change_ts) >= config.topic_idle_delay
+    ):
+        is_idle_last = (
+            state.last_idle_message_id > 0
+            and is_last(chat_id, thread_id, state.last_idle_message_id)
+        )
+        if not is_idle_last:
+            sent = await rate_limit_send_message(
+                client,
+                chat_id,
+                config.topic_idle_text,
+                message_thread_id=thread_id,
+            )
+            message_id = getattr(sent, "message_id", None)
+            if message_id is not None:
+                state.last_idle_message_id = int(message_id)
+                record_message(chat_id, thread_id, state.last_idle_message_id)
+                logger.info(
+                    "topic_idle_notification_sent",
+                    chat_id=chat_id,
+                    thread_id=thread_id,
+                    window_id=window_id,
+                    message_id=state.last_idle_message_id,
+                )
 
     if text == state.last_display_text:
         return

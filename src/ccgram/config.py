@@ -238,6 +238,13 @@ class Config:
         self.screen_diff_limit: int = max(
             100, _parse_int_env("CCGRAM_SCREEN_DIFF_LIMIT", 1000)
         )
+        self.topic_idle_enabled: bool = _parse_bool_env(
+            "CCGRAM_TOPIC_IDLE_ENABLED", True
+        )
+        self.topic_idle_delay: int = max(
+            1, _parse_int_env("CCGRAM_TOPIC_IDLE_DELAY", 10)
+        )
+        self.topic_idle_text: str = os.getenv("CCGRAM_TOPIC_IDLE_TEXT", "idle")
 
     def _init_miniapp(self) -> None:
         # Mini App backend (Phase 3 / Theme 6) — disabled when base URL is empty.

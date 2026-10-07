@@ -155,6 +155,32 @@ class TestTopicStatusConfig:
         with pytest.raises(ValueError, match="CCGRAM_TOPIC_STATUS_DIFF_INTERVAL"):
             Config()
 
+    def test_topic_idle_defaults(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_ENABLED", raising=False)
+        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_DELAY", raising=False)
+        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_TEXT", raising=False)
+        cfg = Config()
+        assert cfg.topic_idle_enabled is True
+        assert cfg.topic_idle_delay == 10
+        assert cfg.topic_idle_text == "idle"
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_topic_idle_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_ENABLED", value)
+        assert Config().topic_idle_enabled is False
+
+    @pytest.mark.parametrize(
+        ("env_str", "expected"),
+        [("15", 15), ("1", 1), ("0", 1)],
+    )
+    def test_topic_idle_delay(self, monkeypatch, env_str, expected):
+        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_DELAY", env_str)
+        assert Config().topic_idle_delay == expected
+
+    def test_topic_idle_text_custom(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_TEXT", "zzz")
+        assert Config().topic_idle_text == "zzz"
+
 
 @pytest.mark.usefixtures("_base_env")
 class TestMessagingConfig:

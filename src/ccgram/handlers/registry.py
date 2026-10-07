@@ -121,6 +121,10 @@ async def _dispatch_double_slash(update: Update, context) -> None:  # type: igno
     if not message or not message.text:
         return
 
+    from ..topic_tail import record_telegram_message
+
+    record_telegram_message(message)
+
     text = message.text.strip()
     # Strip the "//" prefix and split into tokens
     body = text[len(COMMAND_PREFIX) :]
