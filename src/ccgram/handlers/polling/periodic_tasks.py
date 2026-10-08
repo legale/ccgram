@@ -90,6 +90,14 @@ async def _bind_runtime(
             thread_router.bind_thread(uid, thread_id, session.window_id, topic_name)
         thread_router.set_group_chat_id(uid, thread_id, chat_id)
 
+    if session.cwd:
+        from pathlib import Path
+        from ...session import session_manager
+
+        session_manager.set_window_cwd(
+            session.window_id, str(Path(session.cwd).expanduser().resolve())
+        )
+
     if changed:
         pane_text = await tmux_manager.capture_pane(session.window_id, with_ansi=True)
         if pane_text:

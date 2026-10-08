@@ -194,6 +194,14 @@ async def _update_status(
     if not w:
         return
 
+    if w.cwd:
+        from pathlib import Path
+        from ....session import session_manager
+
+        session_manager.set_window_cwd(
+            window_id, str(Path(w.cwd).expanduser().resolve())
+        )
+
     pane_text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
     if not pane_text:
         return

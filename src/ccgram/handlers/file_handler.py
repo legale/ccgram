@@ -22,7 +22,7 @@ from telegram.error import TelegramError
 from ..config import config
 from ..telegram_client import PTBTelegramClient
 from ..window_query import view_window
-from ..tmux_manager import send_to_window
+from ..tmux_manager import send_to_window, tmux_manager
 from ..thread_router import thread_router
 from .callback_helpers import get_thread_id
 from .messaging_pipeline.message_sender import ack_reaction, safe_reply
@@ -112,7 +112,7 @@ def _generate_photo_filename(file_unique_id: str) -> str:
     return f"photo_{timestamp}_{short_id}.jpg"
 
 
-def _resolve_upload_dir(
+async def _resolve_upload_dir(
     user_id: int, thread_id: int | None
 ) -> tuple[str | None, Path | None, str | None]:
     """Resolve window_id and upload directory for a thread.
@@ -123,11 +123,22 @@ def _resolve_upload_dir(
     if not window_id:
         return None, None, "No session bound to this topic."
 
-    view = view_window(window_id)
-    if view is None or not view.cwd:
+    cwd: str | None = None
+    window = await tmux_manager.find_window_by_id(window_id)
+    if window and window.cwd:
+        cwd = str(Path(window.cwd).expanduser().resolve())
+        from ..session import session_manager
+
+        session_manager.set_window_cwd(window_id, cwd)
+    else:
+        view = view_window(window_id)
+        if view and view.cwd:
+            cwd = str(Path(view.cwd).expanduser().resolve())
+
+    if not cwd:
         return window_id, None, "Session has no working directory."
 
-    upload_path = Path(view.cwd) / _UPLOAD_DIR
+    upload_path = Path(cwd) / _UPLOAD_DIR
     return window_id, upload_path, None
 
 
@@ -200,7 +211,7 @@ async def _upload_and_notify(
     success_emoji: str,
 ) -> None:
     """Shared upload flow: resolve dir, download, notify Claude, reply to user."""
-    window_id, upload_path, error = _resolve_upload_dir(user_id, thread_id)
+    window_id, upload_path, error = await _resolve_upload_dir(user_id, thread_id)
     if error or not window_id or not upload_path:
         await safe_reply(message, f"\u274c {error}")
         return

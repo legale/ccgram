@@ -158,9 +158,11 @@ async def _builtin_send(
     if user is None:
         await query.answer("No user context", show_alert=True)
         return
-    user_id = user.id
-    view = view_window(window_id)
-    cwd = Path(view.cwd) if view and view.cwd else None
+    window = await tmux_manager.find_window_by_id(window_id)
+    cwd = Path(window.cwd).expanduser().resolve() if window and window.cwd else None
+    if not cwd or not cwd.is_dir():
+        view = view_window(window_id)
+        cwd = Path(view.cwd).expanduser().resolve() if view and view.cwd else None
     if not cwd or not cwd.is_dir():
         await query.answer("Working directory not available", show_alert=True)
         return
