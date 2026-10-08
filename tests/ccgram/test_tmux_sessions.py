@@ -61,3 +61,30 @@ async def test_clear_session_topic_unsets_session_option() -> None:
         text=True,
         timeout=5,
     )
+
+
+async def test_ensure_managed_window_size_uses_config(monkeypatch) -> None:
+    manager = TmuxManager("ccgram")
+    from ccgram.config import config
+
+    monkeypatch.setattr(config, "tmux_screen_x", 120)
+    monkeypatch.setattr(config, "tmux_screen_y", 60)
+
+    commands_called = []
+
+    async def fake_create_subprocess_exec(*cmd, **kwargs):
+        commands_called.append(cmd)
+        mock_proc = MagicMock()
+        mock_proc.wait = MagicMock()
+        async def fake_wait():
+            pass
+        mock_proc.wait = fake_wait
+        return mock_proc
+
+    with patch("ccgram.tmux_manager.asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
+        await manager._ensure_managed_window_size("cc_test", "@1")
+
+    assert commands_called == [
+        ("tmux", "set-window-option", "-t", "cc_test:@1", "window-size", "automatic"),
+        ("tmux", "resize-window", "-t", "cc_test:@1", "-x", "120", "-y", "60"),
+    ]

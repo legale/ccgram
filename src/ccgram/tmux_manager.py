@@ -483,8 +483,8 @@ class TmuxManager:
     async def _ensure_managed_window_size(self, session_name: str, window_id: str) -> None:
         target = f"{session_name}:{window_id}"
         for command in (
-            ("set-window-option", "-t", target, "window-size", "manual"),
-            ("resize-window", "-t", target, "-x", "80", "-y", "120"),
+            ("set-window-option", "-t", target, "window-size", "automatic"),
+            ("resize-window", "-t", target, "-x", str(config.tmux_screen_x), "-y", str(config.tmux_screen_y)),
         ):
             proc = await asyncio.create_subprocess_exec(
                 "tmux", *command,
