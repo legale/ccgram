@@ -270,10 +270,10 @@ class TestValidateSendable:
             assert validate_sendable(f, tmp_path) is None
 
     def test_outside_cwd_denied(self, tmp_path: Path) -> None:
-        outside = tmp_path.parent / "secret.txt"
+        outside = Path("/var/log/syslog")
         assert (
             validate_sendable(outside, tmp_path)
-            == "File is outside tmux session directory"
+            == "File is outside tmux session directory and /tmp"
         )
 
     def test_hidden_file_denied(self, tmp_path: Path) -> None:
@@ -303,14 +303,17 @@ path = ".*private.*"
         assert "gitleaks" in result
         assert "my-rule" in result
 
-    def test_gitignored_denied(self, tmp_path: Path) -> None:
+    def test_tmp_file_allowed(self, tmp_path: Path) -> None:
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=True) as tmp:
+            tmp.write("data in tmp")
+            tmp.flush()
+            assert validate_sendable(Path(tmp.name), tmp_path) is None
+
+    def test_gitignored_allowed(self, tmp_path: Path) -> None:
         f = tmp_path / "output.log"
         f.write_text("log", encoding="utf-8")
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        with patch("subprocess.run", return_value=mock_result):
-            result = validate_sendable(f, tmp_path)
-        assert result == "File is gitignored"
+        assert validate_sendable(f, tmp_path) is None
 
     def test_file_too_large_denied(self, tmp_path: Path) -> None:
         f = tmp_path / "huge.bin"

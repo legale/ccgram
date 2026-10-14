@@ -394,24 +394,27 @@ async def _dispatch_search(
     is_glob = "*" in pattern or "?" in pattern
 
     if not is_glob:
-        exact = cwd / pattern
+        exact = Path(pattern) if pattern.startswith("/") else cwd / pattern
         if exact.exists() and exact.is_file():
             error = validate_sendable(exact, cwd)
             if error:
                 await safe_reply(update.message, f"Cannot send: {error}")  # type: ignore[arg-type]
                 return
-            try:
-                rel = exact.resolve().relative_to(cwd.resolve())
-            except ValueError:
+            exact_resolved = exact.resolve()
+            cwd_resolved = cwd.resolve()
+            tmp_root = Path("/tmp").resolve()
+            if exact_resolved.is_relative_to(cwd_resolved):
+                rel = exact_resolved.relative_to(cwd_resolved)
+                if any(is_excluded_dir(part) for part in rel.parts[:-1]):
+                    await safe_reply(
+                        update.message,  # type: ignore[arg-type]
+                        "Cannot send: file is in an excluded directory",
+                    )
+                    return
+            elif not exact_resolved.is_relative_to(tmp_root):
                 await safe_reply(
                     update.message,  # type: ignore[arg-type]
-                    "Cannot send: file is outside tmux session directory",
-                )
-                return
-            if any(is_excluded_dir(part) for part in rel.parts[:-1]):
-                await safe_reply(
-                    update.message,  # type: ignore[arg-type]
-                    "Cannot send: file is in an excluded directory",
+                    "Cannot send: file is outside tmux session directory and /tmp",
                 )
                 return
             await _upload_with_feedback(update, context, chat_id, thread_id, exact)

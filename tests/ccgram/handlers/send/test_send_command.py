@@ -735,3 +735,21 @@ class TestSendCommand:
         ):
             await send_command(update, ctx)
         mock_up.assert_awaited_once()
+
+    async def test_exact_path_tmp_file_uploads(self, tmp_path: Path) -> None:
+        self.window.cwd = str(tmp_path)
+        tmp_file = Path("/tmp/ccgram_test_tmp_upload.txt")
+        tmp_file.write_text("tmp file test content", encoding="utf-8")
+        try:
+            update = _make_update(text=f"/send {tmp_file}")
+            ctx = _make_context()
+            with patch(
+                "ccgram.handlers.send.send_command.upload_file", new_callable=AsyncMock
+            ) as mock_up:
+                await send_command(update, ctx)
+            mock_up.assert_awaited_once()
+            call_args = mock_up.call_args
+            assert call_args[0][1:] == (-100123, 42, tmp_file)
+        finally:
+            tmp_file.unlink(missing_ok=True)
+

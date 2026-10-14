@@ -211,24 +211,31 @@ def _check_size_and_type(path: Path) -> str | None:
 
 
 def validate_sendable(path: Path, cwd: Path) -> str | None:
-    """Run the full security pipeline for *path* relative to *cwd*.
+    """Run the full security pipeline for *path* relative to *cwd* or /tmp.
 
     Returns a human-readable error string on the first failed check, or None
     if the file is safe to send.
 
-    Pipeline order (cheap stat-based checks first, subprocess last):
-    1. Path containment (traversal)
+    Pipeline order (cheap stat-based checks first):
+    1. Path containment (must be in session cwd or /tmp)
     2. Hidden file/dir check
     3. Secret pattern match
     4. File size limit + regular-file check
     5. State-file protection (assert_sendable from utils)
-    6. Gitleaks rule match
-    7. Gitignore check (subprocess — most expensive, last)
+    6. Gitleaks rule match (only when path is within cwd)
     """
-    if not is_path_contained(path, cwd):
-        return "File is outside tmux session directory"
+    tmp_root = Path("/tmp").resolve()
+    path_resolved = path.resolve()
+    cwd_resolved = cwd.resolve()
 
-    if is_hidden(path, cwd):
+    in_cwd = is_path_contained(path, cwd)
+    in_tmp = path_resolved.is_relative_to(tmp_root)
+
+    if not in_cwd and not in_tmp:
+        return "File is outside tmux session directory and /tmp"
+
+    effective_root = cwd_resolved if in_cwd else tmp_root
+    if is_hidden(path, effective_root):
         return "Hidden files cannot be sent"
 
     pattern = matches_secret_pattern(path)
@@ -244,12 +251,10 @@ def validate_sendable(path: Path, cwd: Path) -> str | None:
     except ValueError as exc:
         return str(exc)
 
-    rule_id = check_gitleaks_rules(path, cwd)
-    if rule_id is not None:
-        return f"File denied by gitleaks rule: {rule_id}"
-
-    if is_gitignored(path, cwd):
-        return "File is gitignored"
+    if in_cwd:
+        rule_id = check_gitleaks_rules(path, cwd)
+        if rule_id is not None:
+            return f"File denied by gitleaks rule: {rule_id}"
 
     return None
 
