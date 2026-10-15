@@ -38,6 +38,7 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//ctrl-c` — отправить Ctrl+C в сессию",
         "• `//enter` — отправить Enter в сессию",
         "• `//esc` — отправить Escape в сессию",
+        "• `//tab` — отправить Tab в сессию",
         "• `//send` — отправить файл в tmux",
         "",
         "_Команды и пути, начинающиеся с `/` (например `/bin/ls`), отправляются напрямую в tmux._",
@@ -126,9 +127,15 @@ async def esc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _send_special_key(update, context, "Escape", "Escape")
 
 
+async def tab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//tab`` — send Tab to the bound tmux session."""
+    await _send_special_key(update, context, "Tab", "Tab")
+
+
 __all__ = [
     "commands_command",
     "ctrl_c_command",
     "enter_command",
     "esc_command",
+    "tab_command",
 ]
