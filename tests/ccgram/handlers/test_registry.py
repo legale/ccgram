@@ -107,6 +107,21 @@ def test_find_handler_ses_alias():
     assert _find_handler("ses") is sessions_command
 
 
+def test_find_handler_ctrl_c_and_ctrl_cc():
+    from ccgram.handlers.commands import ctrl_c_command, ctrl_cc_command
+
+    assert _find_handler("ctrl-c") is ctrl_c_command
+    assert _find_handler("ctrlc") is ctrl_c_command
+    assert _find_handler("ctrl-cc") is ctrl_cc_command
+    assert _find_handler("ctrlcc") is ctrl_cc_command
+
+
+def test_find_handler_ctrl_prefix_ambiguous():
+    # "ctrl" or "ctrl-" matches ctrl-c, ctrlc, ctrl-cc, ctrlcc → ambiguous
+    assert _find_handler("ctrl") is None
+    assert _find_handler("ctrl-") is None
+
+
 # ---------------------------------------------------------------------------
 # CommandSpec dataclass
 

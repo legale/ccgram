@@ -36,6 +36,7 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//unbind` — закрыть топик, сохранив tmux-сессию",
         "• `//killme` — завершить сессию и закрыть топик",
         "• `//ctrl-c` — отправить Ctrl+C в сессию",
+        "• `//ctrl-cc` — отправить двойной Ctrl+C в сессию",
         "• `//enter` — отправить Enter в сессию",
         "• `//esc` — отправить Escape в сессию",
         "• `//tab` — отправить Tab в сессию",
@@ -46,11 +47,13 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
     await safe_reply(update.message, "\n".join(lines))
 
 
-async def _send_special_key(
+async def _send_special_key(  # noqa: C901
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     key: str,
     key_name: str,
+    *,
+    repeat: int = 1,
 ) -> None:
     """Helper to send a special key to the bound tmux session."""
     user = update.effective_user
@@ -98,11 +101,17 @@ async def _send_special_key(
     client = PTBTelegramClient(context.bot)
     sidecar_pane_id = tmux_manager.get_sidecar_pane_id(window_id)
     if sidecar_pane_id:
-        await tmux_manager.send_keys_to_pane(
-            sidecar_pane_id, key, enter=False, literal=False, window_id=window_id
-        )
+        for _ in range(repeat):
+            await tmux_manager.send_keys_to_pane(
+                sidecar_pane_id, key, enter=False, literal=False, window_id=window_id
+            )
 
-    sent = await tmux_manager.send_keys(window_id, key, enter=False, literal=False)
+    sent = True
+    for _ in range(repeat):
+        sent = await tmux_manager.send_keys(window_id, key, enter=False, literal=False)
+        if not sent:
+            break
+
     if not sent:
         await safe_reply(update.message, f"❌ Failed to send `{key_name}` to tmux.")
         return
@@ -115,6 +124,11 @@ async def _send_special_key(
 async def ctrl_c_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """``//ctrl-c`` — send Ctrl+C (SIGINT) to the bound tmux session."""
     await _send_special_key(update, context, "C-c", "Ctrl+C")
+
+
+async def ctrl_cc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//ctrl-cc`` — send double Ctrl+C (SIGINT x2) to the bound tmux session."""
+    await _send_special_key(update, context, "C-c", "Ctrl+C x2", repeat=2)
 
 
 async def enter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -135,6 +149,7 @@ async def tab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 __all__ = [
     "commands_command",
     "ctrl_c_command",
+    "ctrl_cc_command",
     "enter_command",
     "esc_command",
     "tab_command",
