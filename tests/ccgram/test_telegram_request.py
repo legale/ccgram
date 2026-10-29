@@ -11,6 +11,15 @@ from ccgram.telegram_request import ResilientPollingHTTPXRequest
 
 
 class TestResilientPollingHTTPXRequest:
+    def test_uses_https_proxy_from_environment(self, monkeypatch) -> None:
+        monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:8888")
+
+        request = ResilientPollingHTTPXRequest()
+
+        proxy_transport = next(iter(request._client._mounts.values()))
+        assert proxy_transport._pool._proxy_url.host == b"127.0.0.1"
+        assert proxy_transport._pool._proxy_url.port == 8888
+
     async def test_rebuilds_client_after_timeout(self) -> None:
         request = ResilientPollingHTTPXRequest()
         old_client = request._client

@@ -18,8 +18,6 @@ usage() {
 
 runloop() {
 	cd "${PROJECT_DIR}"
-	echo "[ccgram-dev] installing/updating Claude hooks"
-	uv run ccgram hook --install
 	acquire_lock() {
 		if mkdir "${LOCK_DIR}" 2>/dev/null; then
 			echo "$$" >"${LOCK_DIR}/pid"

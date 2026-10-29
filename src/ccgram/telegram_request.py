@@ -1,6 +1,7 @@
 """Telegram request helpers for resilient long polling."""
 
 import asyncio
+import os
 import time
 
 import httpx
@@ -13,6 +14,16 @@ logger = structlog.get_logger()
 # Minimum interval between reset warnings during a sustained outage.
 # Without this, every failed poll (~5s apart) emits a warning, flooding logs.
 _RESET_WARN_INTERVAL_S: float = 30.0
+
+
+def _telegram_proxy() -> str | None:
+    """Return the HTTPS proxy configured for outbound Telegram requests."""
+    return (
+        os.environ.get("HTTPS_PROXY")
+        or os.environ.get("https_proxy")
+        or os.environ.get("ALL_PROXY")
+        or os.environ.get("all_proxy")
+    ) or None
 
 
 class ResilientPollingHTTPXRequest(HTTPXRequest):
@@ -30,6 +41,10 @@ class ResilientPollingHTTPXRequest(HTTPXRequest):
     """
 
     def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+        if kwargs.get("proxy") is None:
+            proxy = _telegram_proxy()
+            if proxy is not None:
+                kwargs["proxy"] = proxy
         super().__init__(*args, **kwargs)
         # 0.0 means "no warn yet" — first reset will warn.
         self._last_reset_warn_ts: float = 0.0
