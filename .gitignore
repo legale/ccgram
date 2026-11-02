@@ -1,0 +1,74 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+*.egg
+
+# Build & Distribution
+build/
+dist/
+sdist/
+wheels/
+src/ccgram/_version.py
+
+# Virtual Environments
+.venv/
+.env
+
+# Testing & Coverage
+.hypothesis/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+
+# Type Checking & Linting
+.mypy_cache/
+.ruff_cache/
+
+# Go module cache (external)
+pkg/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Claude Code (keep .claude/ tracked)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Spec (keep .spec/ tracked)
+
+# ai artificats to skip
+.brainstorming/
+
+# Blog posts and social media drafts
+posts/
+docs/posts/
+
+
+# ralphex progress logs
+.ralphex/
+progress*.txt
+
+# Contributor tool dirs
+.serena
+.works
+
+# Dev run lock
+.ccgram-dev-run.lock.d/
+
+# Runtime uploads
+.ccgram-uploads/
+
+# Local temporary archives and extraction trees
+tmp/

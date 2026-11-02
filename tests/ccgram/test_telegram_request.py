@@ -1,0 +1,132 @@
+"""Tests for resilient Telegram polling requests."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from telegram.error import NetworkError, TimedOut
+from telegram.request import HTTPXRequest
+
+from ccgram.bot import create_bot
+from ccgram.telegram_request import ResilientPollingHTTPXRequest
+
+
+class TestResilientPollingHTTPXRequest:
+    def test_uses_https_proxy_from_environment(self, monkeypatch) -> None:
+        monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:8888")
+
+        request = ResilientPollingHTTPXRequest()
+
+        proxy_transport = next(iter(request._client._mounts.values()))
+        pool = getattr(proxy_transport, "_pool")  # type: ignore[attr-defined]
+        assert pool._proxy_url.host == b"127.0.0.1"
+        assert pool._proxy_url.port == 8888
+
+    async def test_rebuilds_client_after_timeout(self) -> None:
+        request = ResilientPollingHTTPXRequest()
+        old_client = request._client
+
+        with (
+            patch.object(
+                HTTPXRequest,
+                "do_request",
+                AsyncMock(side_effect=TimedOut("pool timeout")),
+            ),
+            pytest.raises(TimedOut),
+        ):
+            await request.do_request("https://example.com", "POST")
+
+        assert request._client is not old_client
+        assert old_client.is_closed
+        assert not request._client.is_closed
+
+    async def test_rebuilds_client_after_network_error(self) -> None:
+        request = ResilientPollingHTTPXRequest()
+        old_client = request._client
+
+        with (
+            patch.object(
+                HTTPXRequest,
+                "do_request",
+                AsyncMock(side_effect=NetworkError("proxy broken")),
+            ),
+            pytest.raises(NetworkError),
+        ):
+            await request.do_request("https://example.com", "POST")
+
+        assert request._client is not old_client
+        assert old_client.is_closed
+        assert not request._client.is_closed
+
+
+def _reset_log_calls(mock_logger, level: str) -> list:
+    return [
+        c
+        for c in getattr(mock_logger, level).call_args_list
+        if c.args and "Reset Telegram polling" in c.args[0]
+    ]
+
+
+class TestResetWarningRateLimit:
+    async def test_first_reset_warns(self) -> None:
+        request = ResilientPollingHTTPXRequest()
+        with (
+            patch.object(
+                HTTPXRequest,
+                "do_request",
+                AsyncMock(side_effect=TimedOut("t")),
+            ),
+            patch("ccgram.telegram_request.logger") as mock_logger,
+            pytest.raises(TimedOut),
+        ):
+            await request.do_request("https://example.com", "POST")
+        assert len(_reset_log_calls(mock_logger, "warning")) == 1
+        assert _reset_log_calls(mock_logger, "debug") == []
+
+    async def test_repeated_resets_within_interval_demoted_to_debug(self) -> None:
+        request = ResilientPollingHTTPXRequest()
+        with (
+            patch.object(
+                HTTPXRequest,
+                "do_request",
+                AsyncMock(side_effect=TimedOut("t")),
+            ),
+            patch("ccgram.telegram_request.logger") as mock_logger,
+        ):
+            for _ in range(5):
+                with pytest.raises(TimedOut):
+                    await request.do_request("https://example.com", "POST")
+
+        assert len(_reset_log_calls(mock_logger, "warning")) == 1
+        assert len(_reset_log_calls(mock_logger, "debug")) == 4
+
+    async def test_success_resets_warn_eligibility(self) -> None:
+        request = ResilientPollingHTTPXRequest()
+        sentinel = object()
+        mock = AsyncMock(side_effect=[TimedOut("t"), sentinel, TimedOut("t")])
+
+        with (
+            patch.object(HTTPXRequest, "do_request", mock),
+            patch("ccgram.telegram_request.logger") as mock_logger,
+        ):
+            with pytest.raises(TimedOut):
+                await request.do_request("u", "POST")
+            await request.do_request("u", "POST")
+            with pytest.raises(TimedOut):
+                await request.do_request("u", "POST")
+
+        assert len(_reset_log_calls(mock_logger, "warning")) == 2
+
+
+class TestCreateBotPollingRequest:
+    @patch("ccgram.bot.config")
+    def test_uses_resilient_request_for_telegram_traffic(
+        self, mock_config: MagicMock
+    ) -> None:
+        mock_config.telegram_bot_token = "fake:token"
+
+        app = create_bot()
+
+        assert isinstance(app.bot._request[0], ResilientPollingHTTPXRequest)
+        assert isinstance(app.bot._request[1], ResilientPollingHTTPXRequest)
+        assert app.bot._request[0]._client._transport._pool._max_connections == 1
+        assert app.bot._request[1]._client._transport._pool._max_connections == 256

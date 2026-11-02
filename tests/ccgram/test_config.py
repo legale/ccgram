@@ -1,0 +1,341 @@
+import socket
+import pytest
+
+from ccgram.config import Config
+
+
+@pytest.fixture
+def _base_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test:token")
+    monkeypatch.setenv("ALLOWED_USERS", "12345")
+    monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
+    for name in (
+        "CCGRAM_INSTANCE_NAME",
+        "CCGRAM_PROVIDER",
+        "CCGRAM_HIDE_TOOL_CALLS",
+        "CCGRAM_STATUS_POLL_INTERVAL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestConfigValid:
+    def test_valid_config(self):
+        cfg = Config()
+        assert cfg.telegram_bot_token == "test:token"
+        assert cfg.allowed_users == {12345}
+
+    def test_custom_tmux_session_name(self, monkeypatch):
+        monkeypatch.setenv("TMUX_SESSION_NAME", "mysession")
+        cfg = Config()
+        assert cfg.tmux_session_name == "mysession"
+
+    def test_session_working_directory_defaults_to_home(self):
+        cfg = Config()
+        assert cfg.session_working_directory == "~"
+
+    def test_custom_session_working_directory(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_SESSION_WORKING_DIRECTORY", "/tmp/work")
+        cfg = Config()
+        assert cfg.session_working_directory == "/tmp/work"
+
+    def test_tmux_screen_size_defaults(self, monkeypatch):
+        monkeypatch.delenv("TMUX_SCREEN_X", raising=False)
+        monkeypatch.delenv("TMUX_SCREEN_Y", raising=False)
+        cfg = Config()
+        assert cfg.tmux_screen_x in (80, 200)
+        assert cfg.tmux_screen_y in (80, 120)
+
+    def test_custom_tmux_screen_size(self, monkeypatch):
+        monkeypatch.setenv("TMUX_SCREEN_X", "100")
+        monkeypatch.setenv("TMUX_SCREEN_Y", "50")
+        cfg = Config()
+        assert cfg.tmux_screen_x == 100
+        assert cfg.tmux_screen_y == 50
+
+    def test_file_size_limit_defaults_to_1gb(self):
+        assert Config().file_size_limit_mb == 1024
+
+    def test_custom_file_size_limit(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_FILE_SIZE_LIMIT_MB", "2048")
+        assert Config().file_size_limit_mb == 2048
+
+    def test_is_user_allowed_true(self):
+        cfg = Config()
+        assert cfg.is_user_allowed(12345) is True
+
+    def test_is_user_allowed_false(self):
+        cfg = Config()
+        assert cfg.is_user_allowed(99999) is False
+
+    def test_group_id_default_none(self):
+        cfg = Config()
+        assert cfg.group_id is None
+
+    def test_group_id_parsed_as_int(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_GROUP_ID", "-1001234567890")
+        cfg = Config()
+        assert cfg.group_id == -1001234567890
+
+    def test_instance_name_defaults_to_hostname(self):
+        cfg = Config()
+        assert cfg.instance_name == socket.gethostname()
+
+    def test_instance_name_from_env(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_INSTANCE_NAME", "bot-1")
+        cfg = Config()
+        assert cfg.instance_name == "bot-1"
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestOwnWindowId:
+    def test_own_window_id_default_none(self):
+        cfg = Config()
+        assert cfg.own_window_id is None
+
+    def test_own_window_id_set_directly(self):
+        cfg = Config()
+        cfg.own_window_id = "@3"
+        assert cfg.own_window_id == "@3"
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestConfigMissingEnv:
+    def test_missing_telegram_bot_token(self, monkeypatch):
+        monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+        with pytest.raises(ValueError, match="TELEGRAM_BOT_TOKEN"):
+            Config()
+
+    def test_missing_allowed_users(self, monkeypatch):
+        monkeypatch.delenv("ALLOWED_USERS", raising=False)
+        with pytest.raises(ValueError, match="ALLOWED_USERS"):
+            Config()
+
+    def test_non_numeric_allowed_users(self, monkeypatch):
+        monkeypatch.setenv("ALLOWED_USERS", "abc")
+        with pytest.raises(ValueError, match="non-numeric"):
+            Config()
+
+    def test_non_numeric_group_id(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_GROUP_ID", "not-a-number")
+        with pytest.raises(ValueError, match="CCGRAM_GROUP_ID must be a valid integer"):
+            Config()
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestHideToolCalls:
+    def test_hide_tool_calls_default_true(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_HIDE_TOOL_CALLS", raising=False)
+        cfg = Config()
+        assert cfg.hide_tool_calls is True
+
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "True", "YES", "Yes"])
+    def test_hide_tool_calls_enabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_HIDE_TOOL_CALLS", value)
+        cfg = Config()
+        assert cfg.hide_tool_calls is True
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_hide_tool_calls_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_HIDE_TOOL_CALLS", value)
+        cfg = Config()
+        assert cfg.hide_tool_calls is False
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestTopicStatusConfig:
+    def test_status_diff_default_true(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_TOPIC_STATUS_DIFF_ENABLED", raising=False)
+        assert Config().topic_status_diff_enabled is True
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_status_diff_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_ENABLED", value)
+        assert Config().topic_status_diff_enabled is False
+
+    @pytest.mark.parametrize(
+        ("env_str", "expected"),
+        [("10", 10), ("1", 1), ("0", 1)],
+    )
+    def test_status_diff_interval(self, monkeypatch, env_str, expected):
+        monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", env_str)
+        assert Config().topic_status_diff_interval == expected
+
+    def test_status_diff_interval_default(self):
+        assert Config().topic_status_diff_interval == 3
+
+    def test_status_diff_interval_invalid(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", "bad")
+        with pytest.raises(ValueError, match="CCGRAM_TOPIC_STATUS_DIFF_INTERVAL"):
+            Config()
+
+    def test_topic_idle_defaults(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_ENABLED", raising=False)
+        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_DELAY", raising=False)
+        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_TEXT", raising=False)
+        cfg = Config()
+        assert cfg.topic_idle_enabled is True
+        assert cfg.topic_idle_delay == 10
+        assert cfg.topic_idle_text == "idle"
+
+    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
+    def test_topic_idle_disabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_ENABLED", value)
+        assert Config().topic_idle_enabled is False
+
+    @pytest.mark.parametrize(
+        ("env_str", "expected"),
+        [("15", 15), ("1", 1), ("0", 1)],
+    )
+    def test_topic_idle_delay(self, monkeypatch, env_str, expected):
+        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_DELAY", env_str)
+        assert Config().topic_idle_delay == expected
+
+    def test_topic_idle_text_custom(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_TEXT", "zzz")
+        assert Config().topic_idle_text == "zzz"
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestMessagingConfig:
+    def test_msg_auto_spawn_default_false(self):
+        cfg = Config()
+        assert cfg.msg_auto_spawn is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "True"])
+    def test_msg_auto_spawn_enabled(self, monkeypatch, value):
+        monkeypatch.setenv("CCGRAM_MSG_AUTO_SPAWN", value)
+        cfg = Config()
+        assert cfg.msg_auto_spawn is True
+
+    @pytest.mark.parametrize(
+        ("attr", "env_var", "default", "env_str", "expected"),
+        [
+            ("msg_max_windows", "CCGRAM_MSG_MAX_WINDOWS", 10, "20", 20),
+            ("msg_wait_timeout", "CCGRAM_MSG_WAIT_TIMEOUT", 60, "120", 120),
+            ("msg_spawn_timeout", "CCGRAM_MSG_SPAWN_TIMEOUT", 300, "600", 600),
+            ("msg_spawn_rate", "CCGRAM_MSG_SPAWN_RATE", 3, "5", 5),
+            ("msg_rate_limit", "CCGRAM_MSG_RATE_LIMIT", 10, "25", 25),
+        ],
+    )
+    def test_int_config_default_and_override(
+        self, monkeypatch, attr, env_var, default, env_str, expected
+    ):
+        assert getattr(Config(), attr) == default
+        monkeypatch.setenv(env_var, env_str)
+        assert getattr(Config(), attr) == expected
+
+    def test_mailbox_dir_derived_from_config_dir(self, tmp_path):
+        cfg = Config()
+        assert cfg.mailbox_dir == tmp_path / "mailbox"
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestLiveViewConfig:
+    @pytest.mark.parametrize(
+        ("attr", "env_var", "default", "env_str", "expected"),
+        [
+            ("live_view_interval", "CCGRAM_LIVE_VIEW_INTERVAL", 5, "10", 10),
+            ("live_view_timeout", "CCGRAM_LIVE_VIEW_TIMEOUT", 300, "600", 600),
+        ],
+    )
+    def test_default_and_override(
+        self, monkeypatch, attr, env_var, default, env_str, expected
+    ):
+        assert getattr(Config(), attr) == default
+        monkeypatch.setenv(env_var, env_str)
+        assert getattr(Config(), attr) == expected
+
+    @pytest.mark.parametrize(
+        ("attr", "env_var"),
+        [
+            ("live_view_interval", "CCGRAM_LIVE_VIEW_INTERVAL"),
+            ("live_view_timeout", "CCGRAM_LIVE_VIEW_TIMEOUT"),
+        ],
+    )
+    def test_zero_clamped_to_one(self, monkeypatch, attr, env_var):
+        monkeypatch.setenv(env_var, "0")
+        assert getattr(Config(), attr) == 1
+
+    @pytest.mark.parametrize(
+        "env_var",
+        ["CCGRAM_LIVE_VIEW_INTERVAL", "CCGRAM_LIVE_VIEW_TIMEOUT"],
+    )
+    def test_invalid_raises(self, monkeypatch, env_var):
+        monkeypatch.setenv(env_var, "not-a-number")
+        with pytest.raises(ValueError, match=env_var):
+            Config()
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestPollingConfig:
+    @pytest.mark.parametrize(
+        ("attr", "env_var", "default", "env_str", "expected", "clamp_str", "clamped"),
+        [
+            (
+                "status_poll_interval",
+                "CCGRAM_STATUS_POLL_INTERVAL",
+                1.0,
+                "2.0",
+                2.0,
+                "0.2",
+                0.5,
+            ),
+        ],
+    )
+    def test_default_override_and_clamp(
+        self, monkeypatch, attr, env_var, default, env_str, expected, clamp_str, clamped
+    ):
+        assert getattr(Config(), attr) == default
+        monkeypatch.setenv(env_var, env_str)
+        assert getattr(Config(), attr) == expected
+        monkeypatch.setenv(env_var, clamp_str)
+        assert getattr(Config(), attr) == clamped
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestLimitsConfig:
+    def test_default_limits(self):
+        cfg = Config()
+        assert cfg.live_view_limit == 2500
+        assert cfg.screen_diff_limit == 2000
+
+    def test_custom_limits(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_LIVE_VIEW_LIMIT", "500")
+        monkeypatch.setenv("CCGRAM_SCREEN_DIFF_LIMIT", "800")
+        cfg = Config()
+        assert cfg.live_view_limit == 500
+        assert cfg.screen_diff_limit == 800
+
+    def test_env_default_file_fallback(self, monkeypatch, tmp_path):
+        default_file = tmp_path / ".env-default"
+        default_file.write_text("CCGRAM_LIVE_VIEW_LIMIT=1234\n")
+        monkeypatch.delenv("CCGRAM_LIVE_VIEW_LIMIT", raising=False)
+        monkeypatch.chdir(tmp_path)
+        cfg = Config()
+        assert cfg.live_view_limit == 1234
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestScreenshotsConfig:
+    def test_default_screenshots_config(self):
+        cfg = Config()
+        assert cfg.screenshot_font_size == 15
+        assert cfg.screenshot_palette_colors == 64
+        assert cfg.screenshot_as_photo is True
+
+    def test_custom_screenshots_config(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_FONT_SIZE", "20")
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_PALETTE_COLORS", "128")
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_AS_PHOTO", "false")
+        cfg = Config()
+        assert cfg.screenshot_font_size == 20
+        assert cfg.screenshot_palette_colors == 128
+        assert cfg.screenshot_as_photo is False
+
+    def test_clamped_screenshots_config(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_FONT_SIZE", "4")
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_PALETTE_COLORS", "-10")
+        cfg = Config()
+        assert cfg.screenshot_font_size == 8
+        assert cfg.screenshot_palette_colors == 0

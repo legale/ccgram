@@ -1,0 +1,36 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version:
+          - "3.13"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: uv sync --all-extras
+      - name: Format check
+        run: uv run ruff format --check src/ tests/
+      - name: Lint
+        run: uv run ruff check src/ tests/
+      - name: Type check
+        run: uv run pyright src/ccgram/
+      - name: Dependency check
+        run: uv run deptry src
+      - name: Unit tests
+        run: uv run pytest tests/ -m "not integration and not e2e" --tb=short -v --timeout=30
+      - name: Integration tests
+        run: uv run pytest tests/integration/ -m "not llm" --tb=short -v --timeout=30
