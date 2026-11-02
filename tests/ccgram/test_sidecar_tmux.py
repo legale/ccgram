@@ -1,6 +1,6 @@
 """Tests for tmux sidecar pane management and invariant (max 2 panes)."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from ccgram.tmux_manager import TmuxManager, PaneInfo
 
@@ -8,7 +8,15 @@ from ccgram.tmux_manager import TmuxManager, PaneInfo
 async def test_ensure_sidecar_pane_splits_when_single_pane() -> None:
     tm = TmuxManager("test-session")
     panes = [
-        PaneInfo(pane_id="%1", index=0, active=True, command="bash", path="/tmp", width=80, height=24)
+        PaneInfo(
+            pane_id="%1",
+            index=0,
+            active=True,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        )
     ]
 
     mock_proc = AsyncMock()
@@ -17,13 +25,16 @@ async def test_ensure_sidecar_pane_splits_when_single_pane() -> None:
 
     with (
         patch.object(tm, "list_panes", new=AsyncMock(return_value=panes)),
-        patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)) as exec_mock,
+        patch(
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)
+        ) as exec_mock,
     ):
         sidecar_id = await tm.ensure_sidecar_pane("@1")
 
     assert sidecar_id == "%2"
     assert tm.get_sidecar_pane_id("@1") == "%2"
     exec_mock.assert_awaited_once()
+    assert exec_mock.await_args is not None
     cmd = exec_mock.await_args.args
     assert "split-window" in cmd
     assert "-d" in cmd
@@ -32,8 +43,24 @@ async def test_ensure_sidecar_pane_splits_when_single_pane() -> None:
 async def test_ensure_sidecar_pane_reuses_when_two_panes_exist() -> None:
     tm = TmuxManager("test-session")
     panes = [
-        PaneInfo(pane_id="%1", index=0, active=True, command="bash", path="/tmp", width=80, height=24),
-        PaneInfo(pane_id="%2", index=1, active=False, command="bash", path="/tmp", width=80, height=24),
+        PaneInfo(
+            pane_id="%1",
+            index=0,
+            active=True,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        ),
+        PaneInfo(
+            pane_id="%2",
+            index=1,
+            active=False,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        ),
     ]
 
     with (
@@ -50,10 +77,42 @@ async def test_ensure_sidecar_pane_reuses_when_two_panes_exist() -> None:
 async def test_ensure_sidecar_pane_enforces_max_two_panes_by_killing_excess() -> None:
     tm = TmuxManager("test-session")
     panes = [
-        PaneInfo(pane_id="%1", index=0, active=True, command="bash", path="/tmp", width=80, height=24),
-        PaneInfo(pane_id="%2", index=1, active=False, command="bash", path="/tmp", width=80, height=24),
-        PaneInfo(pane_id="%3", index=2, active=False, command="bash", path="/tmp", width=80, height=24),
-        PaneInfo(pane_id="%4", index=3, active=False, command="bash", path="/tmp", width=80, height=24),
+        PaneInfo(
+            pane_id="%1",
+            index=0,
+            active=True,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        ),
+        PaneInfo(
+            pane_id="%2",
+            index=1,
+            active=False,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        ),
+        PaneInfo(
+            pane_id="%3",
+            index=2,
+            active=False,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        ),
+        PaneInfo(
+            pane_id="%4",
+            index=3,
+            active=False,
+            command="bash",
+            path="/tmp",
+            width=80,
+            height=24,
+        ),
     ]
 
     kill_proc = AsyncMock()
@@ -61,7 +120,9 @@ async def test_ensure_sidecar_pane_enforces_max_two_panes_by_killing_excess() ->
 
     with (
         patch.object(tm, "list_panes", new=AsyncMock(return_value=panes)),
-        patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=kill_proc)) as exec_mock,
+        patch(
+            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=kill_proc)
+        ) as exec_mock,
     ):
         sidecar_id = await tm.ensure_sidecar_pane("@1")
 

@@ -273,13 +273,8 @@ class TestDraftStreamIntegration:
         return bot
 
     async def test_first_tool_use_starts_draft_stream(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
     ) -> None:
-        # No status bubble to dismiss.
-        monkeypatch.setattr(
-            "ccgram.handlers.status.status_bubble.clear_status_message",
-            AsyncMock(return_value=None),
-        )
         bot = self._make_bot(send_id=77)
 
         batch = ToolBatch(window_id="@0", thread_id=10)
@@ -296,12 +291,8 @@ class TestDraftStreamIntegration:
         assert batch.telegram_msg_id == 77
 
     async def test_second_call_replaces_text_via_draft(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
     ) -> None:
-        monkeypatch.setattr(
-            "ccgram.handlers.status.status_bubble.clear_status_message",
-            AsyncMock(return_value=None),
-        )
         bot = self._make_bot(send_id=77)
 
         batch = ToolBatch(window_id="@0", thread_id=10)
@@ -318,12 +309,8 @@ class TestDraftStreamIntegration:
         bot.edit_message_text.assert_awaited_once()
 
     async def test_flush_batch_finalizes_active_draft(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
     ) -> None:
-        monkeypatch.setattr(
-            "ccgram.handlers.status.status_bubble.clear_status_message",
-            AsyncMock(return_value=None),
-        )
         bot = self._make_bot(send_id=77)
         batch = ToolBatch(window_id="@0", thread_id=10)
         batch.entries.append(

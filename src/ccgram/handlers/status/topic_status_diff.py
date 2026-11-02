@@ -15,7 +15,6 @@ from telegram.error import RetryAfter, TelegramError
 
 from ...config import config
 from ...telegram_client import TelegramClient
-from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
 from ...topic_tail import is_last, record_message
 from ..messaging_pipeline.message_sender import (
     edit_with_fallback,
@@ -72,9 +71,7 @@ def _tail_lines(text: str, limit: int | None = None) -> str:
     return "\n".join(reversed(kept))
 
 
-def _format_screen(
-    window_id: str, pane_text: str, title: str | None = None
-) -> str:
+def _format_screen(window_id: str, pane_text: str, title: str | None = None) -> str:
     header = title or f"Screen delta {window_id}"
     body = _tail_lines(pane_text, config.screen_diff_limit)
     return f"{header}\n```\n{body}\n```"
@@ -83,9 +80,7 @@ def _format_screen(
 def _get_state(
     chat_id: int, thread_id: int, window_id: str, target: str = "main"
 ) -> _DiffState:
-    key: tuple[int, int] | tuple[int, int, str] = (
-        (chat_id, thread_id) if target == "main" else (chat_id, thread_id, target)
-    )
+    key: tuple[int, int, str] = (chat_id, thread_id, target)
     state = _diff_states.get(key)
     if state is None or state.window_id != window_id:
         state = _DiffState(window_id=window_id)
@@ -249,9 +244,8 @@ async def update_topic_status_diff(
         and state.last_change_ts > 0.0
         and (now - state.last_change_ts) >= config.topic_idle_delay
     ):
-        is_idle_last = (
-            state.last_idle_message_id > 0
-            and is_last(chat_id, thread_id, state.last_idle_message_id)
+        is_idle_last = state.last_idle_message_id > 0 and is_last(
+            chat_id, thread_id, state.last_idle_message_id
         )
         if not is_idle_last:
             sent = await rate_limit_send_message(

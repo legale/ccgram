@@ -288,7 +288,9 @@ class TmuxManager:
             for line in result.stdout.splitlines():
                 parts = line.split("\t", 2)
                 session_name = parts[0].strip()
-                if not session_name or not session_name.startswith(config.tmux_session_prefix):
+                if not session_name or not session_name.startswith(
+                    config.tmux_session_prefix
+                ):
                     continue
                 cwd = parts[1] if len(parts) > 1 else ""
                 topic_ref = self._parse_topic_ref(  # noqa: PLR2004
@@ -480,14 +482,17 @@ class TmuxManager:
 
         return await self._capture_pane_plain(window_id)
 
-    async def _ensure_managed_window_size(self, session_name: str, window_id: str) -> None:
+    async def _ensure_managed_window_size(
+        self, session_name: str, window_id: str
+    ) -> None:
         target = f"{session_name}:{window_id}"
         for command in (
             ("set-window-option", "-t", target, "window-size", "largest"),
-            #("resize-window", "-t", target, "-x", str(config.tmux_screen_x), "-y", str(config.tmux_screen_y)),
+            # ("resize-window", "-t", target, "-x", str(config.tmux_screen_x), "-y", str(config.tmux_screen_y)),
         ):
             proc = await asyncio.create_subprocess_exec(
-                "tmux", *command,
+                "tmux",
+                *command,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -631,6 +636,7 @@ class TmuxManager:
 
         Foreign windows (emdash) are captured via subprocess instead.
         """
+
         def _sync_capture() -> str | None:
             session_name, wid = self._split_qualified(window_id)
             session = self.get_session(session_name)
@@ -820,6 +826,7 @@ class TmuxManager:
 
         Foreign windows (emdash) are never killed — they are owned externally.
         """
+
         def _sync_kill() -> bool:
             session_name, wid = self._split_qualified(window_id)
             session = self.get_session(session_name)

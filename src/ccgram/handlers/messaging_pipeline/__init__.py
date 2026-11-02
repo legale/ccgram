@@ -40,8 +40,6 @@ from .message_task import (
     ContentTask,
     ContentType,
     MessageTask,
-    StatusClearTask,
-    StatusUpdateTask,
     thread_key,
 )
 from .topic_commands import toolcalls_command, verbose_command
@@ -69,8 +67,6 @@ __all__ = [
     "ContentTask",
     "ContentType",
     "MessageTask",
-    "StatusClearTask",
-    "StatusUpdateTask",
     "ToolBatch",
     "ToolBatchEntry",
     "ack_reaction",

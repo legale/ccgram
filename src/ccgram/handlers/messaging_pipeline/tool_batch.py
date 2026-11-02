@@ -302,23 +302,16 @@ def _extract_task_tool_suffix(entry: ToolBatchEntry) -> str:
 
 async def _send_or_edit_batch(
     client: TelegramClient,
-    user_id: int,
+    user_id: int,  # noqa: ARG001
     batch: ToolBatch,
     chat_id: int,
     raw_thread_id: int | None,
-    thread_id_or_0: int,
+    thread_id_or_0: int,  # noqa: ARG001
 ) -> None:
     """Send a new batch message or replace the existing draft text."""
-    # Lazy: status_bubble is registered as a callback target via the
-    # registry; importing it at top forms tool_batch ↔ status_bubble
-    # through the messaging_pipeline subpackage's __init__ chain.
-    # Lazy: status ↔ messaging_pipeline cycle
-    from ..status.status_bubble import clear_status_message
-
     batch_text = format_batch_message(batch.entries)
 
     if batch.draft is None:
-        await clear_status_message(client, user_id, thread_id_or_0)
         await _rate_limit_chat(chat_id)
         batch.draft = DraftStream(
             unwrap_bot(client),

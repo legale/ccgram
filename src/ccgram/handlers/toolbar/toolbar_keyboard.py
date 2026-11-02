@@ -11,7 +11,6 @@ from __future__ import annotations
 from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
 from ...config import config
-from ... import window_query
 from ...toolbar_config import (
     ToolbarAction,
     ToolbarConfig,
@@ -80,9 +79,7 @@ def _make_button(
     return InlineKeyboardButton(label, callback_data=cb)
 
 
-def build_toolbar_keyboard(
-    window_id: str
-) -> InlineKeyboardMarkup:
+def build_toolbar_keyboard(window_id: str) -> InlineKeyboardMarkup:
     """Build the inline keyboard for /toolbar from per-provider config."""
     cfg = get_toolbar_config()
     layout = cfg.for_provider("shell")
@@ -139,7 +136,6 @@ async def refresh_button_label(
     logger = structlog.get_logger()
 
     await asyncio.sleep(delay)
-    view = window_query.view_window(window_id)
     short_label = "Def"
     _set_action_label(window_id, action.name, short_label)
     new_kb = build_toolbar_keyboard(window_id)

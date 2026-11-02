@@ -305,6 +305,7 @@ path = ".*private.*"
 
     def test_tmp_file_allowed(self, tmp_path: Path) -> None:
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=True) as tmp:
             tmp.write("data in tmp")
             tmp.flush()

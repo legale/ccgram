@@ -17,8 +17,9 @@ class TestResilientPollingHTTPXRequest:
         request = ResilientPollingHTTPXRequest()
 
         proxy_transport = next(iter(request._client._mounts.values()))
-        assert proxy_transport._pool._proxy_url.host == b"127.0.0.1"
-        assert proxy_transport._pool._proxy_url.port == 8888
+        pool = getattr(proxy_transport, "_pool")  # type: ignore[attr-defined]
+        assert pool._proxy_url.host == b"127.0.0.1"
+        assert pool._proxy_url.port == 8888
 
     async def test_rebuilds_client_after_timeout(self) -> None:
         request = ResilientPollingHTTPXRequest()

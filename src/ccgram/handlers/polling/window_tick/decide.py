@@ -5,10 +5,8 @@ All inputs flow in via ``TickContext``; output is a ``TickDecision``.
 
 from __future__ import annotations
 
-import time
 
 from ..polling_types import (
-    STARTUP_TIMEOUT,
     StatusUpdate,
     TickContext,
     TickDecision,
@@ -16,7 +14,7 @@ from ..polling_types import (
 )
 
 
-def build_status_line(status: StatusUpdate | None) -> str | None:
+def build_status_line(status: StatusUpdate | None = None) -> str | None:  # noqa: ARG001
     """Status lines are disabled in simplified polling model."""
     return None
 

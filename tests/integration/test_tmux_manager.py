@@ -280,29 +280,6 @@ async def test_capture_pane_with_ansi(tmux, tmp_path) -> None:
     assert "red" in ansi
 
 
-async def test_ansi_capture_through_pyte(tmux, tmp_path) -> None:
-    from ccgram.screen_buffer import ScreenBuffer
-
-    ok, _msg, _name, window_id = await tmux.create_window(
-        str(tmp_path), window_name="pyte-e2e", start_agent=False
-    )
-    assert ok
-
-    await tmux.send_keys(window_id, r'printf "\033[1mbold text\033[0m"')
-    await asyncio.sleep(0.5)
-
-    w = await tmux.find_window_by_id(window_id)
-    assert w is not None
-    ansi_text = await tmux.capture_pane(window_id, with_ansi=True)
-    assert ansi_text is not None
-
-    buf = ScreenBuffer(columns=w.pane_width, rows=w.pane_height)
-    buf.feed(ansi_text)
-    rendered = buf.rendered_text
-    assert "bold text" in rendered
-    assert "\x1b" not in rendered
-
-
 async def test_create_window_does_not_inject_environment_commands(
     tmux, tmp_path
 ) -> None:

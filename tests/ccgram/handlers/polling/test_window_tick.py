@@ -10,13 +10,10 @@ from ccgram.handlers.polling.polling_state import (
     interactive_strategy,
     lifecycle_strategy,
     terminal_poll_state,
-    terminal_screen_buffer,
 )
 from ccgram.handlers.polling.polling_types import TickContext, TickDecision
 from ccgram.handlers.polling.window_tick import (
     _handle_dead_window_notification,
-    _apply_active_transition,
-    _transition_to_idle,
     _update_status,
     decide_tick,
     tick_window,
@@ -31,14 +28,12 @@ def _reset():
     lifecycle_strategy.reset_typing_state()
     lifecycle_strategy.reset_dead_notification_state()
     interactive_strategy.clear_all_alerts()
-    terminal_screen_buffer.reset_screen_buffer_state()
     yield
     terminal_poll_state._states.clear()
     lifecycle_strategy.reset_autoclose_state()
     lifecycle_strategy.reset_typing_state()
     lifecycle_strategy.reset_dead_notification_state()
     interactive_strategy.clear_all_alerts()
-    terminal_screen_buffer.reset_screen_buffer_state()
 
 
 def _make_window(
@@ -123,16 +118,11 @@ class TestUpdateStatusTopicDiff:
 
         bot = AsyncMock(spec=Bot)
         w = _make_window()
-        status = _make_status(raw_text="Working", is_interactive=False)
 
         with (
             patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
             patch("ccgram.handlers.polling.window_tick.apply.window_query"),
             patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
-            patch(
-                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
-                return_value=status,
-            ),
             patch(
                 "ccgram.handlers.polling.window_tick.apply.update_topic_status_diff",
                 new_callable=AsyncMock,
@@ -163,16 +153,11 @@ class TestUpdateStatusTopicDiff:
 
         bot = AsyncMock(spec=Bot)
         w = _make_window()
-        status = _make_status(raw_text="Working", is_interactive=False)
 
         with (
             patch("ccgram.handlers.polling.window_tick.apply.tmux_manager") as mock_tm,
             patch("ccgram.handlers.polling.window_tick.apply.window_query"),
             patch("ccgram.handlers.polling.window_tick.apply.thread_router") as mock_tr,
-            patch(
-                "ccgram.handlers.polling.window_tick.observe._parse_with_pyte",
-                return_value=status,
-            ),
             patch(
                 "ccgram.handlers.polling.window_tick.apply.update_topic_status_diff",
                 new_callable=AsyncMock,
@@ -228,7 +213,6 @@ class TestDecideTickActiveTranscript:
 
 
 class TestDecideTickShellPrompt:
-
     def test_shell_provider_yields_idle(self):
         ctx = _make_ctx(is_shell_prompt=True, supports_hook=False)
         decision = decide_tick(ctx)

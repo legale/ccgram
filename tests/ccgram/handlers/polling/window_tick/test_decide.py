@@ -4,11 +4,9 @@ import pytest
 
 from ccgram.handlers.polling.polling_types import (
     STARTUP_TIMEOUT,
-    StatusUpdate,
     TickContext,
 )
 from ccgram.handlers.polling.window_tick.decide import (
-    build_status_line,
     decide_tick,
     is_shell_prompt,
 )
@@ -58,7 +56,6 @@ class TestDecideTickDeadWindow:
 
 
 class TestDecideTickShellPrompt:
-
     def test_no_hook_provider_yields_idle(self):
         ctx = _make_ctx(is_shell_prompt=True, supports_hook=False)
         decision = decide_tick(ctx)

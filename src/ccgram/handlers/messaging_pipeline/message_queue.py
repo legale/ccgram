@@ -17,12 +17,6 @@ from ...telegram_client import TelegramClient
 from ...thread_router import thread_router
 from ...utils import task_done_callback
 from ...window_query import is_tool_calls_hidden
-from ..status.status_bubble import (
-    clear_status_message,
-    convert_status_to_content,
-    process_status_clear,
-    process_status_update,
-)
 from .message_sender import (
     edit_with_fallback,
     rate_limit_send_message,
@@ -33,8 +27,6 @@ from .message_task import (
     ContentType,
     MessageRole,
     MessageTask,
-    StatusClearTask,
-    StatusUpdateTask,
     thread_key,
 )
 from .tool_batch import (
@@ -172,42 +164,6 @@ async def _merge_content_tasks(
     )
 
 
-async def _coalesce_status_updates(
-    queue: asyncio.Queue[MessageTask],
-    first: StatusUpdateTask,
-    lock: asyncio.Lock,
-) -> tuple[StatusUpdateTask, int]:
-    """Keep only the latest pending status_update for the same topic/window.
-
-    Returns: (selected_task, dropped_count) where dropped_count is the number
-    of queued tasks removed and already accounted for.
-    """
-    selected = first
-    dropped = 0
-    key = (thread_key(first.thread_id), first.window_id)
-
-    async with lock:
-        items = _drain_queue(queue)
-        remaining: list[MessageTask] = []
-
-        for task in items:
-            if not isinstance(task, StatusUpdateTask):
-                remaining.append(task)
-                continue
-            task_key = (thread_key(task.thread_id), task.window_id)
-            if task_key == key:
-                selected = task
-                dropped += 1
-            else:
-                remaining.append(task)
-
-        for item in remaining:
-            queue.put_nowait(item)
-            queue.task_done()
-
-    return selected, dropped
-
-
 async def _handle_content_task(
     client: TelegramClient,
     user_id: int,
@@ -267,18 +223,6 @@ async def _dispatch(
     match task:
         case ContentTask() as ct:
             return await _handle_content_task(client, user_id, ct, queue, lock)
-        case StatusUpdateTask() as st:
-            await _flush_batch_for_task(user_id, st, client)
-            collapsed_task, dropped = await _coalesce_status_updates(queue, st, lock)
-            if dropped > 0:
-                for _ in range(dropped):
-                    queue.task_done()
-            await process_status_update(client, user_id, collapsed_task)
-            return 0
-        case StatusClearTask() as cl:
-            await _flush_batch_for_task(user_id, cl, client)
-            await process_status_clear(client, user_id, cl)
-            return 0
         case _ as unreachable:
             assert_never(unreachable)
 
@@ -343,7 +287,6 @@ async def _process_content_task(
         _tkey = (task.tool_use_id, user_id, tkey)
         edit_msg_id = _tool_msg_ids.pop(_tkey, None)
         if edit_msg_id is not None:
-            await clear_status_message(client, user_id, tkey)
             full_text = "\n\n".join(task.parts)
             success = await edit_with_fallback(
                 client,
@@ -355,28 +298,11 @@ async def _process_content_task(
                 return
             logger.debug("Failed to edit tool msg %s, sending new", edit_msg_id)
 
-    first_part = True
     last_msg_id: int | None = None
     for part in task.parts:
-        sent = None
-
-        if first_part:
-            first_part = False
-            converted_msg_id = await convert_status_to_content(
-                client,
-                user_id,
-                tkey,
-                task.window_id,
-                part,
-            )
-            if converted_msg_id is not None:
-                last_msg_id = converted_msg_id
-                continue
-
         sent = await rate_limit_send_message(
             client, chat_id, part, **send_kwargs(task.thread_id)
         )
-
         if sent:
             last_msg_id = sent.message_id
 
@@ -419,22 +345,7 @@ async def enqueue_status_update(
     status_text: str | None,
     thread_id: int | None = None,
 ) -> None:
-    """Enqueue status update or clear."""
-    queue = get_or_create_queue(client, user_id)
-
-    if status_text is not None:
-        task: MessageTask = StatusUpdateTask(
-            window_id=window_id,
-            text=status_text,
-            thread_id=thread_id,
-        )
-    else:
-        task = StatusClearTask(
-            window_id=window_id,
-            thread_id=thread_id,
-        )
-
-    queue.put_nowait(task)
+    """Status updates removed — no-op."""
 
 
 def clear_tool_msg_ids_for_topic(user_id: int, thread_id: int | None = None) -> None:

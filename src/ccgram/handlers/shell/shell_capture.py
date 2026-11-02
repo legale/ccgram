@@ -110,6 +110,7 @@ _MAX_FIX_OUTPUT_CHARS = 800
 # BMP PUA: U+E000–U+F8FF, Supplement PUA-A: U+F0000–U+FFFFD
 _GLYPH_RE = re.compile(r"[\ue000-\uf8ff\U000f0000-\U000ffffd]")
 
+
 async def _capture_current_screen(window_id: str) -> str | None:
     """Capture only the current terminal screen."""
     return await tmux_manager.capture_pane(window_id)

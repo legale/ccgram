@@ -127,6 +127,7 @@ async def _resolve_upload_dir(
     window = await tmux_manager.find_window_by_id(window_id)
     if window and window.cwd:
         cwd = str(Path(window.cwd).expanduser().resolve())
+        # Lazy: session_manager needed only for cwd persistence
         from ..session import session_manager
 
         session_manager.set_window_cwd(window_id, cwd)

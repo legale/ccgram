@@ -20,7 +20,6 @@ from ...thread_router import thread_router
 from ...tmux_manager import send_to_window
 from ...utils import handle_general_topic_message, is_general_topic
 from ..callback_helpers import get_thread_id as _get_thread_id
-from ..live.pane_callbacks import apply_pane_rename
 from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..sessions_dashboard import apply_session_rename
 
@@ -113,17 +112,6 @@ async def _handle_unnamed_topic(bot: Bot, chat: Chat | None, message: Message) -
         await safe_reply(message, "Use a named topic.")
 
 
-async def _handle_rename_captures(
-    user_data: dict | None,
-    thread_id: int | None,
-    text: str,
-    message: Message,
-) -> bool:
-    if await apply_pane_rename(user_data, thread_id, text, message):
-        return True
-    return await apply_session_rename(user_data, thread_id, text, message)
-
-
 async def handle_text_message(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
@@ -161,9 +149,7 @@ async def handle_text_message(
     if chat and thread_id is not None:
         thread_router.set_group_chat_id(user.id, thread_id, chat.id)
 
-    if await _handle_rename_captures(
-        context.user_data, thread_id, message.text, message
-    ):
+    if await apply_session_rename(context.user_data, thread_id, message.text, message):
         return
 
     if thread_id is None:
@@ -217,7 +203,10 @@ async def _handle_sidecar_command(
         window_id=window_id,
         command=command,
     )
+    # Lazy: sidecar operations load tmux_manager and status diff
     from ...tmux_manager import tmux_manager
+
+    # Lazy: sidecar operations load tmux_manager and status diff
     from ..status.topic_status_diff import (
         start_sidecar_diff,
         update_topic_status_diff,

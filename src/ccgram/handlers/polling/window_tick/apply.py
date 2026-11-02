@@ -20,7 +20,6 @@ from ....config import config
 from ....telegram_client import PTBTelegramClient
 from ....thread_router import thread_router
 from ....tmux_manager import tmux_manager
-from ....window_state_store import window_store
 from ...messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
 )
@@ -118,8 +117,8 @@ async def _apply_active_transition(
     user_id: int,
     window_id: str,
     thread_id: int | None,
-    decision: TickDecision,
-    notif_mode: str,
+    decision: TickDecision,  # noqa: ARG001
+    notif_mode: str,  # noqa: ARG001
 ) -> None:
     client = PTBTelegramClient(bot)
     if thread_id is not None:
@@ -195,7 +194,10 @@ async def _update_status(
         return
 
     if w.cwd:
+        # Lazy: Path import
         from pathlib import Path
+
+        # Lazy: session_manager import
         from ....session import session_manager
 
         session_manager.set_window_cwd(

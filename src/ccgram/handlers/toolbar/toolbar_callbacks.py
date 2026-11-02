@@ -170,7 +170,7 @@ async def _builtin_send(
         await query.answer("State error", show_alert=True)
         return
     thread_id = get_thread_id(update)
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id) if thread_id else None
+    chat_id = thread_router.resolve_chat_id(user.id, thread_id) if thread_id else None
     if chat_id is None:
         await query.answer("Use in a topic", show_alert=True)
         return

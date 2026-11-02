@@ -25,24 +25,7 @@ class ContentTask:
     thread_id: int | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class StatusUpdateTask:
-    """An update to the status bubble (edit-in-place or send if missing)."""
-
-    window_id: str
-    text: str | None
-    thread_id: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class StatusClearTask:
-    """A request to clear the status bubble for a topic."""
-
-    window_id: str | None
-    thread_id: int | None = None
-
-
-MessageTask: TypeAlias = ContentTask | StatusUpdateTask | StatusClearTask
+MessageTask: TypeAlias = ContentTask
 
 
 def thread_key(thread_id: int | None) -> int:

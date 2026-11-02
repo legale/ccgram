@@ -22,7 +22,7 @@ def _telegram_proxy() -> str | None:
         os.environ.get("HTTPS_PROXY")
         or os.environ.get("https_proxy")
         or os.environ.get("ALL_PROXY")
-        or os.environ.get("all_proxy")
+        or os.environ.get("all_proxy")  # noqa: SIM112
     ) or None
 
 

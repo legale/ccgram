@@ -130,8 +130,10 @@ async def _handle_live_start(
         await query.answer("Use in a topic", show_alert=True)
         return
 
-    # Lazy: live_view ↔ screenshot_callbacks bidirectional cycle.
+    # Lazy: config resolved at call time
     from ...config import config
+
+    # Lazy: live_view ↔ screenshot_callbacks bidirectional cycle.
     from .live_view import (
         LiveViewState,
         build_live_keyboard,
@@ -587,93 +589,6 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
             last_hash=content_hash(text),
         )
     )
-
-
-async def panes_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:  # noqa: C901
-    """List all panes in the current topic's window."""
-    # Lazy: config singleton resolved at call time so tests can swap it
-    from ...config import config
-
-    # Lazy: utils pulls in chat-id helpers that reach back into handlers
-    from ...utils import handle_general_topic_message, is_general_topic
-
-    # Lazy: window_state_store proxy not yet wired at module load
-    from ...window_state_store import window_store
-
-    # Lazy: messaging_pipeline ↔ live cycle through status_bubble
-    from ..messaging_pipeline.message_sender import safe_reply
-
-    # Lazy: pane_callbacks ↔ screenshot_callbacks cycle through the toolbar
-    from .pane_callbacks import build_pane_buttons, build_pane_lifecycle_button
-
-    user = update.effective_user
-    if not user or not config.is_user_allowed(user.id):
-        return
-    if not update.message:
-        return
-
-    thread_id = await _command_thread_id(
-        update,
-        safe_reply,
-        handle_general_topic_message,
-        is_general_topic,
-        "\u274c Use this command inside a topic.",
-    )
-    if thread_id is None:
-        return
-
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
-    if not window_id:
-        await safe_reply(
-            update.message, "\u274c This topic is not bound to any session."
-        )
-        return
-
-    panes = await tmux_manager.list_panes(window_id)
-    if len(panes) <= 1:
-        await safe_reply(
-            update.message,
-            "\U0001f4d0 Single pane \u2014 no multi-pane layout detected.",
-        )
-        return
-
-    # Lazy: polling_state imports many handler symbols transitively.
-    from ..polling.polling_state import interactive_strategy
-
-    lines = [f"\U0001f4d0 {len(panes)} panes in window\n"]
-    rows: list[list] = []
-    for pane in panes:
-        prefix = "\U0001f4cd" if pane.active else "  "
-        label = f"Pane {pane.index} ({pane.command})"
-        suffix_parts: list[str] = []
-        if pane.active:
-            suffix_parts.append("active")
-        if interactive_strategy.has_pane_alert(pane.pane_id):
-            prefix = "\u26a0\ufe0f"
-            suffix_parts.append("blocked")
-        elif not pane.active:
-            suffix_parts.append("running")
-        stored = window_store.get_pane(window_id, pane.pane_id)
-        if stored and stored.name:
-            suffix_parts.insert(0, stored.name)
-        if stored and stored.subscribed:
-            suffix_parts.append("subscribed")
-        suffix = f" \u2014 {', '.join(suffix_parts)}" if suffix_parts else ""
-        lines.append(f"{prefix} {label}{suffix}")
-        rows.append(
-            build_pane_buttons(
-                window_id,
-                pane.pane_id,
-                subscribed=bool(stored and stored.subscribed),
-            )
-        )
-
-    lifecycle_on = window_store.get_pane_lifecycle_notify(
-        window_id, config.pane_lifecycle_notify
-    )
-    rows.append([build_pane_lifecycle_button(window_id, enabled=lifecycle_on)])
-    keyboard = InlineKeyboardMarkup(rows) if rows else None
-    await safe_reply(update.message, "\n".join(lines), reply_markup=keyboard)
 
 
 # --- Registry dispatch entry point ---

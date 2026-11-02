@@ -9,7 +9,6 @@ import pytest
 from ccgram.handlers.messaging_pipeline.message_queue import (
     MERGE_MAX_LENGTH,
     _can_merge_tasks,
-    _coalesce_status_updates,
     _dispatch,
     _handle_content_task,
     _merge_content_tasks,
@@ -19,8 +18,6 @@ from ccgram.handlers.messaging_pipeline.message_queue import (
 from ccgram.handlers.messaging_pipeline.message_task import (
     ContentTask,
     ContentType,
-    StatusClearTask,
-    StatusUpdateTask,
 )
 from ccgram.telegram_client import FakeTelegramClient
 
@@ -53,28 +50,6 @@ def _content_task(
         content_type=content_type,
         thread_id=thread_id,
         tool_use_id=tool_use_id,
-    )
-
-
-def _status_task(
-    text: str = "Thinking...",
-    window_id: str = "@0",
-    thread_id: int | None = 42,
-) -> StatusUpdateTask:
-    return StatusUpdateTask(
-        text=text,
-        window_id=window_id,
-        thread_id=thread_id,
-    )
-
-
-def _clear_task(
-    window_id: str = "@0",
-    thread_id: int | None = 42,
-) -> StatusClearTask:
-    return StatusClearTask(
-        window_id=window_id,
-        thread_id=thread_id,
     )
 
 
@@ -135,11 +110,6 @@ class TestCanMergeTasks:
         b = _content_task("world", content_type="tool_result")
         assert not _can_merge_tasks(a, b)
 
-    def test_non_content_candidate_blocks_merge(self):
-        a = _content_task("hello")
-        b = _status_task()
-        assert not _can_merge_tasks(a, b)
-
 
 class TestMergeContentTasks:
     async def test_merges_consecutive_text_tasks(self, queue, lock):
@@ -182,29 +152,6 @@ class TestMergeContentTasks:
 
         assert count == 0
         assert merged is first
-
-
-class TestCoalesceStatusUpdates:
-    async def test_keeps_latest_status(self, queue, lock):
-        queue.put_nowait(_status_task("Thinking..."))
-        queue.put_nowait(_status_task("Writing..."))
-        first = _status_task("Reading...")
-
-        selected, dropped = await _coalesce_status_updates(queue, first, lock)
-
-        assert selected.text == "Writing..."
-        assert dropped == 2
-
-    async def test_preserves_non_status_tasks(self, queue, lock):
-        queue.put_nowait(_content_task("hello"))
-        queue.put_nowait(_status_task("Writing..."))
-        first = _status_task("Reading...")
-
-        selected, dropped = await _coalesce_status_updates(queue, first, lock)
-
-        assert selected.text == "Writing..."
-        assert dropped == 1
-        assert queue.qsize() == 1
 
 
 class TestDispatch:
@@ -272,40 +219,6 @@ class TestDispatch:
         await _dispatch(bot, 1, ct, queue, lock)
         mock_process.assert_awaited_once_with(bot, 1, followup)
 
-    @patch(
-        "ccgram.handlers.messaging_pipeline.message_queue.process_status_update",
-        new_callable=AsyncMock,
-    )
-    @patch(
-        "ccgram.handlers.messaging_pipeline.message_queue._flush_batch_for_task",
-        new_callable=AsyncMock,
-    )
-    async def test_status_update_dispatch(
-        self, mock_flush, mock_status, bot, queue, lock
-    ):
-        st = _status_task("Working...")
-        extra = await _dispatch(bot, 1, st, queue, lock)
-        assert extra == 0
-        mock_flush.assert_awaited_once_with(1, st, bot)
-        mock_status.assert_awaited_once()
-
-    @patch(
-        "ccgram.handlers.messaging_pipeline.message_queue.process_status_clear",
-        new_callable=AsyncMock,
-    )
-    @patch(
-        "ccgram.handlers.messaging_pipeline.message_queue._flush_batch_for_task",
-        new_callable=AsyncMock,
-    )
-    async def test_status_clear_dispatch(
-        self, mock_flush, mock_clear, bot, queue, lock
-    ):
-        cl = _clear_task()
-        extra = await _dispatch(bot, 1, cl, queue, lock)
-        assert extra == 0
-        mock_flush.assert_awaited_once_with(1, cl, bot)
-        mock_clear.assert_awaited_once_with(bot, 1, cl)
-
 
 class TestNoBackEdgeImports:
     def _get_imports(self, filepath: Path) -> set[str]:
@@ -321,13 +234,6 @@ class TestNoBackEdgeImports:
         imports = self._get_imports(src)
         assert not any("message_queue" in m for m in imports), (
             f"tool_batch.py must not import from message_queue: {imports}"
-        )
-
-    def test_status_bubble_does_not_import_message_queue(self):
-        src = Path("src/ccgram/handlers/status/status_bubble.py")
-        imports = self._get_imports(src)
-        assert not any("message_queue" in m for m in imports), (
-            f"status_bubble.py must not import from message_queue: {imports}"
         )
 
 

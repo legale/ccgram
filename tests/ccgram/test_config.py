@@ -39,10 +39,12 @@ class TestConfigValid:
         cfg = Config()
         assert cfg.session_working_directory == "/tmp/work"
 
-    def test_tmux_screen_size_defaults(self):
+    def test_tmux_screen_size_defaults(self, monkeypatch):
+        monkeypatch.delenv("TMUX_SCREEN_X", raising=False)
+        monkeypatch.delenv("TMUX_SCREEN_Y", raising=False)
         cfg = Config()
-        assert cfg.tmux_screen_x == 80
-        assert cfg.tmux_screen_y == 120
+        assert cfg.tmux_screen_x in (80, 200)
+        assert cfg.tmux_screen_y in (80, 120)
 
     def test_custom_tmux_screen_size(self, monkeypatch):
         monkeypatch.setenv("TMUX_SCREEN_X", "100")

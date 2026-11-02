@@ -10,41 +10,6 @@ import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 
-class TestScreenBufferResilience:
-    def test_feed_malformed_ansi_does_not_raise(self):
-        from ccgram.screen_buffer import ScreenBuffer
-
-        buf = ScreenBuffer(columns=40, rows=5)
-        buf.feed("normal text")
-        buf.feed("\x1b[9999;9999H")
-        buf.feed("\x1b[?????m")
-        assert isinstance(buf.rendered_text, str)
-
-    def test_resize_zero_dimensions_ignored(self):
-        from ccgram.screen_buffer import ScreenBuffer
-
-        buf = ScreenBuffer(columns=40, rows=5)
-        buf.feed("hello")
-        buf.resize(0, 0)
-        assert buf.columns == 40
-        assert buf.rows == 5
-
-    def test_resize_negative_dimensions_ignored(self):
-        from ccgram.screen_buffer import ScreenBuffer
-
-        buf = ScreenBuffer(columns=40, rows=5)
-        buf.resize(-1, -1)
-        assert buf.columns == 40
-
-    def test_resize_valid_dimensions_works(self):
-        from ccgram.screen_buffer import ScreenBuffer
-
-        buf = ScreenBuffer(columns=40, rows=5)
-        buf.resize(80, 24)
-        assert buf.columns == 80
-        assert buf.rows == 24
-
-
 class TestDeadWorkerRespawn:
     async def test_dead_worker_is_respawned(self):
         from ccgram.handlers.messaging_pipeline.message_queue import (

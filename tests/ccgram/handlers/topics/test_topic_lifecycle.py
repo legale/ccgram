@@ -81,6 +81,3 @@ async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:
     )
     tmux.kill_session.assert_awaited_once_with("cc_foo")
     router.unbind_thread.assert_called_once_with(1, 42)
-
-
-

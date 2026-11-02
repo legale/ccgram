@@ -24,9 +24,6 @@ if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
 from ..config import config
-from ..mailbox import Mailbox
-from ..msg_discovery import clear_declared
-from ..spawn_request import clear_spawn_state
 from ..thread_router import thread_router
 from ..tmux_manager import clear_vim_state, tmux_manager
 from ..topic_tail import clear_topic_tail_state
@@ -34,8 +31,6 @@ from ..utils import handle_general_topic_message, is_general_topic, log_throttle
 from .callback_helpers import get_thread_id
 from .command_history import clear_history
 from .live.live_view import clear_live_view
-from .messaging.msg_delivery import clear_delivery_state
-from .messaging.msg_telegram import clear_loop_alerts
 from .messaging_pipeline.message_queue import (
     clear_tool_msg_ids_for_topic,
     enqueue_status_update,
@@ -46,12 +41,9 @@ from .polling.polling_state import (
     interactive_strategy,
     lifecycle_strategy,
     terminal_poll_state,
-    terminal_screen_buffer,
 )
 from .shell.shell_capture import clear_shell_monitor_state
 from .shell.shell_commands import clear_shell_hint_seen, clear_shell_pending
-from .status.status_bar_actions import clear_key_refreshes
-from .status.status_bubble import clear_status_msg_info
 from .status.topic_emoji import clear_topic_emoji_state
 from .status.topic_status_diff import clear_topic_status_diff_state
 from .toolbar.toolbar_keyboard import clear_toolbar_labels
@@ -80,7 +72,7 @@ def _clear_all_topic_state(
     thread_id: int,
     *,
     window_id: str | None = None,
-    qualified_id: str | None = None,
+    qualified_id: str | None = None,  # noqa: ARG001
     chat_id: int | None = None,
 ) -> None:
     """Explicitly clean up all per-topic, per-chat, per-window, and per-qualified state."""
@@ -102,21 +94,12 @@ def _clear_all_topic_state(
 
     # Window scope (window_id)
     if window_id:
-        _safe_call(terminal_screen_buffer.clear_screen_buffer, window_id)
         _safe_call(terminal_poll_state.clear_state, window_id)
         _safe_call(interactive_strategy.clear_pane_alerts, window_id)
         _safe_call(clear_shell_monitor_state, window_id)
-        _safe_call(clear_key_refreshes, window_id)
         _safe_call(clear_toolbar_labels, window_id)
         _safe_call(clear_vim_state, window_id)
         _safe_call(tmux_manager.forget_sidecar_pane, window_id)
-
-    # Qualified scope (qualified_id)
-    if qualified_id:
-        _safe_call(clear_delivery_state, qualified_id)
-        _safe_call(clear_loop_alerts, qualified_id)
-        _safe_call(clear_declared, qualified_id)
-        _safe_call(clear_spawn_state, qualified_id)
 
 
 async def clear_topic_state(
@@ -134,9 +117,9 @@ async def clear_topic_state(
     bot-specific async cleanup and infrastructure I/O.
 
     Args:
-        window_dead: When False, skip mailbox/qualified-scope cleanup because
+        window_dead: When False, skip qualified-scope cleanup because
             the tmux window is still alive (e.g. topic close, //unbind).
-            Window-scope callbacks (toolbar labels, screen buffer, etc.) always
+            Window-scope callbacks (toolbar labels, monitor state, etc.) always
             run.  Shell prompt orchestrator state is cleared separately, only
             when the window is truly dead, to preserve skip/offer state for
             live sessions.
@@ -147,7 +130,6 @@ async def clear_topic_state(
     if window_id and window_dead:
         qualified_id = f"{config.tmux_session_name}:{window_id}"
 
-    # Enqueue status-message delete BEFORE clearing message ID
     if client is not None:
         await enqueue_status_update(
             client,
@@ -156,12 +138,9 @@ async def clear_topic_state(
             None,
             thread_id=thread_id,
         )
-    else:
-        clear_status_msg_info(user_id, thread_id)
 
     # Direct explicit dispatch — all module-specific per-topic/window/chat state.
-    # Always pass window_id so window-scope state (toolbar, screen buffer,
-    # monitor state, etc.) clears even when the window is still alive.
+    # Always pass window_id so window-scope state (toolbar, monitor state, etc.) clears even when the window is still alive.
     # Shell prompt orchestrator state is handled below so it only clears on true window death.
     _clear_all_topic_state(
         user_id,
@@ -181,9 +160,6 @@ async def clear_topic_state(
     log_throttle_reset(f"status-update:{user_id}:{thread_id}")
     if window_id:
         log_throttle_reset(f"topic-probe:{window_id}")
-        mb = Mailbox(config.mailbox_dir)
-        if qualified_id is not None:
-            mb.clear_inbox(qualified_id)
 
 
 async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -292,10 +268,9 @@ async def killme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
 
     client = PTBTelegramClient(context.bot)
+    # Lazy: avoid circular import between cleanup and sessions_dashboard
     from .sessions_dashboard import kill_session_and_unbind
 
     success, msg = await kill_session_and_unbind(window_id, client)
     if not success:
         await safe_reply(update.message, msg)
-
-

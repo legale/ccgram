@@ -28,7 +28,6 @@ dependencies = [
     "aiofiles>=24.0.0",
     "structlog>=24.0.0",
     "click>=8.1.0",
-    "pyte>=0.8.2",
     "pathspec>=0.12",
     "aiohttp>=3.10",
 ]
@@ -91,6 +90,8 @@ max-statements = 60
 [tool.ruff.lint.per-file-ignores]
 # Tests: unused args (fixtures, mock lambdas), magic values in assertions
 "tests/**" = ["ARG", "PLR2004"]
+"src/ccgram/tmux_manager.py" = ["C901", "PLR2004", "BLE001"]
+"src/ccgram/handlers/status/topic_status_diff.py" = ["PLR2004"]
 # ANSI SGR codes/Unicode ranges + ANSI code parsing is inherently branchy
 "src/ccgram/screenshot.py" = ["PLR2004", "C901", "PLR0912"]
 # Session manager: complex state migration (resolve_stale_ids) and session map loading

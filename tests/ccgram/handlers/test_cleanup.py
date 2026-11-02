@@ -49,7 +49,9 @@ class TestClearTopicState:
             patch("ccgram.handlers.cleanup.enqueue_status_update"),
         ):
             mock_tr.resolve_chat_id.return_value = -100
-            await clear_topic_state(1, 42, client=AsyncMock(), window_id="@0", window_dead=True)
+            await clear_topic_state(
+                1, 42, client=AsyncMock(), window_id="@0", window_dead=True
+            )
 
         mock_clear_all.assert_called_once()
         _, kwargs = mock_clear_all.call_args
@@ -64,7 +66,9 @@ class TestClearTopicState:
             patch("ccgram.handlers.cleanup.enqueue_status_update"),
         ):
             mock_tr.resolve_chat_id.return_value = -100
-            await clear_topic_state(1, 42, client=AsyncMock(), window_id="@0", window_dead=False)
+            await clear_topic_state(
+                1, 42, client=AsyncMock(), window_id="@0", window_dead=False
+            )
 
         mock_clear_all.assert_called_once()
         _, kwargs = mock_clear_all.call_args

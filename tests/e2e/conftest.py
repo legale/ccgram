@@ -79,7 +79,6 @@ def e2e_tmux(monkeypatch):
 
     monkeypatch.setattr(config, "tmux_session_name", E2E_TMUX_SESSION)
 
-
     server = libtmux.Server()
 
     # Kill stale session if it exists

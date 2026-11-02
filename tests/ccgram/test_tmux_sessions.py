@@ -76,15 +76,19 @@ async def test_ensure_managed_window_size_uses_config(monkeypatch) -> None:
         commands_called.append(cmd)
         mock_proc = MagicMock()
         mock_proc.wait = MagicMock()
+
         async def fake_wait():
             pass
+
         mock_proc.wait = fake_wait
         return mock_proc
 
-    with patch("ccgram.tmux_manager.asyncio.create_subprocess_exec", side_effect=fake_create_subprocess_exec):
+    with patch(
+        "ccgram.tmux_manager.asyncio.create_subprocess_exec",
+        side_effect=fake_create_subprocess_exec,
+    ):
         await manager._ensure_managed_window_size("cc_test", "@1")
 
     assert commands_called == [
-        ("tmux", "set-window-option", "-t", "cc_test:@1", "window-size", "automatic"),
-        ("tmux", "resize-window", "-t", "cc_test:@1", "-x", "120", "-y", "60"),
+        ("tmux", "set-window-option", "-t", "cc_test:@1", "window-size", "largest"),
     ]

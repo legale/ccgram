@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from .config import config
 from .handlers.messaging_pipeline.message_queue import shutdown_workers
 from .handlers.polling.polling_coordinator import status_poll_loop
 from .session import session_manager
@@ -87,13 +86,6 @@ async def shutdown_runtime() -> None:
         logger.info("Status polling stopped")
 
     await shutdown_workers()
-
-    # Lazy: mailbox is a leaf module; importing it lazily here avoids
-    # paying the cost on bootstrap when shutdown is the only caller.
-    # Lazy: mailbox sweep helper used only by the periodic-task wire-up
-    from .mailbox import Mailbox
-
-    Mailbox(config.mailbox_dir).sweep()
 
     # Lazy: main → bot → bootstrap cycle (same as start path).
     from .main import stop_miniapp_if_enabled

@@ -4,15 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from ccgram.session import SessionManager
 from ccgram.window_state_store import (
     DEFAULT_PANE_STATE,
-    DEFAULT_TOOL_CALL_VISIBILITY,
-    TOOL_CALL_VISIBILITY_MODES,
     PaneInfo,
-    WindowState,
     WindowStateStore,
-    window_store,
 )
 
 
@@ -226,5 +221,3 @@ class TestBatchMode:
     ) -> None:
         store.get_window_state("@1").batch_mode = "garbage"
         assert store.get_batch_mode("@1") == "batched"
-
-

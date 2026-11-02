@@ -64,10 +64,20 @@ async def _send_special_key(  # noqa: C901
 
     # Lazy: avoid circular imports at module load
     from ...telegram_client import PTBTelegramClient
+
+    # Lazy: avoid circular imports at module load
     from ...thread_router import thread_router
+
+    # Lazy: avoid circular imports at module load
     from ...tmux_manager import tmux_manager
+
+    # Lazy: avoid circular imports at module load
     from ...utils import handle_general_topic_message, is_general_topic
+
+    # Lazy: avoid circular imports at module load
     from ..callback_helpers import get_thread_id
+
+    # Lazy: avoid circular imports at module load
     from ..messaging_pipeline.message_sender import ack_reaction
 
     thread_id = get_thread_id(update)
@@ -87,6 +97,7 @@ async def _send_special_key(  # noqa: C901
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
     window_id = thread_router.get_window_for_thread(user.id, thread_id)
     if not window_id:
+        # Lazy: avoid circular import with topic_binding
         from ..topics.topic_binding import find_topic_session
 
         session = await find_topic_session(chat_id, thread_id)

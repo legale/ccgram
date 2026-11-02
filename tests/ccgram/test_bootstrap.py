@@ -20,7 +20,7 @@ async def test_bootstrap_starts_polling_before_miniapp() -> None:
     order: list[str] = []
     with (
         patch("ccgram.bootstrap.install_global_exception_handler"),
-        patch("ccgram.bootstrap.session_manager") as manager,
+        patch("ccgram.bootstrap.session_manager"),
         patch(
             "ccgram.bootstrap.start_status_polling",
             side_effect=lambda _app: order.append("polling"),
@@ -41,7 +41,6 @@ async def test_shutdown_cancels_polling_and_flushes_state() -> None:
     bootstrap._status_poll_task = asyncio.create_task(_noop())
     with (
         patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
-        patch("ccgram.mailbox.Mailbox"),
         patch("ccgram.main.stop_miniapp_if_enabled", new_callable=AsyncMock),
         patch("ccgram.bootstrap.session_manager") as manager,
     ):

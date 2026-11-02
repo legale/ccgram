@@ -8,14 +8,12 @@ from hypothesis import strategies as st
 from ccgram.handlers.messaging_pipeline.message_queue import (
     MERGE_MAX_LENGTH,
     _can_merge_tasks,
-    _coalesce_status_updates,
     _merge_content_tasks,
 )
 from ccgram.handlers.messaging_pipeline.message_task import (
     ContentTask,
     ContentType,
     MessageTask,
-    StatusUpdateTask,
 )
 
 # --- Strategies ---
@@ -233,21 +231,3 @@ async def test_queue_counter_with_partial_merge() -> None:
     assert count == 1
     assert merged.parts == ("a", "b")
     assert queue.qsize() == 2
-
-
-async def test_status_coalesce_keeps_latest_same_window_thread() -> None:
-    first = StatusUpdateTask(text="old", window_id="@1", thread_id=10)
-    queue: asyncio.Queue[MessageTask] = asyncio.Queue()
-    lock = asyncio.Lock()
-
-    await queue.put(StatusUpdateTask(text="mid", window_id="@1", thread_id=10))
-    await queue.put(StatusUpdateTask(text="new", window_id="@1", thread_id=10))
-    await queue.put(StatusUpdateTask(text="other-window", window_id="@2", thread_id=10))
-
-    selected, dropped = await _coalesce_status_updates(queue, first, lock)
-    assert selected.text == "new"
-    assert dropped == 2
-    assert queue.qsize() == 1
-    remaining = queue.get_nowait()
-    assert isinstance(remaining, StatusUpdateTask)
-    assert remaining.text == "other-window"

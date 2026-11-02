@@ -44,10 +44,6 @@ def batch_env():
     try:
         with (
             patch(
-                "ccgram.handlers.status.status_bubble.clear_status_message",
-                new_callable=AsyncMock,
-            ) as mock_clear,
-            patch(
                 "ccgram.handlers.messaging_pipeline.tool_batch.get_batch_mode",
                 return_value="batched",
             ),
@@ -64,7 +60,7 @@ def batch_env():
             sent_msg = MagicMock()
             sent_msg.message_id = 100
             bot.send_message.return_value = sent_msg
-            yield bot, bot.send_message, mock_clear
+            yield bot, bot.send_message, AsyncMock()
     finally:
         reset_draft_state()
         _active_batches.clear()
@@ -549,11 +545,6 @@ class TestProcessBatchTask:
         assert len(batch.entries) == 2
         assert batch.entries[0].tool_use_id == f"tu{BATCH_MAX_ENTRIES}"
         assert batch.entries[1].tool_use_id == f"tu{BATCH_MAX_ENTRIES + 1}"
-
-    async def test_batch_clears_status_on_first_send(self, batch_env) -> None:
-        bot, _, mock_clear = batch_env
-        await process_tool_event(bot, 1, _make_tool_use())
-        mock_clear.assert_awaited_once()
 
     async def test_second_tool_edits_existing_message(self, batch_env) -> None:
         bot, mock_send, _ = batch_env

@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ....tmux_manager import has_insert_indicator, notify_vim_insert_seen
-from ..polling_state import terminal_poll_state, terminal_screen_buffer
+from ..polling_state import terminal_poll_state
 from ..polling_types import StatusUpdate, TickContext, is_shell_prompt
 from .decide import build_status_line
 
@@ -16,28 +16,23 @@ if TYPE_CHECKING:
     from ....tmux_manager import TmuxWindow
 
 
-def _parse_with_pyte(
-    window_id: str,
+def _check_vim_insert(
+    window_id: str,  # noqa: ARG001
     pane_text: str,
-    columns: int = 0,
-    rows: int = 0,
-) -> StatusUpdate | None:
-    return terminal_screen_buffer.parse_with_pyte(window_id, pane_text, columns, rows)
-
-
-def _check_vim_insert(window_id: str, pane_text: str, w: "TmuxWindow") -> None:
-    vim_text = terminal_screen_buffer.get_rendered_text(window_id, pane_text)
-    if has_insert_indicator(vim_text):
+    w: "TmuxWindow",
+) -> None:
+    if has_insert_indicator(pane_text):
         notify_vim_insert_seen(w.window_id)
 
 
-def _get_last_activity_ts(window_id: str) -> float | None:
-    _ = window_id
+def _get_last_activity_ts(window_id: str) -> float | None:  # noqa: ARG001
     return None
 
 
 async def _resolve_status(
-    window_id: str, pane_text: str, w: "TmuxWindow"
+    window_id: str,  # noqa: ARG001
+    pane_text: str,  # noqa: ARG001
+    w: "TmuxWindow",  # noqa: ARG001
 ) -> StatusUpdate | None:
     """Terminal status line parsing is disabled."""
     return None
@@ -72,7 +67,6 @@ def build_context(
 __all__ = [
     "_check_vim_insert",
     "_get_last_activity_ts",
-    "_parse_with_pyte",
     "_resolve_status",
     "build_context",
 ]

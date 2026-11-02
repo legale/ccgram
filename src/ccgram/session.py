@@ -20,10 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from .config import config
-from .mailbox import Mailbox
 from .state_persistence import StatePersistence
-from .tmux_manager import tmux_manager
-from .thread_router import ThreadRouter, thread_router
+from .thread_router import thread_router
 from .user_preferences import (
     UserPreferences,
     install_user_preferences,

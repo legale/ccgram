@@ -250,7 +250,11 @@ class ToolbarConfig:
 
     def for_provider(self, provider_name: str = "shell") -> ToolbarLayout:
         """Return the layout for ``provider_name``, falling back to claude."""
-        return self.layouts.get(provider_name) or self.layouts.get("claude")
+        return (
+            self.layouts.get(provider_name)
+            or self.layouts.get("claude")
+            or DEFAULT_LAYOUTS["claude"]
+        )
 
 
 def _parse_action(name: str, raw: object) -> ToolbarAction | None:

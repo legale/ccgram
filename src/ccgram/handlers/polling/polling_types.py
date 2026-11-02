@@ -13,8 +13,7 @@ Imports are restricted to stdlib + ``ccgram.providers.base.StatusUpdate`` plus
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 
@@ -29,9 +28,7 @@ class StatusUpdate:
 
 
 if TYPE_CHECKING:
-    from telegram import Bot
-
-    from ...screen_buffer import ScreenBuffer
+    pass
 
 # ── Constants ───────────────────────────────────────────────────────────
 
@@ -70,12 +67,9 @@ class WindowPollState:
     has_seen_status: bool = False
     startup_time: float | None = None
     probe_failures: int = 0
-    screen_buffer: ScreenBuffer | None = field(default=None, repr=False)
     pane_count_cache: tuple[int, float] | None = None
     unbound_timer: float | None = None
     last_pane_hash: int | None = None
-    last_pyte_result: StatusUpdate | None = field(default=None, repr=False)
-    last_rendered_text: str | None = None
 
 
 @dataclass

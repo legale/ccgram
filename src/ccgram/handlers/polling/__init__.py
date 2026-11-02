@@ -5,13 +5,12 @@ Bundles the modules that drive the centralized polling cycle:
 sequential session step), ``polling_types`` (pure data types and constants),
 ``polling_state``
 (stateful strategy classes + module-level singletons), and
-``periodic_tasks`` (broker delivery, mailbox sweep, lifecycle ticking).
+``periodic_tasks`` (reconcile, live view, lifecycle ticking).
 
 Only the **pure** ``polling_types`` symbols are re-exported at the
 package level so that callers can ``from ccgram.handlers.polling import
 TickContext`` without paying the cost of loading the stateful
-singletons. Stateful symbols (``terminal_screen_buffer``,
-``lifecycle_strategy``, etc.) must be imported from the canonical
+singletons. Stateful symbols (``lifecycle_strategy``, etc.) must be imported from the canonical
 ``polling_state`` submodule:
 
     from ccgram.handlers.polling.polling_state import lifecycle_strategy

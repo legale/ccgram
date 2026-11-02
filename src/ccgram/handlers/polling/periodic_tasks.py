@@ -13,7 +13,6 @@ from ...thread_router import thread_router
 from ...tmux_manager import send_to_window, tmux_manager
 from ...utils import log_throttle_sweep, log_throttled
 from ..live.live_view import tick_live_views
-from ..messaging.msg_broker import BROKER_CYCLE_INTERVAL, SWEEP_INTERVAL
 from ..messaging_pipeline.message_sender import is_thread_gone
 from ..status.topic_status_diff import prime_topic_status_diff
 
@@ -91,7 +90,10 @@ async def _bind_runtime(
         thread_router.set_group_chat_id(uid, thread_id, chat_id)
 
     if session.cwd:
+        # Lazy: Path import
         from pathlib import Path
+
+        # Lazy: session_manager import
         from ...session import session_manager
 
         session_manager.set_window_cwd(
@@ -136,7 +138,9 @@ async def _remove_missing_topic(
     """Remove a tmux session whose Telegram topic was deleted."""
     session_name = session.window_name
     if not await tmux_manager.kill_session(session_name):
-        logger.warning("Failed to remove tmux session %s after topic deletion", session_name)
+        logger.warning(
+            "Failed to remove tmux session %s after topic deletion", session_name
+        )
         return
     session.topic_ref = None
     await _clear_runtime_topic(client, chat_id, thread_id, window_dead=True)
@@ -333,90 +337,15 @@ async def send_with_reconcile(
 # ── Broker integration ────────────────────────────────────────────────────
 
 
-async def run_broker_cycle(
-    client: TelegramClient | None = None,
-    idle_windows: frozenset[str] = frozenset(),
-) -> None:
-    """Run one broker delivery cycle (called from poll loop and hook_events)."""
-    # Lazy: msg_broker is registered as a callback target via the broker
-    # registry; importing it at top of periodic_tasks pulls the
-    # messaging subpackage into the polling package's cold path.
-    # Lazy: imports resolved per-tick so tests can swap singletons
-    from ... import window_query
-
-    # Lazy: imports resolved per-tick so tests can swap singletons
-    from ...mailbox import Mailbox
-
-    # Lazy: messaging ↔ polling cycle through msg_telegram
-    from ..messaging.msg_broker import broker_delivery_cycle
-
-    mailbox = Mailbox(config.mailbox_dir)
-    await broker_delivery_cycle(
-        mailbox=mailbox,
-        tmux_mgr=tmux_manager,
-        window_ids=window_query.iter_window_ids(),
-        tmux_session=config.tmux_session_name,
-        msg_rate_limit=config.msg_rate_limit,
-        client=client,
-        idle_windows=idle_windows,
-    )
-    if client is not None:
-        await _run_spawn_cycle(client)
-
-
-async def _run_spawn_cycle(client: TelegramClient) -> None:
-    """Scan for file-based spawn requests and post approval keyboards or auto-approve."""
-    # Lazy: msg_spawn pulls topic_orchestration which sits inside the
-    # sync_command cycle; keep at call site.
-    # Lazy: spawn pipeline reaches back into polling
-    from ...spawn_request import pop_pending, scan_spawn_requests
-
-    # Lazy: spawn pipeline reaches back into polling
-    from ..messaging.msg_spawn import (
-        handle_spawn_approval,
-        post_spawn_approval_keyboard,
-    )
-
-    new_requests = scan_spawn_requests(spawn_timeout=config.msg_spawn_timeout)
-    for req in new_requests:
-        try:
-            if req.auto or config.msg_auto_spawn:
-                await handle_spawn_approval(
-                    req.id, client, spawn_timeout=config.msg_spawn_timeout
-                )
-            else:
-                posted = await post_spawn_approval_keyboard(
-                    client, req.requester_window, req
-                )
-                if not posted:
-                    pop_pending(req.id)
-        except (OSError, TelegramError):
-            pop_pending(req.id)
-            logger.debug("Failed to process spawn request", request_id=req.id)
-
-
-def _run_mailbox_sweep() -> None:
-    """Run periodic mailbox sweep."""
-    # Lazy: Mailbox is a leaf module; loading inside the sweep keeps
-    # the polling subpackage's import surface narrow.
-    # Lazy: imports resolved per-tick so tests can swap singletons
-    from ...mailbox import Mailbox
-
-    mailbox = Mailbox(config.mailbox_dir)
-    removed = mailbox.sweep()
-    if removed:
-        logger.debug("Mailbox sweep removed %d messages", removed)
-
-
 # ── Orchestration ──────────────────────────────────────────────────────────
 
 
 async def run_periodic_tasks(
     client: TelegramClient,
-    all_windows: list["TmuxWindow"],
+    all_windows: list["TmuxWindow"],  # noqa: ARG001
     timers: dict[str, float],
 ) -> None:
-    """Run time-gated periodic tasks (topic check, broker, sweep)."""
+    """Run time-gated periodic tasks (topic check, live view)."""
     now = time.monotonic()
 
     verify_topics = now - timers["topic_check"] >= TOPIC_CHECK_INTERVAL
@@ -430,20 +359,13 @@ async def run_periodic_tasks(
         timers["topic_check"] = now
         log_throttle_sweep()
 
-    if now - timers["broker"] >= BROKER_CYCLE_INTERVAL:
-        timers["broker"] = now
-        await run_broker_cycle(client)
-
-    if now - timers["sweep"] >= SWEEP_INTERVAL:
-        timers["sweep"] = now
-        _run_mailbox_sweep()
-
 
 async def run_lifecycle_tasks(
     client: TelegramClient,
     all_windows: list["TmuxWindow"],  # noqa: ARG001 - lifecycle API
 ) -> None:
     """Run per-tick topic lifecycle tasks."""
+    # Lazy: topic_lifecycle is needed for check_autoclose_timers
     from ..topics.topic_lifecycle import check_autoclose_timers
 
     await check_autoclose_timers(client)

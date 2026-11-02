@@ -124,13 +124,10 @@ def load_handlers() -> None:
     from . import sessions_dashboard  # noqa: F401
 
     # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
-    from .live import pane_callbacks, screenshot_callbacks  # noqa: F401
+    from .live import screenshot_callbacks  # noqa: F401
 
     # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
     from .send import send_callbacks  # noqa: F401
 
     # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
     from .shell import shell_capture, shell_commands, shell_prompt_orchestrator  # noqa: F401
-
-    # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
-    from .status import status_bar_actions  # noqa: F401

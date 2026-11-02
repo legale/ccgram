@@ -752,4 +752,3 @@ class TestSendCommand:
             assert call_args[0][1:] == (-100123, 42, tmp_file)
         finally:
             tmp_file.unlink(missing_ok=True)
-

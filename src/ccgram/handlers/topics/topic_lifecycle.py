@@ -8,7 +8,6 @@ import structlog
 from telegram import Update
 from telegram.error import BadRequest, TelegramError
 from ...config import config
-from ...session import session_manager
 from ...telegram_client import PTBTelegramClient, TelegramClient
 from ...thread_router import thread_router
 from ...tmux_manager import tmux_manager
@@ -21,7 +20,6 @@ from ..polling.polling_state import (
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
-    from ...tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
 
@@ -102,8 +100,6 @@ async def _close_expired_topic(
 
 
 # ── Display name sync / state pruning ─────────────────────────────────────
-
-
 
 
 # ------------------------------------------------------------------
@@ -246,9 +242,13 @@ async def topic_edited_handler(  # noqa: C901
             )
         except BadRequest as exc:
             if "topic_not_modified" not in exc.message.lower():
-                logger.warning("Failed to remove tmux prefix from topic %d: %s", thread_id, exc)
+                logger.warning(
+                    "Failed to remove tmux prefix from topic %d: %s", thread_id, exc
+                )
         except TelegramError as exc:
-            logger.warning("Failed to remove tmux prefix from topic %d: %s", thread_id, exc)
+            logger.warning(
+                "Failed to remove tmux prefix from topic %d: %s", thread_id, exc
+            )
     update_stored_topic_name(chat.id, thread_id, name)
     logger.info(
         "Renamed bound topic session %s -> %s (chat=%d, thread=%d)",

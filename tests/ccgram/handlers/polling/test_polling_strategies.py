@@ -9,7 +9,6 @@ import pytest
 from ccgram.handlers.polling.polling_state import (
     InteractiveUIStrategy,
     TerminalPollState,
-    TerminalScreenBuffer,
     TopicLifecycleStrategy,
 )
 from ccgram.handlers.polling.polling_types import (
@@ -18,75 +17,6 @@ from ccgram.handlers.polling.polling_types import (
     WindowPollState,
     is_shell_prompt,
 )
-
-
-class TestTerminalScreenBuffer:
-    def setup_method(self):
-        self.poll_state = TerminalPollState()
-        self.strategy = TerminalScreenBuffer(self.poll_state)
-
-    def test_clear_screen_buffer(self):
-        ws = self.poll_state.get_state("@0")
-        ws.last_pane_hash = 12345
-        ws.last_rendered_text = "some text"
-        self.strategy.clear_screen_buffer("@0")
-        assert ws.screen_buffer is None
-        assert ws.last_pane_hash is None
-        assert ws.last_rendered_text is None
-
-    def test_reset_screen_buffer_state(self):
-        ws = self.poll_state.get_state("@0")
-        ws.last_pane_hash = 999
-        self.strategy.reset_screen_buffer_state()
-        assert ws.last_pane_hash is None
-
-    def test_parse_with_pyte_content_hash_cache(self):
-        ws = self.poll_state.get_state("@0")
-        ws.last_pane_hash = hash(("same text", 200, 50))
-        ws.last_pyte_result = None
-        result = self.strategy.parse_with_pyte("@0", "same text", 200, 50)
-        assert result is None
-
-    def test_parse_with_pyte_invalid_dimensions_defaults(self):
-        with patch(
-            "ccgram.handlers.polling.polling_state.TerminalScreenBuffer.get_screen_buffer"
-        ) as mock_buf:
-            mock_buf.return_value.rendered_text = ""
-            mock_buf.return_value.display = []
-            with (
-                patch("ccgram.terminal_parser.parse_from_screen", return_value=None),
-                patch(
-                    "ccgram.terminal_parser.parse_status_from_screen", return_value=None
-                ),
-            ):
-                self.strategy.parse_with_pyte("@0", "text", 0, 0)
-                mock_buf.assert_called_with("@0", 200, 50)
-
-    def test_is_single_pane_cached_true(self):
-        ws = self.poll_state.get_state("@0")
-        ws.pane_count_cache = (1, time.monotonic() + 10.0)
-        assert self.strategy.is_single_pane_cached("@0")
-
-    def test_is_single_pane_cached_false_multi(self):
-        ws = self.poll_state.get_state("@0")
-        ws.pane_count_cache = (3, time.monotonic() + 10.0)
-        assert not self.strategy.is_single_pane_cached("@0")
-
-    def test_is_single_pane_cached_false_expired(self):
-        ws = self.poll_state.get_state("@0")
-        ws.pane_count_cache = (1, time.monotonic() - 1.0)
-        assert not self.strategy.is_single_pane_cached("@0")
-
-    def test_is_single_pane_cached_false_no_cache(self):
-        assert not self.strategy.is_single_pane_cached("@0")
-
-    def test_get_rendered_text_returns_cached(self):
-        ws = self.poll_state.get_state("@0")
-        ws.last_rendered_text = "cached"
-        assert self.strategy.get_rendered_text("@0", "fallback") == "cached"
-
-    def test_get_rendered_text_returns_fallback(self):
-        assert self.strategy.get_rendered_text("@0", "fallback") == "fallback"
 
 
 class TestTerminalPollState:
@@ -212,7 +142,6 @@ class TestTerminalPollState:
 class TestInteractiveUIStrategy:
     def setup_method(self):
         self.poll_state = TerminalPollState()
-        self.screen_buffer = TerminalScreenBuffer(self.poll_state)
         self.strategy = InteractiveUIStrategy()
 
     def test_has_pane_alert_false_by_default(self):

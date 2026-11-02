@@ -279,5 +279,3 @@ class TestSelfCorrection:
 
 
 # ── _send_literal_then_enter integration ───────────────────────────────
-
-

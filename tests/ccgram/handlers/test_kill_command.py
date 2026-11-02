@@ -132,4 +132,3 @@ class TestKillmeCommand:
         mock_tm.kill_session.assert_awaited_once_with("ccgram")
         mock_tr.unbind_thread.assert_called_once_with(100, 42)
         mock_clear.assert_called_once()
-

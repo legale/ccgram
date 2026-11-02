@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING
 from ..polling_state import (
     lifecycle_strategy,
     terminal_poll_state,
-    terminal_screen_buffer,
 )
 from ..polling_types import TickContext, TickDecision, is_shell_prompt
 from .apply import (
@@ -37,7 +36,6 @@ from .decide import build_status_line, decide_tick
 from .observe import (
     _check_vim_insert,
     _get_last_activity_ts,
-    _parse_with_pyte,
     _resolve_status,
     build_context,
 )
@@ -75,7 +73,6 @@ __all__ = [
     "_check_vim_insert",
     "_get_last_activity_ts",
     "_handle_dead_window_notification",
-    "_parse_with_pyte",
     "_resolve_status",
     "_send_typing_throttled",
     "_transition_to_idle",
@@ -86,6 +83,5 @@ __all__ = [
     "is_shell_prompt",
     "lifecycle_strategy",
     "terminal_poll_state",
-    "terminal_screen_buffer",
     "tick_window",
 ]
