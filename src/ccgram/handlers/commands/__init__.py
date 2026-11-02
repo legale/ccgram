@@ -25,26 +25,10 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
     if not update.message:
         return
 
-    lines = [
-        "*Команды бота (префикс `//`)*:",
-        "",
-        "• `//commands` (или `//help`) — список команд",
-        "• `//screenshot` (или `//screen`) — скриншот терминала",
-        "• `//live` — автообновляемый просмотр терминала",
-        "• `//sessions` — дашборд сессий",
-        "• `//bind <key>` — привязать топик к `cc_<key>` (`tmux attach -t cc_<key>`)",
-        "• `//unbind` — закрыть топик, сохранив tmux-сессию",
-        "• `//killme` — завершить сессию и закрыть топик",
-        "• `//ctrl-c` — отправить Ctrl+C в сессию",
-        "• `//ctrl-cc` — отправить двойной Ctrl+C в сессию",
-        "• `//enter` — отправить Enter в сессию",
-        "• `//esc` — отправить Escape в сессию",
-        "• `//tab` — отправить Tab в сессию",
-        "• `//send` — отправить файл в tmux",
-        "",
-        "_Команды и пути, начинающиеся с `/` (например `/bin/ls`), отправляются напрямую в tmux._",
-    ]
-    await safe_reply(update.message, "\n".join(lines))
+    # Lazy: avoid circular import with handlers.registry
+    from ..registry import format_commands_help
+
+    await safe_reply(update.message, format_commands_help())
 
 
 async def _send_special_key(  # noqa: C901

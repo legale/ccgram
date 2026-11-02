@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from telegram.error import TelegramError
+
 from .handlers.messaging_pipeline.message_queue import shutdown_workers
 from .handlers.polling.polling_coordinator import status_poll_loop
 from .session import session_manager
@@ -61,10 +63,24 @@ def start_status_polling(application: Application) -> asyncio.Task[None]:
     return _status_poll_task
 
 
+async def sync_bot_commands(application: Application) -> None:
+    """Sync the single-source-of-truth command list with Telegram menu."""
+    # Lazy: avoid circular import between bootstrap and registry
+    from .handlers.registry import get_telegram_menu_commands
+
+    commands = get_telegram_menu_commands()
+    try:
+        await application.bot.set_my_commands(commands)
+        logger.info("Synced %d commands with Telegram menu", len(commands))
+    except TelegramError as exc:
+        logger.warning("Failed to sync commands with Telegram menu: %s", exc)
+
+
 async def bootstrap_application(application: Application) -> None:
     """Run the full post_init sequence in the prescribed order."""
     install_global_exception_handler()
     start_status_polling(application)
+    await sync_bot_commands(application)
 
     # Lazy: main imports bot at top, bot imports bootstrap; hoisting forms
     # main → bot → bootstrap → main on cold import.

@@ -245,3 +245,88 @@ async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.warning("Topic rename failed on bind: %s", exc)
 
     await safe_reply(message, target_session)
+
+
+async def rename_command(  # noqa: C901
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """``//rename <new_name>`` — rename both the Telegram topic and the bound tmux session."""
+    user = update.effective_user
+    message = update.message
+    chat = update.effective_chat
+    if not user or not config.is_user_allowed(user.id) or not message or not chat:
+        return
+
+    thread_id = get_thread_id(update)
+    if thread_id is None:
+        await safe_reply(message, "Error: not inside a topic")
+        return
+
+    parts = (message.text or "").strip().split(maxsplit=1)
+    if len(parts) != 2:  # noqa: PLR2004
+        await safe_reply(message, "Usage: //rename <new_name>")
+        return
+
+    # Lazy: avoid circular imports
+    from ..status.topic_emoji import strip_emoji_prefix, update_stored_topic_name
+
+    raw_name = strip_emoji_prefix(parts[1].strip()).strip()
+    name = raw_name.removeprefix(config.tmux_session_prefix).strip()
+    if not _valid_name(name):
+        await safe_reply(message, f"Invalid topic name: {name!r}")
+        return
+
+    # Find the bound session
+    session = await find_topic_session(chat.id, thread_id)
+    if session is None:
+        window_id = thread_router.get_window_for_thread(user.id, thread_id)
+        if not window_id:
+            window_id = thread_router.get_window_for_chat_thread(chat.id, thread_id)
+        if window_id:
+            session_name = window_id.split(":", 1)[0]
+            sessions = await tmux_manager.list_sessions()
+            session = next((s for s in sessions if s.window_name == session_name), None)
+
+    if session is None:
+        await safe_reply(
+            message, "Topic is not bound to any session. Use //bind <key>."
+        )
+        return
+
+    target = tmux_manager.topic_session_name(name)
+    old_name = session.window_name
+    if session.window_name != target:
+        if not await tmux_manager.rename_session(session.window_name, target):
+            await safe_reply(
+                message,
+                f"Failed to rename tmux session {old_name} -> {target}",
+            )
+            return
+        session.window_name = target
+        if ":" in session.window_id:
+            bare_id = session.window_id.rsplit(":", 1)[1]
+            session.window_id = f"{target}:{bare_id}"
+        await tmux_manager.set_session_topic(target, chat.id, thread_id)
+        session.topic_ref = (chat.id, thread_id)
+        bind_runtime(user.id, chat.id, thread_id, session)
+
+    update_stored_topic_name(chat.id, thread_id, name)
+
+    # Rename Telegram topic if supported
+    client = PTBTelegramClient(context.bot)
+    try:
+        await client.edit_forum_topic(chat.id, thread_id, name=name)
+    except BadRequest as exc:
+        if "topic_not_modified" not in exc.message.lower():
+            logger.warning("Topic rename failed on //rename: %s", exc)
+    except TelegramError as exc:
+        logger.warning("Topic rename failed on //rename: %s", exc)
+
+    logger.info(
+        "Renamed topic via //rename: %s -> %s (chat=%d, thread=%d)",
+        old_name,
+        target,
+        chat.id,
+        thread_id,
+    )
+    await safe_reply(message, target)

@@ -214,16 +214,41 @@ async def topic_created_handler(
     )
 
 
-async def topic_edited_handler(  # noqa: C901
+async def topic_edited_handler(  # noqa: C901, PLR0912
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Rename the bound tmux session after a Telegram topic rename."""
     user = update.effective_user
     message = update.effective_message or update.message
     chat = update.effective_chat
-    if not user or not config.is_user_allowed(user.id) or not message or not chat:
+    logger.info(
+        "topic_edited_handler_invoked",
+        user_id=user.id if user else None,
+        chat_id=chat.id if chat else None,
+        has_message=bool(message),
+        forum_topic_edited=bool(message and message.forum_topic_edited),
+        edited_name=message.forum_topic_edited.name
+        if message and message.forum_topic_edited
+        else None,
+    )
+    allowed = (user is not None and config.is_user_allowed(user.id)) or (
+        chat is not None and config.is_user_allowed(chat.id)
+    )
+    if not allowed or not message or not chat:
+        logger.warning(
+            "topic_edited_handler_rejected_user_or_chat",
+            user_id=user.id if user else None,
+            chat_id=chat.id if chat else None,
+            allowed=allowed,
+        )
         return
     if not message.forum_topic_edited or not message.forum_topic_edited.name:
+        logger.warning(
+            "topic_edited_handler_rejected_no_edited_name",
+            forum_topic_edited=message.forum_topic_edited.to_dict()
+            if message and message.forum_topic_edited
+            else None,
+        )
         return
 
     # Lazy: callback helpers are needed only while handling topic events.
@@ -234,10 +259,20 @@ async def topic_edited_handler(  # noqa: C901
 
     thread_id = get_thread_id(update)
     if thread_id is None:
+        thread_id = getattr(message, "message_thread_id", None) or getattr(
+            message, "message_id", None
+        )
+    if thread_id is None:
+        logger.warning(
+            "topic_edited_handler_rejected_no_thread_id",
+            message_dict=message.to_dict() if message else None,
+        )
         return
+
+    user_id = user.id if user else chat.id
     session = await find_topic_session(chat.id, thread_id)
     if session is None:
-        window_id = thread_router.get_window_for_thread(user.id, thread_id)
+        window_id = thread_router.get_window_for_thread(user_id, thread_id)
         if not window_id:
             window_id = thread_router.get_window_for_chat_thread(chat.id, thread_id)
         if window_id:
@@ -275,7 +310,7 @@ async def topic_edited_handler(  # noqa: C901
             session.window_id = f"{target}:{bare_id}"
         await tmux_manager.set_session_topic(target, chat.id, thread_id)
         session.topic_ref = (chat.id, thread_id)
-        bind_runtime(user.id, chat.id, thread_id, session)
+        bind_runtime(user_id, chat.id, thread_id, session)
 
     if raw_name != name:
         try:
