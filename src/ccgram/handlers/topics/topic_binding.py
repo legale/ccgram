@@ -87,13 +87,17 @@ async def _create_session(name: str) -> tuple[TmuxWindow | None, str | None]:
 
 async def find_topic_session(chat_id: int, thread_id: int) -> TmuxWindow | None:
     """Return the single managed session bound to a Telegram topic."""
+    sessions = await _managed_sessions()
     topic_ref = (chat_id, thread_id)
-    matches = [
+    matches = [session for session in sessions if session.topic_ref == topic_ref]
+    if len(matches) == 1:
+        return matches[0]
+    matches_thread = [
         session
-        for session in await _managed_sessions()
-        if session.topic_ref == topic_ref
+        for session in sessions
+        if session.topic_ref and session.topic_ref[1] == thread_id
     ]
-    return matches[0] if len(matches) == 1 else None
+    return matches_thread[0] if len(matches_thread) == 1 else None
 
 
 async def ensure_topic_session(  # noqa: C901, PLR0911, PLR0912
