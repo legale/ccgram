@@ -84,7 +84,7 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
         )
         is_bound = window_id in bound_window_ids or session.topic_ref is not None
         status = "+" if is_bound else "o"
-        display_name = tmux_manager.topic_name_from_session_name(session.window_name)
+        display_name = session.window_name
         cwd_part = f" — {session.cwd}" if session.cwd else ""
         status_suffix = "" if is_bound else " (unbound)"
         lines.append(f"{status} {display_name}{cwd_part}{status_suffix}")
@@ -294,7 +294,7 @@ async def apply_session_rename(
         await safe_reply(message, "Rename cancelled.")
         return True
 
-    name = tmux_manager.topic_name_from_session_name(raw_name)
+    name = raw_name
     if not name or len(name) > 50 or "\n" in name:  # noqa: PLR2004
         await safe_reply(
             message,
@@ -324,7 +324,7 @@ async def apply_session_rename(
 
         lifecycle_strategy.clear_dead_notification(user.id, pending_thread)
         lifecycle_strategy.clear_autoclose_timer(user.id, pending_thread)
-        target_session = tmux_manager.topic_session_name(name)
+        target_session = name
         await tmux_manager.set_session_topic(target_session, chat.id, pending_thread)
         session = await find_topic_session(chat.id, pending_thread)
         if session:
@@ -351,10 +351,8 @@ async def _execute_session_rename(window_id: str, name: str) -> str | None:
     if ":" not in window_id or window_id.startswith("@"):
         return None
     session_name, bare_id = window_id.rsplit(":", 1)
-    if not session_name.startswith(config.tmux_session_prefix):
-        return None
 
-    target_session = tmux_manager.topic_session_name(name)
+    target_session = name
     if not await tmux_manager.rename_session(session_name, target_session):
         return None
 
