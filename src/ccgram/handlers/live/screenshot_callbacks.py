@@ -221,6 +221,34 @@ async def _handle_live_stop(
     await query.answer("\u23f9 Stopped")
 
 
+async def _send_screenshot_media(
+    client: PTBTelegramClient,
+    chat_id: int,
+    png_bytes: bytes,
+    keyboard: InlineKeyboardMarkup,
+    thread_id: int | None,
+    filename: str = "screenshot.png",
+) -> None:
+    # Lazy: config resolved at call time for testability
+    from ...config import config
+
+    if config.screenshot_as_photo:
+        await client.send_photo(
+            chat_id=chat_id,
+            photo=io.BytesIO(png_bytes),
+            reply_markup=keyboard,
+            message_thread_id=thread_id,
+        )
+    else:
+        await client.send_document(
+            chat_id=chat_id,
+            document=io.BytesIO(png_bytes),
+            filename=filename,
+            reply_markup=keyboard,
+            message_thread_id=thread_id,
+        )
+
+
 async def _handle_pane_screenshot(
     query: CallbackQuery, user_id: int, data: str, update: Update
 ) -> None:
@@ -254,12 +282,13 @@ async def _handle_pane_screenshot(
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
     client = PTBTelegramClient(query.get_bot())
     try:
-        await client.send_document(
+        await _send_screenshot_media(
+            client=client,
             chat_id=chat_id,
-            document=io.BytesIO(png_bytes),
+            png_bytes=png_bytes,
+            keyboard=keyboard,
+            thread_id=thread_id,
             filename=f"pane_{pane_id}.png",
-            reply_markup=keyboard,
-            message_thread_id=thread_id,
         )
         await query.answer(f"\U0001f4f8 Pane {pane_id}")
     except TelegramError as e:
@@ -327,11 +356,17 @@ async def _handle_refresh(query: CallbackQuery, user_id: int, data: str) -> None
 
     png_bytes = await text_to_image(text, with_ansi=True)
     keyboard = build_screenshot_keyboard(window_id, pane_id=pane_id)
+    # Lazy: config resolved at call time for testability
+    from ...config import config
+
+    media = (
+        InputMediaPhoto(media=io.BytesIO(png_bytes))
+        if config.screenshot_as_photo
+        else InputMediaDocument(media=io.BytesIO(png_bytes), filename="screenshot.png")
+    )
     try:
         await query.edit_message_media(
-            media=InputMediaDocument(
-                media=io.BytesIO(png_bytes), filename="screenshot.png"
-            ),
+            media=media,
             reply_markup=keyboard,
         )
         await query.answer("Refreshed")
@@ -371,12 +406,12 @@ async def _handle_status_screenshot(
         chat_id = query.message.chat.id
     client = PTBTelegramClient(query.get_bot())
     try:
-        await client.send_document(
+        await _send_screenshot_media(
+            client=client,
             chat_id=chat_id,
-            document=io.BytesIO(png_bytes),
-            filename="screenshot.png",
-            reply_markup=keyboard,
-            message_thread_id=thread_id,
+            png_bytes=png_bytes,
+            keyboard=keyboard,
+            thread_id=thread_id,
         )
         await query.answer("\U0001f4f8")
     except TelegramError as e:
@@ -488,12 +523,12 @@ async def screenshot_command(
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
     client = PTBTelegramClient(update.message.get_bot())
     try:
-        await client.send_document(
+        await _send_screenshot_media(
+            client=client,
             chat_id=chat_id,
-            document=io.BytesIO(png_bytes),
-            filename="screenshot.png",
-            reply_markup=keyboard,
-            message_thread_id=thread_id,
+            png_bytes=png_bytes,
+            keyboard=keyboard,
+            thread_id=thread_id,
         )
     except TelegramError as e:
         logger.error("Failed to send screenshot: %s", e)

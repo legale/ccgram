@@ -314,3 +314,28 @@ class TestLimitsConfig:
         monkeypatch.chdir(tmp_path)
         cfg = Config()
         assert cfg.live_view_limit == 1234
+
+
+@pytest.mark.usefixtures("_base_env")
+class TestScreenshotsConfig:
+    def test_default_screenshots_config(self):
+        cfg = Config()
+        assert cfg.screenshot_font_size == 15
+        assert cfg.screenshot_palette_colors == 64
+        assert cfg.screenshot_as_photo is True
+
+    def test_custom_screenshots_config(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_FONT_SIZE", "20")
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_PALETTE_COLORS", "128")
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_AS_PHOTO", "false")
+        cfg = Config()
+        assert cfg.screenshot_font_size == 20
+        assert cfg.screenshot_palette_colors == 128
+        assert cfg.screenshot_as_photo is False
+
+    def test_clamped_screenshots_config(self, monkeypatch):
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_FONT_SIZE", "4")
+        monkeypatch.setenv("CCGRAM_SCREENSHOT_PALETTE_COLORS", "-10")
+        cfg = Config()
+        assert cfg.screenshot_font_size == 8
+        assert cfg.screenshot_palette_colors == 0

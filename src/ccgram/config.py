@@ -160,6 +160,7 @@ class Config:
         self._init_send()
         self._init_lifecycle()
         self._init_topic_status()
+        self._init_screenshots()
 
         # Global default for hiding tool_use/tool_result content in Telegram.
         # Per-window override via WindowState.tool_call_visibility takes precedence.
@@ -257,6 +258,17 @@ class Config:
         self.miniapp_base_url: str = os.getenv("CCGRAM_MINIAPP_BASE_URL", "").strip()
         self.miniapp_host: str = os.getenv("CCGRAM_MINIAPP_HOST", "127.0.0.1")
         self.miniapp_port: int = _parse_int_env("CCGRAM_MINIAPP_PORT", 8765)
+
+    def _init_screenshots(self) -> None:
+        self.screenshot_font_size: int = max(
+            8, _parse_int_env("CCGRAM_SCREENSHOT_FONT_SIZE", 15)
+        )
+        self.screenshot_palette_colors: int = max(
+            0, _parse_int_env("CCGRAM_SCREENSHOT_PALETTE_COLORS", 64)
+        )
+        self.screenshot_as_photo: bool = _parse_bool_env(
+            "CCGRAM_SCREENSHOT_AS_PHOTO", True
+        )
 
     def is_user_allowed(self, user_id: int) -> bool:
         """Check if a user is in the allowed list."""

@@ -267,24 +267,33 @@ def _split_line_segments_plain(line: str) -> list[tuple[str, int]]:
 
 async def text_to_image(
     text: str,
-    font_size: int = 28,
+    font_size: int | None = None,
     with_ansi: bool = True,
     *,
     live_mode: bool = False,
+    palette_colors: int | None = None,
 ) -> bytes:
     """Render monospace text onto a dark-background image and return PNG bytes.
 
     Args:
         text: The text to render (may contain ANSI color codes)
-        font_size: Font size in pixels
+        font_size: Font size in pixels (defaults to config.screenshot_font_size)
         with_ansi: If True, parse and render ANSI color codes
         live_mode: If True, optimize for repeated streaming (smaller font,
             palette quantization, max compression)
+        palette_colors: Palette quantization colors (defaults to
+            config.screenshot_palette_colors, 0 to disable)
 
     Returns:
         PNG image bytes
     """
-    effective_font_size = 20 if live_mode else font_size
+    # Lazy: config resolved at call time for testability
+    from .config import config
+
+    base_font_size = font_size if font_size is not None else config.screenshot_font_size
+    effective_font_size = (
+        max(10, int(base_font_size * 0.75)) if live_mode else base_font_size
+    )
 
     def _render_image() -> bytes:
         fonts = [_load_font(p, effective_font_size) for p in _FONT_PATHS]
@@ -352,7 +361,16 @@ async def text_to_image(
             img = img.quantize(colors=32)
             img.save(buf, format="PNG", optimize=True, compress_level=9)
         else:
-            img.save(buf, format="PNG")
+            colors = (
+                palette_colors
+                if palette_colors is not None
+                else config.screenshot_palette_colors
+            )
+            if colors > 0:
+                img = img.quantize(colors=colors)
+                img.save(buf, format="PNG", optimize=True, compress_level=6)
+            else:
+                img.save(buf, format="PNG", optimize=True)
         return buf.getvalue()
 
     # Run CPU-intensive image rendering in thread pool

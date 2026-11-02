@@ -233,6 +233,7 @@ class TestScreenshotCommand:
         mock_render: AsyncMock,
     ) -> None:
         mock_config.is_user_allowed.return_value = True
+        mock_config.screenshot_as_photo = True
         mock_tr.get_window_for_thread.return_value = "@0"
         mock_tr.resolve_chat_id.return_value = -100
         mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
@@ -244,6 +245,41 @@ class TestScreenshotCommand:
 
         mock_tm.capture_pane.assert_awaited_once_with("@0", with_ansi=True)
         mock_render.assert_awaited_once_with("term output", with_ansi=True)
+        bot = update.message.get_bot.return_value
+        bot.send_photo.assert_awaited_once()
+        kwargs = bot.send_photo.call_args.kwargs
+        assert kwargs["chat_id"] == -100
+        assert kwargs["message_thread_id"] == 42
+        assert kwargs["reply_markup"] is not None
+        mock_reply.assert_not_awaited()
+
+    @patch(f"{_SC}.text_to_image", new_callable=AsyncMock, return_value=b"png_data")
+    @patch(f"{_SC}.tmux_manager")
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_screenshot_success_as_document(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        mock_render: AsyncMock,
+    ) -> None:
+        mock_config.is_user_allowed.return_value = True
+        mock_config.screenshot_as_photo = False
+        mock_tr.get_window_for_thread.return_value = "@0"
+        mock_tr.resolve_chat_id.return_value = -100
+        mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
+        mock_tm.capture_pane = AsyncMock(return_value="term output")
+
+        update = _make_update()
+        with patch(f"{_SC}.get_thread_id", return_value=42):
+            await screenshot_command(update, MagicMock())
+
         bot = update.message.get_bot.return_value
         bot.send_document.assert_awaited_once()
         kwargs = bot.send_document.call_args.kwargs
@@ -372,13 +408,14 @@ class TestScreenshotCommand:
         _mock_render: AsyncMock,
     ) -> None:
         mock_config.is_user_allowed.return_value = True
+        mock_config.screenshot_as_photo = True
         mock_tr.get_window_for_thread.return_value = "@0"
         mock_tr.resolve_chat_id.return_value = -100
         mock_tm.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
         mock_tm.capture_pane = AsyncMock(return_value="term output")
 
         update = _make_update()
-        update.message.get_bot.return_value.send_document = AsyncMock(
+        update.message.get_bot.return_value.send_photo = AsyncMock(
             side_effect=TelegramError("send error")
         )
 

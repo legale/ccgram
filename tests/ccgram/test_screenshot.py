@@ -12,7 +12,7 @@ async def test_default_produces_valid_png():
     png = await text_to_image(SAMPLE_TEXT, with_ansi=False)
     img = Image.open(io.BytesIO(png))
     assert img.format == "PNG"
-    assert img.mode == "RGB"
+    assert img.mode in ("RGB", "P")
 
 
 async def test_ansi_produces_valid_png():
@@ -35,8 +35,9 @@ async def test_live_mode_smaller_than_default():
 
 
 async def test_live_mode_smaller_dimensions():
-    regular = await text_to_image(SAMPLE_TEXT, with_ansi=False, live_mode=False)
-    live = await text_to_image(SAMPLE_TEXT, with_ansi=False, live_mode=True)
+    text = "hello world " * 10
+    regular = await text_to_image(text, with_ansi=False, live_mode=False)
+    live = await text_to_image(text, with_ansi=False, live_mode=True)
     reg_img = Image.open(io.BytesIO(regular))
     live_img = Image.open(io.BytesIO(live))
     assert live_img.width < reg_img.width
@@ -44,7 +45,9 @@ async def test_live_mode_smaller_dimensions():
 
 
 async def test_default_unchanged_without_live_mode():
-    png = await text_to_image(SAMPLE_TEXT, font_size=28, with_ansi=False)
+    png = await text_to_image(
+        SAMPLE_TEXT, font_size=28, with_ansi=False, palette_colors=0
+    )
     img = Image.open(io.BytesIO(png))
     assert img.mode == "RGB"
     assert img.format == "PNG"
@@ -65,3 +68,13 @@ async def test_live_mode_palette_size():
     assert palette is not None
     unique_colors = len(set(zip(palette[::3], palette[1::3], palette[2::3])))
     assert unique_colors <= 32
+
+
+async def test_default_palette_quantization():
+    png = await text_to_image(SAMPLE_TEXT, with_ansi=False)
+    img = Image.open(io.BytesIO(png))
+    assert img.mode == "P"
+    palette = img.getpalette()
+    assert palette is not None
+    unique_colors = len(set(zip(palette[::3], palette[1::3], palette[2::3])))
+    assert unique_colors <= 64
