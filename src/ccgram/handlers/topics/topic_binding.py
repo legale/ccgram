@@ -311,22 +311,28 @@ async def rename_command(  # noqa: C901
         bind_runtime(user.id, chat.id, thread_id, session)
 
     update_stored_topic_name(chat.id, thread_id, name)
+    bind_runtime(user.id, chat.id, thread_id, session)
 
     # Rename Telegram topic if supported
+    tg_renamed = False
     client = PTBTelegramClient(context.bot)
     try:
-        await client.edit_forum_topic(chat.id, thread_id, name=name)
+        res = await client.edit_forum_topic(chat.id, thread_id, name=name)
+        tg_renamed = bool(res)
     except BadRequest as exc:
-        if "topic_not_modified" not in exc.message.lower():
+        if "topic_not_modified" in exc.message.lower():
+            tg_renamed = True
+        else:
             logger.warning("Topic rename failed on //rename: %s", exc)
     except TelegramError as exc:
         logger.warning("Topic rename failed on //rename: %s", exc)
 
     logger.info(
-        "Renamed topic via //rename: %s -> %s (chat=%d, thread=%d)",
+        "Renamed topic via //rename: %s -> %s (chat=%d, thread=%d, tg_ok=%s)",
         old_name,
         target,
         chat.id,
         thread_id,
+        tg_renamed,
     )
-    await safe_reply(message, target)
+    await safe_reply(message, f"{target} (топик: {name})")
