@@ -313,6 +313,12 @@ async def rename_command(  # noqa: C901
     update_stored_topic_name(chat.id, thread_id, name)
     bind_runtime(user.id, chat.id, thread_id, session)
 
+    # Lazy: clear dead notification and autoclose if a rename race occurred
+    from ..polling.polling_state import lifecycle_strategy
+
+    lifecycle_strategy.clear_dead_notification(user.id, thread_id)
+    lifecycle_strategy.clear_autoclose_timer(user.id, thread_id)
+
     # Rename Telegram topic if supported
     tg_renamed = False
     client = PTBTelegramClient(context.bot)

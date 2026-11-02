@@ -915,6 +915,22 @@ class TmuxManager:
 
         return await asyncio.to_thread(_sync_rename)
 
+    async def session_exists(self, session_name: str) -> bool:
+        """Check whether a tmux session exists."""
+
+        def _sync_exists() -> bool:
+            try:
+                proc = subprocess.run(
+                    ["tmux", "has-session", "-t", session_name],
+                    capture_output=True,
+                    timeout=5,
+                )
+                return proc.returncode == 0
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                return False
+
+        return await asyncio.to_thread(_sync_exists)
+
     # ── Pane-level operations ──────────────────────────────────────────
 
     def get_sidecar_pane_id(self, window_id: str) -> str | None:

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ....tmux_manager import tmux_manager
 from ..polling_state import (
     lifecycle_strategy,
     terminal_poll_state,
@@ -58,6 +59,9 @@ async def tick_window(
         return
 
     if window is None:
+        session_name = window_id.split(":", 1)[0]
+        if await tmux_manager.session_exists(session_name):
+            return
         await _handle_dead_window_notification(bot, user_id, thread_id, window_id)
         return
 
