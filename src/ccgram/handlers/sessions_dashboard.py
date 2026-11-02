@@ -82,32 +82,36 @@ async def _build_dashboard(user_id: int) -> tuple[str, InlineKeyboardMarkup]:
             ),
             session.window_id,
         )
-        status = "+" if window_id in bound_window_ids else "o"
+        is_bound = window_id in bound_window_ids or session.topic_ref is not None
+        status = "+" if is_bound else "o"
         display_name = tmux_manager.topic_name_from_session_name(session.window_name)
-        lines.append(f"{status} {display_name} {session.cwd}".rstrip())
-        action_rows.extend(
+        cwd_part = f" — {session.cwd}" if session.cwd else ""
+        status_suffix = "" if is_bound else " (unbound)"
+        lines.append(f"{status} {display_name}{cwd_part}{status_suffix}")
+        action_rows.append(
             [
-                [
-                    InlineKeyboardButton(
-                        f"{status} {display_name}",
-                        callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "scr",
-                        callback_data=f"{CB_SESSIONS_SCREENSHOT}{window_id}"[:64],
-                    ),
-                    InlineKeyboardButton(
-                        "kill",
-                        callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
-                    ),
-                ],
+                InlineKeyboardButton(
+                    f"✏️ {display_name}",
+                    callback_data=f"{CB_SESSIONS_RENAME}{window_id}"[:64],
+                ),
+                InlineKeyboardButton(
+                    "📸",
+                    callback_data=f"{CB_SESSIONS_SCREENSHOT}{window_id}"[:64],
+                ),
+                InlineKeyboardButton(
+                    "✕",
+                    callback_data=f"{CB_SESSIONS_KILL}{window_id}"[:64],
+                ),
             ]
         )
 
+    action_rows.append([_REFRESH_BTN])
+
     content = "\n".join(lines)
-    text = f"Sessions\n\n```\n{content}\n```"
+    legend = (
+        "+ привязана к топику | o свободна\n✏️ переименовать | 📸 скриншот | ✕ закрыть"
+    )
+    text = f"Sessions\n\n```\n{content}\n```\n{legend}"
     return text, InlineKeyboardMarkup(action_rows)
 
 
@@ -225,7 +229,8 @@ async def handle_sessions_rename(
     client: TelegramClient,
 ) -> None:
     """Prompt user to provide a new name for the session."""
-    display = thread_router.get_display_name(window_id)
+    session_name = window_id.split(":", 1)[0]
+    display = tmux_manager.topic_name_from_session_name(session_name)
     thread_id = next(
         (
             tid
@@ -284,10 +289,12 @@ async def apply_session_rename(
     if not window_id:
         return False
 
-    name = tmux_manager.topic_name_from_session_name(text.strip())
-    if name in ("-", "/cancel", "cancel"):
+    raw_name = text.strip()
+    if raw_name in ("-", "/cancel", "cancel"):
         await safe_reply(message, "Rename cancelled.")
         return True
+
+    name = tmux_manager.topic_name_from_session_name(raw_name)
     if not name or len(name) > 50 or "\n" in name:  # noqa: PLR2004
         await safe_reply(
             message,
@@ -299,6 +306,35 @@ async def apply_session_rename(
     if new_wid is None:
         await safe_reply(message, f"Cannot rename session to `{name}`.")
         return True
+
+    user = message.from_user
+    chat = message.chat
+    if pending_thread is not None and user and chat:
+        # Lazy: PTBTelegramClient needed only when updating topic after dashboard rename
+        from ..telegram_client import PTBTelegramClient
+
+        # Lazy: lifecycle_strategy needed only when updating topic after dashboard rename
+        from .polling.polling_state import lifecycle_strategy
+
+        # Lazy: update_stored_topic_name needed only when updating topic after dashboard rename
+        from .status.topic_emoji import update_stored_topic_name
+
+        # Lazy: bind helpers needed only when updating topic after dashboard rename
+        from .topics.topic_binding import bind_runtime, find_topic_session
+
+        lifecycle_strategy.clear_dead_notification(user.id, pending_thread)
+        lifecycle_strategy.clear_autoclose_timer(user.id, pending_thread)
+        target_session = tmux_manager.topic_session_name(name)
+        await tmux_manager.set_session_topic(target_session, chat.id, pending_thread)
+        session = await find_topic_session(chat.id, pending_thread)
+        if session:
+            bind_runtime(user.id, chat.id, pending_thread, session)
+        update_stored_topic_name(chat.id, pending_thread, name)
+        try:
+            client = PTBTelegramClient(message.get_bot())
+            await client.edit_forum_topic(chat.id, pending_thread, name=name)
+        except TelegramError as exc:
+            logger.warning("Failed to edit forum topic on dashboard rename: %s", exc)
 
     logger.info(
         "Session renamed: window %s -> %s (%r, thread=%s)",
@@ -318,11 +354,11 @@ async def _execute_session_rename(window_id: str, name: str) -> str | None:
     if not session_name.startswith(config.tmux_session_prefix):
         return None
 
-    new_session_name = name
-    if not await tmux_manager.rename_session(session_name, new_session_name):
+    target_session = tmux_manager.topic_session_name(name)
+    if not await tmux_manager.rename_session(session_name, target_session):
         return None
 
-    return f"{new_session_name}:{bare_id}"
+    return f"{target_session}:{bare_id}"
 
 
 async def _dispatch_window_action(
