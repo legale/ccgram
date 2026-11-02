@@ -32,7 +32,7 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
         "• `//screenshot` (или `//screen`) — скриншот терминала",
         "• `//live` — автообновляемый просмотр терминала",
         "• `//sessions` — дашборд сессий",
-        "• `//bind <name>` — привязать текущий топик к `cc_<name>`",
+        "• `//bind <key>` — привязать топик к `cc_<key>` (`tmux attach -t cc_<key>`)",
         "• `//unbind` — закрыть топик, сохранив tmux-сессию",
         "• `//killme` — завершить сессию и закрыть топик",
         "• `//ctrl-c` — отправить Ctrl+C в сессию",

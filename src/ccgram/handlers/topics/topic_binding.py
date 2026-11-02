@@ -117,7 +117,10 @@ async def ensure_topic_session(  # noqa: C901, PLR0911, PLR0912
             return bind_runtime(
                 user_id, chat_id, thread_id, linked[0], router=router
             ), None
-        return None, "Topic is not bound. Use `//bind <name>`."
+        return (
+            None,
+            f"//bind <key>\n\ntmux attach -t {config.tmux_session_prefix}<key>",
+        )
     if not _valid_name(topic_name):
         return None, "Invalid session name."
 
@@ -183,12 +186,18 @@ async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     thread_id = get_thread_id(update)
     if thread_id is None:
-        await safe_reply(message, "Use `//bind <name>` inside a Telegram topic.")
+        await safe_reply(
+            message,
+            f"Use inside a Telegram topic:\n\n//bind <key>\n\ntmux attach -t {config.tmux_session_prefix}<key>",
+        )
         return
 
     parts = (message.text or "").strip().split(maxsplit=1)
     if len(parts) != 2 or not _valid_name(parts[1].strip()):  # noqa: PLR2004
-        await safe_reply(message, "Usage: `//bind <name>`")
+        await safe_reply(
+            message,
+            f"//bind <key>\n\ntmux attach -t {config.tmux_session_prefix}<key>",
+        )
         return
     name = parts[1].strip()
 
@@ -208,16 +217,12 @@ async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await client.edit_forum_topic(chat.id, thread_id, name=name)
     except BadRequest as exc:
         if "topic_not_modified" not in exc.message.lower():
-            await safe_reply(
-                message,
-                f"Bound to `{tmux_manager.topic_session_name(name)}`, but topic rename failed: {exc}",
-            )
-            return
+            logger.warning("Topic rename failed on bind: %s", exc)
     except TelegramError as exc:
-        await safe_reply(
-            message,
-            f"Bound to `{tmux_manager.topic_session_name(name)}`, but topic rename failed: {exc}",
-        )
-        return
+        logger.warning("Topic rename failed on bind: %s", exc)
 
-    await safe_reply(message, f"Bound to `{tmux_manager.topic_session_name(name)}`.")
+    target_session = tmux_manager.topic_session_name(name)
+    await safe_reply(
+        message,
+        f"//bind {name}\n\ntmux attach -t {target_session}",
+    )

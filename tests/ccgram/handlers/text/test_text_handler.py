@@ -43,7 +43,10 @@ async def test_unbound_topic_requires_bind() -> None:
         handled = await module._handle_unbound_topic(1, 42, message)
 
     assert handled is True
-    reply.assert_awaited_once_with(message, "Topic is not bound. Use `//bind <name>`.")
+    reply.assert_awaited_once_with(
+        message,
+        "//bind <key>\n\ntmux attach -t cc_<key>",
+    )
 
 
 async def test_forward_uses_reconcile_retry_path() -> None:

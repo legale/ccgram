@@ -48,7 +48,10 @@ async def _handle_unbound_topic(
         return True
     session = await find_topic_session(chat.id, thread_id)
     if session is None:
-        await safe_reply(message, "Topic is not bound. Use `//bind <name>`.")
+        await safe_reply(
+            message,
+            f"//bind <key>\n\ntmux attach -t {config.tmux_session_prefix}<key>",
+        )
         return True
     bind_runtime(user_id, chat.id, thread_id, session)
     return False

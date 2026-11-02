@@ -128,3 +128,57 @@ async def test_explicit_rebind_moves_topic_to_requested_session() -> None:
     tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 42)
     assert old.topic_ref is None
     assert target.topic_ref == (-100, 42)
+
+
+async def test_bind_command_replies_strict_format() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//bind mykey"
+    update.effective_chat.id = -100
+    context = MagicMock()
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch.object(
+            topic_binding,
+            "ensure_topic_session",
+            new=AsyncMock(return_value=("cc_mykey:@1", None)),
+        ),
+        patch.object(
+            topic_binding,
+            "PTBTelegramClient",
+            return_value=MagicMock(edit_forum_topic=AsyncMock()),
+        ),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.bind_command(update, context)
+
+    reply.assert_awaited_once_with(
+        update.message,
+        "//bind mykey\n\ntmux attach -t cc_mykey",
+    )
+
+
+async def test_bind_command_usage_replies_strict_format() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//bind"
+    update.effective_chat.id = -100
+    context = MagicMock()
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.bind_command(update, context)
+
+    reply.assert_awaited_once_with(
+        update.message,
+        "//bind <key>\n\ntmux attach -t cc_<key>",
+    )
