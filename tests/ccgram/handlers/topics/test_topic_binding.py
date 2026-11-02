@@ -130,7 +130,7 @@ async def test_explicit_rebind_moves_topic_to_requested_session() -> None:
     assert target.topic_ref == (-100, 42)
 
 
-async def test_bind_command_replies_strict_format() -> None:
+async def test_bind_command_replies_session_name_on_success() -> None:
     from ccgram.handlers.topics import topic_binding
 
     update = MagicMock()
@@ -139,9 +139,17 @@ async def test_bind_command_replies_strict_format() -> None:
     update.effective_chat.id = -100
     context = MagicMock()
 
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    mock_proc.returncode = 0
+
     with (
         patch.object(topic_binding.config, "is_user_allowed", return_value=True),
         patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=mock_proc),
+        ),
         patch.object(
             topic_binding,
             "ensure_topic_session",
@@ -156,13 +164,39 @@ async def test_bind_command_replies_strict_format() -> None:
     ):
         await topic_binding.bind_command(update, context)
 
-    reply.assert_awaited_once_with(
-        update.message,
-        "//bind mykey\n\ntmux attach -t cc_mykey",
+    reply.assert_awaited_once_with(update.message, "cc_mykey")
+
+
+async def test_bind_command_replies_error_when_session_not_found() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//bind mykey"
+    update.effective_chat.id = -100
+    context = MagicMock()
+
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(
+        return_value=(b"", b"can't find session: cc_mykey\n")
     )
+    mock_proc.returncode = 1
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=mock_proc),
+        ),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.bind_command(update, context)
+
+    reply.assert_awaited_once_with(update.message, "can't find session: cc_mykey")
 
 
-async def test_bind_command_usage_replies_strict_format() -> None:
+async def test_bind_command_usage() -> None:
     from ccgram.handlers.topics import topic_binding
 
     update = MagicMock()
@@ -178,7 +212,4 @@ async def test_bind_command_usage_replies_strict_format() -> None:
     ):
         await topic_binding.bind_command(update, context)
 
-    reply.assert_awaited_once_with(
-        update.message,
-        "//bind <key>\n\ntmux attach -t cc_<key>",
-    )
+    reply.assert_awaited_once_with(update.message, "Usage: //bind <key>")

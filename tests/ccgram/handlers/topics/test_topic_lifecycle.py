@@ -28,8 +28,15 @@ async def test_topic_created_claims_strict_name_match() -> None:
     update.message.forum_topic_created.name = "foo"
     context = MagicMock()
 
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+
     with (
         patch("ccgram.config.Config.is_user_allowed", return_value=True),
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=mock_proc),
+        ),
         patch.object(
             topic_lifecycle,
             "ensure_topic_session",
@@ -47,9 +54,9 @@ async def test_topic_created_claims_strict_name_match() -> None:
         tmux.topic_session_name.return_value = "cc_foo"
         await topic_lifecycle.topic_created_handler(update, context)
 
-    ensure.assert_awaited_once_with(1, -100, 42, "foo")
+    ensure.assert_awaited_once_with(1, -100, 42, "foo", rebind=True)
     client_cls.return_value.send_message.assert_awaited_once_with(
-        -100, "topic foo created\ntmux cc_foo created and bound", message_thread_id=42
+        -100, "cc_foo", message_thread_id=42
     )
 
 

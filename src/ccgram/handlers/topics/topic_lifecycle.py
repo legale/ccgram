@@ -1,6 +1,8 @@
 """Topic lifecycle management for tmux-authoritative topics."""
 
 from __future__ import annotations
+
+import asyncio
 import time
 from typing import TYPE_CHECKING
 
@@ -165,17 +167,31 @@ async def topic_created_handler(
     client = PTBTelegramClient(context.bot)
     topic_name = strip_emoji_prefix(created.name)
     await sync_topic_name(client, chat.id, thread_id, topic_name)
+
+    # First try binding to existing tmux session with rebind=True (analogous to //bind)
+    target = tmux_manager.topic_session_name(topic_name)
     _window_id, error = await ensure_topic_session(
-        user.id, chat.id, thread_id, topic_name
+        user.id, chat.id, thread_id, topic_name, rebind=True
     )
     if error:
         await client.send_message(chat.id, error, message_thread_id=thread_id)
         return
-    target = tmux_manager.topic_session_name(topic_name)
+
+    # Switch attached tmux client if any
+    switch_proc = await asyncio.create_subprocess_exec(
+        "tmux",
+        "switch-client",
+        "-t",
+        target,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    await switch_proc.communicate()
+
     try:
         await client.send_message(
             chat.id,
-            f"topic {topic_name} created\ntmux {target} created and bound",
+            target,
             message_thread_id=thread_id,
         )
     except TelegramError as exc:
