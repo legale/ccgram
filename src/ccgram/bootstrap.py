@@ -64,16 +64,45 @@ def start_status_polling(application: Application) -> asyncio.Task[None]:
 
 
 async def sync_bot_commands(application: Application) -> None:
-    """Sync the single-source-of-truth command list with Telegram menu."""
+    """Sync the single-source-of-truth command list with Telegram menu across all scopes."""
+    # Lazy: avoid circular import between bootstrap and telegram scopes
+    from telegram import (
+        BotCommandScopeAllGroupChats,
+        BotCommandScopeAllPrivateChats,
+        BotCommandScopeChat,
+        BotCommandScopeDefault,
+    )
+
+    # Lazy: avoid circular import with config
+    from .config import config
+
     # Lazy: avoid circular import between bootstrap and registry
     from .handlers.registry import get_telegram_menu_commands
 
     commands = get_telegram_menu_commands()
-    try:
-        await application.bot.set_my_commands(commands)
-        logger.info("Synced %d commands with Telegram menu", len(commands))
-    except TelegramError as exc:
-        logger.warning("Failed to sync commands with Telegram menu: %s", exc)
+    bot = application.bot
+
+    scopes = [
+        BotCommandScopeDefault(),
+        BotCommandScopeAllPrivateChats(),
+        BotCommandScopeAllGroupChats(),
+    ]
+    for uid in config.allowed_users:
+        scopes.append(BotCommandScopeChat(uid))
+    if config.group_id:
+        scopes.append(BotCommandScopeChat(config.group_id))
+
+    for scope in scopes:
+        try:
+            await bot.set_my_commands(commands, scope=scope)
+        except TelegramError as exc:
+            logger.debug("Failed to set commands for scope %s: %s", scope, exc)
+
+    logger.info(
+        "Synced %d commands with Telegram menu across %d scopes",
+        len(commands),
+        len(scopes),
+    )
 
 
 async def bootstrap_application(application: Application) -> None:
