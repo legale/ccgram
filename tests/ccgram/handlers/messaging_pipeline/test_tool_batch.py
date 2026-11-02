@@ -20,7 +20,6 @@ from ccgram.handlers.messaging_pipeline.tool_batch import (
     is_batch_eligible,
     process_tool_event,
 )
-from ccgram.telegram_draft import mark_draft_unavailable, reset_draft_state
 
 
 class TestFormatBatchMessage:
@@ -197,7 +196,7 @@ class TestBatchDataStructures:
     def test_tool_batch_defaults(self) -> None:
         batch = ToolBatch(window_id="@0", thread_id=42)
         assert batch.entries == []
-        assert batch.telegram_msg_id is None
+        assert batch.message_id is None
         assert batch.total_length == 0
 
     def test_constants(self) -> None:
@@ -237,14 +236,11 @@ class TestNoImportFromMessageQueue:
         assert violations == [], f"tool_batch imports from message_queue: {violations}"
 
 
-class TestDraftStreamIntegration:
-    """Verify tool_batch routes send/edit through DraftStream (legacy mode)."""
+class TestStreamingMessageIntegration:
+    """Verify tool_batch routes send/edit through StreamingMessage."""
 
     @pytest.fixture(autouse=True)
     def _setup_draft_state(self, monkeypatch: pytest.MonkeyPatch):
-        reset_draft_state()
-        # Force legacy DraftStream mode for deterministic bot.* assertions.
-        mark_draft_unavailable("test")
         _active_batches.clear()
         # Avoid real wall-clock rate-limiting in unit tests.
         monkeypatch.setattr(
@@ -262,7 +258,6 @@ class TestDraftStreamIntegration:
         )
         yield
         _active_batches.clear()
-        reset_draft_state()
 
     @staticmethod
     def _make_bot(send_id: int = 99):
@@ -272,7 +267,7 @@ class TestDraftStreamIntegration:
         bot.send_message.return_value = sent
         return bot
 
-    async def test_first_tool_use_starts_draft_stream(
+    async def test_first_tool_use_starts_stream(
         self,
     ) -> None:
         bot = self._make_bot(send_id=77)
@@ -287,10 +282,10 @@ class TestDraftStreamIntegration:
         )
 
         bot.send_message.assert_awaited_once()
-        assert batch.draft is not None
-        assert batch.telegram_msg_id == 77
+        assert batch.stream is not None
+        assert batch.message_id == 77
 
-    async def test_second_call_replaces_text_via_draft(
+    async def test_second_call_replaces_stream_text(
         self,
     ) -> None:
         bot = self._make_bot(send_id=77)
@@ -319,12 +314,12 @@ class TestDraftStreamIntegration:
         _active_batches[(1, 10)] = batch
 
         await _send_or_edit_batch(bot, 1, batch, 42, 10, 10)
-        assert batch.draft is not None and not batch.draft.closed
+        assert batch.stream is not None and not batch.stream.closed
 
         await flush_batch(bot, user_id=1, thread_id_or_0=10)
 
         # Draft is closed, removed from active.
-        assert batch.draft.closed is True
+        assert batch.stream.closed is True
         assert (1, 10) not in _active_batches
 
     async def test_flush_batch_no_op_when_no_entries(self) -> None:

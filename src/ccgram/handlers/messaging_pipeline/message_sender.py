@@ -19,14 +19,20 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from telegram import CallbackQuery, LinkPreviewOptions, Message, ReactionTypeEmoji
+from telegram import (
+    CallbackQuery,
+    InlineKeyboardMarkup,
+    LinkPreviewOptions,
+    Message,
+    ReactionTypeEmoji,
+)
 from telegram.error import BadRequest, RetryAfter, TelegramError
 
 from ...config import config
 from ...entity_formatting import convert_to_entities
 from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
-from ...topic_tail import record_telegram_message
+from ...topic_tail import record_message, record_telegram_message
 from ..reactions import (
     ALLOWED_REACTIONS,
     REACT_DONE,
@@ -47,6 +53,7 @@ __all__ = [
     "REACT_RUNNING",
     "REACT_SEEN",
     "REACT_THINKING",
+    "StreamingMessage",
     "ack_reaction",
     "clear_reaction",
     "edit_with_fallback",
@@ -61,6 +68,177 @@ __all__ = [
 ]
 
 logger = structlog.get_logger()
+
+_STREAM_MAX_LENGTH = TELEGRAM_MAX_MESSAGE_LENGTH
+
+
+class _KeepMarkup:
+    __slots__ = ()
+
+
+_KEEP_MARKUP = _KeepMarkup()
+
+
+def _truncate_stream_text(text: str) -> str:
+    if len(text) <= _STREAM_MAX_LENGTH:
+        return text
+    head_len = _STREAM_MAX_LENGTH - 32
+    return f"{text[:head_len]}\n... [truncated {len(text) - head_len} chars]"
+
+
+class StreamingMessage:
+    """Incrementally update one Telegram message through ``TelegramClient``."""
+
+    def __init__(
+        self,
+        client: TelegramClient,
+        chat_id: int,
+        *,
+        message_thread_id: int | None = None,
+        reply_to_message_id: int | None = None,
+        reply_markup: InlineKeyboardMarkup | None = None,
+    ) -> None:
+        self._client = client
+        self._chat_id = chat_id
+        self._thread_id = message_thread_id
+        self._reply_to = reply_to_message_id
+        self._reply_markup = reply_markup
+        self._message_id: int | None = None
+        self._last_pushed_text = ""
+        self._last_pushed_markup: Any = None
+        self._buffer = ""
+        self._started = False
+        self._closed = False
+
+    @property
+    def message_id(self) -> int | None:
+        return self._message_id
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    @property
+    def text(self) -> str:
+        return _truncate_stream_text(self._buffer)
+
+    async def start(self, initial_text: str) -> int | None:
+        if self._started:
+            raise RuntimeError("StreamingMessage.start called twice")
+        if not initial_text:
+            return None
+
+        self._buffer = initial_text
+        try:
+            msg = await self._client.send_message(
+                chat_id=self._chat_id,
+                text=self.text,
+                **self._send_kwargs(),
+            )
+        except RetryAfter as exc:
+            logger.warning("StreamingMessage.start rate-limited: %s", exc)
+            return None
+        except TelegramError as exc:
+            logger.warning("StreamingMessage.start failed: %s", exc)
+            return None
+
+        self._message_id = msg.message_id
+        self._last_pushed_text = self.text
+        self._last_pushed_markup = self._reply_markup or InlineKeyboardMarkup([])
+        record_message(self._chat_id, self._thread_id, self._message_id)
+        self._started = True
+        return self._message_id
+
+    async def append(self, delta: str) -> None:
+        self._ensure_open()
+        self._buffer += delta
+        await self._push_update()
+
+    async def replace(
+        self,
+        text: str,
+        *,
+        reply_markup: InlineKeyboardMarkup | None | Any = _KEEP_MARKUP,
+    ) -> None:
+        self._ensure_open()
+        self._buffer = text
+        if reply_markup is not _KEEP_MARKUP:
+            self._reply_markup = reply_markup
+        await self._push_update()
+
+    async def finalize(
+        self,
+        final_text: str | None = None,
+        *,
+        reply_markup: InlineKeyboardMarkup | None | Any = _KEEP_MARKUP,
+    ) -> None:
+        self._ensure_open()
+        if final_text is not None:
+            self._buffer = final_text
+        if reply_markup is not _KEEP_MARKUP:
+            self._reply_markup = reply_markup
+        await self._push_update()
+        self._closed = True
+
+    async def abort(self) -> None:
+        if self._closed or self._message_id is None:
+            self._closed = True
+            return
+        try:
+            await self._client.delete_message(
+                chat_id=self._chat_id, message_id=self._message_id
+            )
+        except TelegramError as exc:
+            logger.warning("StreamingMessage.abort delete failed: %s", exc)
+        self._closed = True
+
+    def _ensure_open(self) -> None:
+        if not self._started:
+            raise RuntimeError("StreamingMessage not started")
+        if self._closed:
+            raise RuntimeError("StreamingMessage already closed")
+
+    def _send_kwargs(self) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {}
+        if self._thread_id is not None:
+            kwargs["message_thread_id"] = self._thread_id
+        if self._reply_to is not None:
+            kwargs["reply_to_message_id"] = self._reply_to
+        if self._reply_markup is not None:
+            kwargs["reply_markup"] = self._reply_markup
+        return kwargs
+
+    async def _push_update(self) -> None:
+        if self._message_id is None:
+            return
+        markup = self._reply_markup or InlineKeyboardMarkup([])
+        if self._last_pushed_text == self.text and self._last_pushed_markup == markup:
+            return
+
+        try:
+            await self._client.edit_message_text(
+                chat_id=self._chat_id,
+                message_id=self._message_id,
+                text=self.text,
+                reply_markup=markup,
+            )
+            self._last_pushed_text = self.text
+            self._last_pushed_markup = markup
+        except BadRequest as exc:
+            if "not modified" in (exc.message or "").lower():
+                return
+            logger.warning("StreamingMessage edit failed: %s", exc)
+        except RetryAfter as exc:
+            await asyncio.sleep(_retry_after_seconds(exc) + 1)
+            with contextlib.suppress(TelegramError):
+                await self._client.edit_message_text(
+                    chat_id=self._chat_id,
+                    message_id=self._message_id,
+                    text=self.text,
+                    reply_markup=markup,
+                )
+        except TelegramError as exc:
+            logger.warning("StreamingMessage update failed: %s", exc)
 
 
 def is_thread_gone(exc: TelegramError) -> bool:

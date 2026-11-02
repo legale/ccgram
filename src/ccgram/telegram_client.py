@@ -16,7 +16,6 @@ Public API:
   - ``TelegramClient``       — Protocol the handlers depend on
   - ``PTBTelegramClient``    — adapter wrapping ``telegram.Bot``
   - ``FakeTelegramClient``   — recording fake for tests
-  - ``unwrap_bot``           — escape hatch for PTB-only helpers (DraftStream)
 """
 
 from __future__ import annotations
@@ -24,7 +23,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from telegram import Bot, BotCommand, ChatFullInfo, File, ForumTopic, Message
 from telegram._botcommandscope import BotCommandScope
@@ -194,9 +193,8 @@ class PTBTelegramClient:
     def bot(self) -> Bot:
         """Underlying PTB Bot — escape hatch for PTB-only helpers.
 
-        Used by ``unwrap_bot`` for ``DraftStream`` / ``do_api_request`` and a
-        handful of helpers that need PTB internals. Handlers should depend on
-        the ``TelegramClient`` Protocol instead.
+        Kept for callers that need PTB-specific inspection. Handlers should
+        depend on the ``TelegramClient`` Protocol instead.
         """
         return self._bot
 
@@ -602,22 +600,8 @@ _DEFAULT_RETURNS: dict[str, Any] = {
 }
 
 
-def unwrap_bot(client: TelegramClient) -> Bot:
-    """Return the underlying PTB ``Bot`` from a ``TelegramClient``.
-
-    Escape hatch for PTB-only helpers (e.g. ``DraftStream`` uses
-    ``do_api_request``, which is not on the Protocol). Production passes
-    ``PTBTelegramClient(bot)``; tests pass an ``AsyncMock`` shaped like
-    ``Bot`` and get it back unchanged.
-    """
-    if isinstance(client, PTBTelegramClient):
-        return client.bot
-    return cast("Bot", client)
-
-
 __all__ = [
     "FakeTelegramClient",
     "PTBTelegramClient",
     "TelegramClient",
-    "unwrap_bot",
 ]

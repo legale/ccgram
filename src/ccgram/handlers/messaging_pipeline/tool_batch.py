@@ -20,10 +20,10 @@ from dataclasses import dataclass, field
 
 import structlog
 
-from ...telegram_client import TelegramClient, unwrap_bot
-from ...telegram_draft import DraftStream
+from ...telegram_client import TelegramClient
 from ...thread_router import thread_router
 from ...window_query import get_batch_mode
+from .message_sender import StreamingMessage
 from .message_task import ContentTask, thread_key
 
 logger = structlog.get_logger()
@@ -49,9 +49,9 @@ class ToolBatch:
     window_id: str
     thread_id: int  # thread_id_or_0
     entries: list[ToolBatchEntry] = field(default_factory=list)
-    telegram_msg_id: int | None = None
+    message_id: int | None = None
     total_length: int = 0
-    draft: DraftStream | None = None
+    stream: StreamingMessage | None = None
 
 
 # Active tool batches: (user_id, thread_id_or_0) -> ToolBatch
@@ -308,27 +308,27 @@ async def _send_or_edit_batch(
     raw_thread_id: int | None,
     thread_id_or_0: int,  # noqa: ARG001
 ) -> None:
-    """Send a new batch message or replace the existing draft text."""
+    """Send a new batch message or replace the existing stream text."""
     batch_text = format_batch_message(batch.entries)
 
-    if batch.draft is None:
+    if batch.stream is None:
         await _rate_limit_chat(chat_id)
-        batch.draft = DraftStream(
-            unwrap_bot(client),
+        batch.stream = StreamingMessage(
+            client,
             chat_id,
             message_thread_id=raw_thread_id,
         )
-        msg_id = await batch.draft.start(batch_text)
+        msg_id = await batch.stream.start(batch_text)
         if msg_id is not None:
-            batch.telegram_msg_id = msg_id
+            batch.message_id = msg_id
         else:
-            batch.draft = None
+            batch.stream = None
     else:
-        await batch.draft.replace(batch_text)
+        await batch.stream.replace(batch_text)
 
 
 async def _rate_limit_chat(chat_id: int) -> None:
-    """Acquire the per-chat rate-limit slot before opening a new draft."""
+    """Acquire the per-chat rate-limit slot before opening a new stream."""
     # Lazy: sibling import — message_sender ↔ tool_batch via
     # messaging_pipeline/__init__.
     # Lazy: avoids tool_batch ↔ message_sender cycle through the queue worker
@@ -483,32 +483,31 @@ async def flush_batch(
 
     batch_text = format_batch_message(batch.entries)
 
-    if batch.draft is not None and not batch.draft.closed:
+    if batch.stream is not None and not batch.stream.closed:
         try:
-            await batch.draft.finalize(batch_text)
+            await batch.stream.finalize(batch_text)
         except TelegramError as exc:
             logger.warning("flush_batch finalize failed: %s", exc)
         return
 
-    if batch.telegram_msg_id is not None:
-        # Existing message but no active draft (e.g. batch built before
-        # adoption, or draft already closed).  Edit the message in place.
+    if batch.message_id is not None:
+        # Existing message but no active stream, edit it in place.
         try:
             await client.edit_message_text(
                 chat_id=chat_id,
-                message_id=batch.telegram_msg_id,
+                message_id=batch.message_id,
                 text=batch_text,
             )
         except TelegramError as exc:
             logger.warning("flush_batch edit failed: %s", exc)
         return
 
-    # No prior message at all — open a fresh draft and finalize immediately.
+    # No prior message at all — open a fresh stream and finalize immediately.
     await _rate_limit_chat(chat_id)
-    draft = DraftStream(unwrap_bot(client), chat_id, message_thread_id=thread_id)
+    stream = StreamingMessage(client, chat_id, message_thread_id=thread_id)
     try:
-        await draft.start(batch_text)
-        await draft.finalize()
+        if await stream.start(batch_text) is not None:
+            await stream.finalize()
     except TelegramError as exc:
         logger.warning("flush_batch start+finalize failed: %s", exc)
 

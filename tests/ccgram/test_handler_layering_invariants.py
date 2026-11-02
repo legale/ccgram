@@ -33,7 +33,7 @@ _HANDLERS_ROOT = _REPO_ROOT / "src" / "ccgram" / "handlers"
 # the TelegramClient Protocol because they call PTB-only helpers
 # (``getFile`` / ``send_chat_action`` / ``edit_forum_topic`` /
 # ``get_chat_member``) or rely on PTB-specific request flows
-# (``do_api_request`` for ``DraftStream``).
+# (``do_api_request`` for legacy integrations).
 _PTB_BOT_ALLOWLIST = frozenset(
     {
         "cleanup.py",

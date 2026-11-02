@@ -29,18 +29,15 @@ from ccgram.session import (
     WindowState,
     window_store,
 )
-from ccgram.telegram_draft import mark_draft_unavailable, reset_draft_state
 
 
 @pytest.fixture
 def batch_env():
-    """Force DraftStream into legacy mode and patch DraftStream collaborators.
+    """Patch StreamingMessage collaborators.
 
     Returns ``(bot, mock_send, mock_clear)`` where ``mock_send`` is the
-    bot.send_message AsyncMock that DraftStream.start() drives in legacy mode.
+    bot.send_message AsyncMock that StreamingMessage.start() drives.
     """
-    reset_draft_state()
-    mark_draft_unavailable("test")
     try:
         with (
             patch(
@@ -62,7 +59,6 @@ def batch_env():
             bot.send_message.return_value = sent_msg
             yield bot, bot.send_message, AsyncMock()
     finally:
-        reset_draft_state()
         _active_batches.clear()
 
 
@@ -294,7 +290,7 @@ class TestBatchDataStructures:
     def test_tool_batch_defaults(self) -> None:
         batch = ToolBatch(window_id="@0", thread_id=0)
         assert batch.entries == []
-        assert batch.telegram_msg_id is None
+        assert batch.message_id is None
         assert batch.total_length == 0
 
     def test_batch_entry_accumulation(self) -> None:
@@ -447,7 +443,7 @@ class TestProcessBatchTask:
         batch = _active_batches[bkey]
         assert len(batch.entries) == 1
         assert batch.entries[0].tool_use_id == "tu1"
-        assert batch.telegram_msg_id == 100
+        assert batch.message_id == 100
 
     async def test_task_create_batch_sends_task_list(self, batch_env) -> None:
         bot, mock_send, _ = batch_env
@@ -459,7 +455,7 @@ class TestProcessBatchTask:
                 tool_name="TaskCreate",
             ),
         )
-        # DraftStream.start (legacy) drives bot.send_message with kwargs.
+        # StreamingMessage.start drives bot.send_message with kwargs.
         sent_text = mock_send.await_args.kwargs["text"]
 
         assert sent_text.startswith("Creating 1 task\u2026\n")
@@ -672,7 +668,7 @@ class TestFlushBatch:
             window_id="@0",
             thread_id=10,
             entries=[ToolBatchEntry("t1", "Read x", "ok")],
-            telegram_msg_id=100,
+            message_id=100,
         )
 
         bot = AsyncMock()
@@ -693,7 +689,7 @@ class TestFlushBatch:
                 ToolBatchEntry("t1", "Read a.py", "10 lines"),
                 ToolBatchEntry("t2", "Edit a.py", "+1 -1"),
             ],
-            telegram_msg_id=200,
+            message_id=200,
         )
 
         bot = AsyncMock()
@@ -701,13 +697,13 @@ class TestFlushBatch:
         bot.edit_message_text.assert_awaited()
 
     @patch("ccgram.handlers.messaging_pipeline.tool_batch.thread_router")
-    async def test_flush_no_edit_without_telegram_msg_id(self, mock_tr) -> None:
+    async def test_flush_no_edit_without_message_id(self, mock_tr) -> None:
         mock_tr.resolve_chat_id.return_value = 42
         _active_batches[(1, 0)] = ToolBatch(
             window_id="@0",
             thread_id=0,
             entries=[ToolBatchEntry("t1", "Read x")],
-            telegram_msg_id=None,
+            message_id=None,
         )
 
         bot = AsyncMock()
@@ -731,7 +727,7 @@ class TestFlushBatch:
             window_id="@0",
             thread_id=0,
             entries=[ToolBatchEntry("t1", "Read x", "ok")],
-            telegram_msg_id=100,
+            message_id=100,
         )
 
         bot = AsyncMock()
@@ -849,30 +845,24 @@ class TestFlushSendFallback:
         new=AsyncMock(return_value=None),
     )
     @patch("ccgram.handlers.messaging_pipeline.tool_batch.thread_router")
-    async def test_flush_sends_when_no_telegram_msg_id(self, mock_tr) -> None:
-        # No prior message and no draft → flush_batch opens a fresh
-        # DraftStream, which uses bot.send_message in legacy mode.
-        reset_draft_state()
-        mark_draft_unavailable("test")
-        try:
-            mock_tr.resolve_chat_id.return_value = 42
-            _active_batches[(1, 0)] = ToolBatch(
-                window_id="@0",
-                thread_id=0,
-                entries=[ToolBatchEntry("t1", "Read x", "ok")],
-                telegram_msg_id=None,
-            )
+    async def test_flush_sends_when_no_message_id(self, mock_tr) -> None:
+        # No prior message → flush_batch opens a fresh stream.
+        mock_tr.resolve_chat_id.return_value = 42
+        _active_batches[(1, 0)] = ToolBatch(
+            window_id="@0",
+            thread_id=0,
+            entries=[ToolBatchEntry("t1", "Read x", "ok")],
+            message_id=None,
+        )
 
-            bot = AsyncMock()
-            sent = MagicMock()
-            sent.message_id = 100
-            bot.send_message.return_value = sent
-            await flush_batch(bot, 1, 0)
-            bot.send_message.assert_awaited_once()
-            assert "Read x" in bot.send_message.call_args.kwargs["text"]
-            assert (1, 0) not in _active_batches
-        finally:
-            reset_draft_state()
+        bot = AsyncMock()
+        sent = MagicMock()
+        sent.message_id = 100
+        bot.send_message.return_value = sent
+        await flush_batch(bot, 1, 0)
+        bot.send_message.assert_awaited_once()
+        assert "Read x" in bot.send_message.call_args.kwargs["text"]
+        assert (1, 0) not in _active_batches
 
 
 class TestDefensiveElseBranch:
