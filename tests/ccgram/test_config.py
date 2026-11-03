@@ -123,26 +123,6 @@ class TestConfigMissingEnv:
 
 
 @pytest.mark.usefixtures("_base_env")
-class TestHideToolCalls:
-    def test_hide_tool_calls_default_true(self, monkeypatch):
-        monkeypatch.delenv("CCGRAM_HIDE_TOOL_CALLS", raising=False)
-        cfg = Config()
-        assert cfg.hide_tool_calls is True
-
-    @pytest.mark.parametrize("value", ["1", "true", "yes", "True", "YES", "Yes"])
-    def test_hide_tool_calls_enabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_HIDE_TOOL_CALLS", value)
-        cfg = Config()
-        assert cfg.hide_tool_calls is True
-
-    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
-    def test_hide_tool_calls_disabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_HIDE_TOOL_CALLS", value)
-        cfg = Config()
-        assert cfg.hide_tool_calls is False
-
-
-@pytest.mark.usefixtures("_base_env")
 class TestTopicStatusConfig:
     def test_status_diff_default_true(self, monkeypatch):
         monkeypatch.delenv("CCGRAM_TOPIC_STATUS_DIFF_ENABLED", raising=False)
@@ -194,40 +174,6 @@ class TestTopicStatusConfig:
     def test_topic_idle_text_custom(self, monkeypatch):
         monkeypatch.setenv("CCGRAM_TOPIC_IDLE_TEXT", "zzz")
         assert Config().topic_idle_text == "zzz"
-
-
-@pytest.mark.usefixtures("_base_env")
-class TestMessagingConfig:
-    def test_msg_auto_spawn_default_false(self):
-        cfg = Config()
-        assert cfg.msg_auto_spawn is False
-
-    @pytest.mark.parametrize("value", ["1", "true", "yes", "True"])
-    def test_msg_auto_spawn_enabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_MSG_AUTO_SPAWN", value)
-        cfg = Config()
-        assert cfg.msg_auto_spawn is True
-
-    @pytest.mark.parametrize(
-        ("attr", "env_var", "default", "env_str", "expected"),
-        [
-            ("msg_max_windows", "CCGRAM_MSG_MAX_WINDOWS", 10, "20", 20),
-            ("msg_wait_timeout", "CCGRAM_MSG_WAIT_TIMEOUT", 60, "120", 120),
-            ("msg_spawn_timeout", "CCGRAM_MSG_SPAWN_TIMEOUT", 300, "600", 600),
-            ("msg_spawn_rate", "CCGRAM_MSG_SPAWN_RATE", 3, "5", 5),
-            ("msg_rate_limit", "CCGRAM_MSG_RATE_LIMIT", 10, "25", 25),
-        ],
-    )
-    def test_int_config_default_and_override(
-        self, monkeypatch, attr, env_var, default, env_str, expected
-    ):
-        assert getattr(Config(), attr) == default
-        monkeypatch.setenv(env_var, env_str)
-        assert getattr(Config(), attr) == expected
-
-    def test_mailbox_dir_derived_from_config_dir(self, tmp_path):
-        cfg = Config()
-        assert cfg.mailbox_dir == tmp_path / "mailbox"
 
 
 @pytest.mark.usefixtures("_base_env")

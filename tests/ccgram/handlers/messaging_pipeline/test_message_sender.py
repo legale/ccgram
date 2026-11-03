@@ -287,3 +287,44 @@ class TestFallbackNoSentinelLeak:
 
         fallback_kwargs = client.calls[1].kwargs
         assert "\x02" not in fallback_kwargs["text"]
+
+
+class TestChunkedDelivery:
+    async def test_safe_send_delivers_all_parts(self, client, monkeypatch):
+        from ccgram.handlers.messaging_pipeline.message_sender import safe_send
+
+        monkeypatch.setattr(
+            "ccgram.handlers.messaging_pipeline.message_sender.rate_limit_send",
+            AsyncMock(),
+        )
+        client.returns["send_message"] = _fake_message()
+        text = "x" * 9000
+        assert await safe_send(client, 123, text, message_thread_id=42)
+        parts = [c.kwargs for c in client.calls if c.method == "send_message"]
+        assert len(parts) == 3
+        assert "".join(p["text"] for p in parts) == text
+        assert all(p["message_thread_id"] == 42 for p in parts)
+
+    async def test_safe_reply_delivers_all_parts(self):
+        from ccgram.handlers.messaging_pipeline.message_sender import safe_reply
+
+        message = _fake_message()
+        returned = _fake_message()
+        returned.chat_id = 123
+        returned.message_thread_id = 42
+        returned.message_id = 789
+        message.reply_text.return_value = returned
+        text = "z" * 7000
+        await safe_reply(message, text)
+        parts = [c.kwargs["text"] if "text" in c.kwargs else c.args[0]
+                 for c in message.reply_text.await_args_list]
+        assert "".join(parts) == text
+        assert len(parts) == 3
+
+    async def test_long_send_keeps_ack_reaction(self, client, monkeypatch):
+        from ccgram.config import config
+        from ccgram.handlers.messaging_pipeline.message_sender import ack_reaction
+
+        monkeypatch.setattr(config, "ack_reaction", "👀")
+        await ack_reaction(client, 123, 456)
+        assert client.call_count("set_message_reaction") == 1

@@ -29,7 +29,6 @@ from ..tmux_manager import tmux_manager
 from ..topic_tail import clear_topic_tail_state
 from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
 from .callback_helpers import get_thread_id
-from .command_history import clear_history
 from .command_meta import command
 from .live.live_view import clear_live_view
 from .messaging_pipeline.message_sender import safe_reply
@@ -64,7 +63,6 @@ def _clear_all_topic_state(
 ) -> None:
     """Explicitly clean up all per-topic, per-chat, per-window, and per-qualified state."""
     # Topic scope (user_id, thread_id)
-    _safe_call(clear_history, user_id, thread_id)
     _safe_call(clear_live_view, user_id, thread_id)
     _safe_call(clear_topic_status_diff_state, user_id, thread_id)
     # Lazy: avoid circular import with topic_lifecycle

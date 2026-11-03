@@ -109,8 +109,6 @@ class Config:
         self.own_window_id: str | None = None
 
         # All state files live under config_dir
-        self.state_file = self.config_dir / "state.json"
-        self.mailbox_dir = self.config_dir / "mailbox"
         self.status_poll_interval = max(
             0.5, float(os.getenv("CCGRAM_STATUS_POLL_INTERVAL", "1.0"))
         )
@@ -135,18 +133,11 @@ class Config:
             "CCGRAM_ACK_REACTION", "CCBOT_ACK_REACTION"
         )
 
-        self._init_messaging()
         self._init_live_view()
         self._init_send()
         self._init_lifecycle()
         self._init_topic_status()
         self._init_screenshots()
-
-        # Global default for hiding tool_use/tool_result content in Telegram.
-        # Per-window override via WindowState.tool_call_visibility takes precedence.
-        self.hide_tool_calls: bool = _env_with_fallback(
-            "CCGRAM_HIDE_TOOL_CALLS", "HIDE_TOOL_CALLS", "true"
-        ).lower() in ("1", "true", "yes")
 
         logger.debug(
             "Config initialized: dir=%s, token=%s..., allowed_users=%d, "
@@ -156,18 +147,6 @@ class Config:
             len(self.allowed_users),
             self.tmux_session_name,
         )
-
-    def _init_messaging(self) -> None:
-        self.msg_auto_spawn: bool = os.getenv("CCGRAM_MSG_AUTO_SPAWN", "").lower() in (
-            "1",
-            "true",
-            "yes",
-        )
-        self.msg_max_windows: int = _parse_int_env("CCGRAM_MSG_MAX_WINDOWS", 10)
-        self.msg_wait_timeout: int = _parse_int_env("CCGRAM_MSG_WAIT_TIMEOUT", 60)
-        self.msg_spawn_timeout: int = _parse_int_env("CCGRAM_MSG_SPAWN_TIMEOUT", 300)
-        self.msg_spawn_rate: int = _parse_int_env("CCGRAM_MSG_SPAWN_RATE", 3)
-        self.msg_rate_limit: int = _parse_int_env("CCGRAM_MSG_RATE_LIMIT", 10)
 
     def _init_live_view(self) -> None:
         self.live_view_interval: int = max(
@@ -181,8 +160,6 @@ class Config:
         )
 
     def _init_send(self) -> None:
-        self.send_search_depth: int = _parse_int_env("CCGRAM_SEND_SEARCH_DEPTH", 5)
-        self.send_max_results: int = _parse_int_env("CCGRAM_SEND_MAX_RESULTS", 50)
         self.file_size_limit_mb: int = max(
             1, _parse_int_env("CCGRAM_FILE_SIZE_LIMIT_MB", 1024)
         )

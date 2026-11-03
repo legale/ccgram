@@ -37,7 +37,6 @@ _HANDLERS_ROOT = _REPO_ROOT / "src" / "ccgram" / "handlers"
 _PTB_BOT_ALLOWLIST = frozenset(
     {
         "cleanup.py",
-        "command_history.py",
         "commands/__init__.py",
         "commands/forward.py",
         "commands/menu_sync.py",

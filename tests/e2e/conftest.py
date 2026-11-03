@@ -51,13 +51,9 @@ def e2e_state_dir(tmp_path, monkeypatch):
     state_dir = tmp_path / "ccgram-state"
     state_dir.mkdir()
 
-    state_file = state_dir / "state.json"
-    state_file.write_text("{}")
-
     from ccgram.config import config
 
     monkeypatch.setattr(config, "config_dir", state_dir)
-    monkeypatch.setattr(config, "state_file", state_file)
 
     return state_dir
 

@@ -54,11 +54,7 @@ class TestSplitMessage:
         long_line = "x" * 60
         text = f"{short}\n{long_line}\n{short}"
         chunks = split_message(text, max_length=50)
-        assert len(chunks) == 4
-        assert chunks[0] == short
-        assert chunks[1] == "x" * 50
-        assert chunks[2] == "x" * 10
-        assert chunks[3] == short
+        assert chunks == [short, "x" * 50, "x" * 10 + "\n" + short]
 
     @pytest.mark.parametrize(
         "text, max_len, expected_count",
@@ -77,3 +73,9 @@ class TestSplitMessage:
         chunks = split_message(text, max_length=200)
         for chunk in chunks:
             assert len(chunk) <= 200
+
+    def test_splits_astral_unicode_by_utf16_length(self):
+        chunks = split_message("😀" * 3000)
+        assert len(chunks) == 2
+        assert "".join(chunks) == "😀" * 3000
+        assert all(len(c.encode("utf-16-le")) // 2 <= 4096 for c in chunks)

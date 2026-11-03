@@ -21,6 +21,5 @@ Top-level modules (leaves and cross-cutting concerns):
   - callback_registry: prefix-based callback dispatch with self-registration
   - cleanup: topic teardown via TopicStateRegistry
   - registry: central PTB handler registration (register_all) — the PTB wiring spine
-  - response_builder: paginated response formatting
   - user_state: context.user_data string key constants
 """
