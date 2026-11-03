@@ -30,7 +30,6 @@ from ..config import config
 from ..telegram_client import PTBTelegramClient, TelegramClient
 from ..thread_router import thread_router
 from ..tmux_manager import tmux_manager
-from ..window_query import view_window  # noqa: F401 - legacy test patch seam
 from .callback_data import (
     CB_SESSIONS_KILL,
     CB_SESSIONS_KILL_CONFIRM,

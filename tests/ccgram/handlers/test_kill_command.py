@@ -8,13 +8,11 @@ from ccgram.handlers.sessions_dashboard import (
     handle_sessions_kill,
     handle_sessions_kill_confirm,
 )
-from ccgram.session import WindowState
 
 
 @pytest.fixture(autouse=True)
 def _patch_deps():
     with (
-        patch("ccgram.handlers.sessions_dashboard.view_window") as mock_view,
         patch("ccgram.handlers.sessions_dashboard.thread_router") as mock_tr,
         patch("ccgram.handlers.sessions_dashboard.tmux_manager") as mock_tm,
         patch(
@@ -23,15 +21,14 @@ def _patch_deps():
         ) as mock_clear,
     ):
         mock_tr.get_display_name.side_effect = lambda wid: wid
-        mock_view.side_effect = lambda wid: WindowState()
         mock_tr.get_all_thread_windows.return_value = {}
         mock_tm.list_sessions = AsyncMock(return_value=[])
-        yield mock_view, mock_tr, mock_tm, mock_clear
+        yield mock_tr, mock_tm, mock_clear
 
 
 class TestHandleSessionsKill:
     async def test_shows_confirmation(self, _patch_deps) -> None:
-        _mock_sm, mock_tr, _, _ = _patch_deps
+        mock_tr, _, _ = _patch_deps
         mock_tr.get_display_name.side_effect = lambda wid: "myproj"
 
         query = AsyncMock()
@@ -50,7 +47,7 @@ class TestHandleSessionsKill:
 
 class TestHandleSessionsKillConfirm:
     async def test_kills_and_unbinds(self, _patch_deps) -> None:
-        _mock_sm, mock_tr, mock_tm, mock_clear = _patch_deps
+        mock_tr, mock_tm, mock_clear = _patch_deps
         mock_tr.get_display_name.side_effect = lambda wid: "myproj"
         mock_tr.iter_thread_bindings.return_value = [
             (100, 42, "@5"),
@@ -72,7 +69,7 @@ class TestHandleSessionsKillConfirm:
         assert mock_clear.call_count == 2
 
     async def test_window_already_gone(self, _patch_deps) -> None:
-        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
+        mock_tr, mock_tm, _ = _patch_deps
         mock_tr.get_display_name.side_effect = lambda wid: "myproj"
         mock_tr.iter_thread_bindings.return_value = [(100, 42, "@5")]
         mock_tm.session_name = "ccgram"
@@ -87,7 +84,7 @@ class TestHandleSessionsKillConfirm:
         mock_tr.unbind_thread.assert_called_once_with(100, 42)
 
     async def test_refreshes_dashboard_after_kill(self, _patch_deps) -> None:
-        _mock_sm, mock_tr, mock_tm, _ = _patch_deps
+        mock_tr, mock_tm, _ = _patch_deps
         mock_tr.get_display_name.side_effect = lambda wid: "proj"
         mock_tr.iter_thread_bindings.return_value = [(100, 42, "@5")]
         mock_tm.session_name = "ccgram"
@@ -107,7 +104,7 @@ class TestKillmeCommand:
         from ccgram.handlers.cleanup import killme_command
         from telegram import Message, Update, User
 
-        _mock_sm, mock_tr, mock_tm, mock_clear = _patch_deps
+        mock_tr, mock_tm, mock_clear = _patch_deps
         mock_tr.get_window_for_thread.return_value = "@5"
         mock_tr.iter_thread_bindings.return_value = [(100, 42, "@5")]
         mock_tm.session_name = "ccgram"

@@ -21,7 +21,6 @@ from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from ..config import config
 from ..telegram_client import PTBTelegramClient
-from ..window_query import view_window
 from ..tmux_manager import send_to_window, tmux_manager
 from ..thread_router import thread_router
 from .callback_helpers import get_thread_id
@@ -132,9 +131,12 @@ async def _resolve_upload_dir(
 
         session_manager.set_window_cwd(window_id, cwd)
     else:
-        view = view_window(window_id)
-        if view and view.cwd:
-            cwd = str(Path(view.cwd).expanduser().resolve())
+        # Lazy: session_manager needed only for cached cwd lookup
+        from ..session import session_manager
+
+        cached = session_manager.get_window_cwd(window_id)
+        if cached:
+            cwd = str(Path(cached).expanduser().resolve())
 
     if not cwd:
         return window_id, None, "Session has no working directory."

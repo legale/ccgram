@@ -165,10 +165,8 @@ class TestResolveUploadDir:
             "ccgram.handlers.file_handler.tmux_manager.find_window_by_id",
             AsyncMock(return_value=None),
         )
-        monkeypatch.setattr(
-            "ccgram.handlers.file_handler.view_window",
-            lambda window_id: type("WindowView", (), {"cwd": str(fallback_dir)})(),
-        )
+        from ccgram.session import session_manager
+        session_manager.set_window_cwd("@1", str(fallback_dir))
         window_id, upload_path, err = await _resolve_upload_dir(1, 42)
         assert err is None
         assert window_id == "@1"
