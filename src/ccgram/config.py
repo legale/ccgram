@@ -43,6 +43,17 @@ def _parse_int_env(name: str, default: int) -> int:
         raise ValueError(f"{name} must be a valid integer: {exc}") from exc
 
 
+def _parse_required_int_env(name: str) -> int:
+    """Parse a required integer environment variable without a code default."""
+    raw = os.getenv(name)
+    if raw is None:
+        raise ValueError(f"{name} environment variable is required")
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a valid integer: {exc}") from exc
+
+
 def _parse_bool_env(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -180,7 +191,7 @@ class Config:
             1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
         )
         self.screen_diff_limit: int = max(
-            100, _parse_int_env("CCGRAM_SCREEN_DIFF_LIMIT", 2000)
+            100, _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
         )
         self.topic_idle_enabled: bool = _parse_bool_env(
             "CCGRAM_TOPIC_IDLE_ENABLED", True
