@@ -266,14 +266,14 @@ async def rename_command(  # noqa: C901
         return
 
     args = list(context.args or [])
-    if len(args) != 1:  # noqa: PLR2004
-        await safe_reply(message, "Usage: //rename <new_name>")
+    if not args:
+        await safe_reply(message, "Usage: /rename <new_name>")
         return
 
     # Lazy: avoid circular imports
     from ...utils import strip_emoji_prefix
 
-    raw_name = strip_emoji_prefix(args[0].strip()).strip()
+    raw_name = strip_emoji_prefix(" ".join(args).strip()).strip()
     name = raw_name.removeprefix(config.tmux_session_prefix).strip()
     if not _valid_name(name):
         await safe_reply(message, f"Invalid topic name: {name!r}")

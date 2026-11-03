@@ -109,6 +109,28 @@ async def test_reconcile_session_rename_keeps_topic_and_updates_route() -> None:
     client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
 
 
+async def test_reconcile_proceeds_when_reopen_fails_for_non_supergroup() -> None:
+    session = _session("cc_bar")
+    client = AsyncMock()
+    client.reopen_forum_topic.side_effect = BadRequest("The chat is not a supergroup forum")
+    router = _router()
+
+    with (
+        patch.object(periodic_tasks, "tmux_manager") as tmux,
+        patch.object(periodic_tasks, "thread_router", router),
+        patch.object(periodic_tasks, "config") as config,
+        patch.object(periodic_tasks, "prime_topic_status_diff"),
+    ):
+        tmux.list_sessions = AsyncMock(return_value=[session])
+        tmux.topic_name_from_session_name.return_value = "bar"
+        tmux.capture_pane = AsyncMock(return_value=None)
+        config.tmux_session_prefix = "cc_"
+        config.allowed_users = {1}
+        await periodic_tasks.reconcile(client)
+
+    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
+
+
 async def test_reconcile_removes_session_when_telegram_topic_is_missing() -> None:
     session = _session()
     client = AsyncMock()

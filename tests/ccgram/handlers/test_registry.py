@@ -287,3 +287,23 @@ def test_single_slash_path_does_not_match_double_slash_regex():
     pattern = re.compile(r"^//")
     assert not pattern.match("/bin/ls -la")
     assert pattern.match("//screenshot")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_single_slash_command():
+    from ccgram.handlers.registry import _dispatch_double_slash
+
+    update = MagicMock(spec=Update)
+    msg = MagicMock(spec=Message)
+    msg.text = "/rename mytopic"
+    update.effective_message = msg
+
+    context = MagicMock()
+    with (
+        patch("ccgram.handlers.topics.topic_binding.rename_command", new_callable=AsyncMock) as mock_rename,
+        patch("ccgram.handlers.registry.COMMAND_HANDLERS", (mock_rename,)),
+    ):
+        mock_rename._command_info = MagicMock(name="rename", aliases=(), description="", params="<name>", menu_name=None)
+        await _dispatch_double_slash(update, context)
+        mock_rename.assert_awaited_once_with(update, context)
+

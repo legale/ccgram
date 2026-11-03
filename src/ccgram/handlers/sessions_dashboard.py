@@ -320,14 +320,19 @@ async def apply_session_rename(
         from .topics.topic_lifecycle import clear_topic_lifecycle_state
 
         clear_topic_lifecycle_state(user.id, pending_thread)
-        target_session = name
+        target_session = (
+            tmux_manager.topic_session_name(name)
+            if not name.startswith(config.tmux_session_prefix)
+            else name
+        )
         await tmux_manager.set_session_topic(target_session, chat.id, pending_thread)
         session = await find_topic_session(chat.id, pending_thread)
         if session:
             bind_runtime(user.id, chat.id, pending_thread, session)
+        clean_name = name.removeprefix(config.tmux_session_prefix)
         try:
             client = PTBTelegramClient(message.get_bot())
-            await client.edit_forum_topic(chat.id, pending_thread, name=name)
+            await client.edit_forum_topic(chat.id, pending_thread, name=clean_name)
         except TelegramError as exc:
             logger.warning("Failed to edit forum topic on dashboard rename: %s", exc)
 
@@ -347,7 +352,11 @@ async def _execute_session_rename(window_id: str, name: str) -> str | None:
         return None
     session_name, bare_id = window_id.rsplit(":", 1)
 
-    target_session = name
+    target_session = (
+        tmux_manager.topic_session_name(name)
+        if not name.startswith(config.tmux_session_prefix)
+        else name
+    )
     if not await tmux_manager.rename_session(session_name, target_session):
         return None
 

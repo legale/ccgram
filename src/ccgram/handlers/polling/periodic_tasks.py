@@ -163,7 +163,10 @@ async def _sync_topic(
         if is_thread_gone(e):
             await _remove_missing_topic(client, session, chat_id, thread_id)
             return
-        if "topic_not_modified" not in e.message.lower():
+        if (
+            "topic_not_modified" not in e.message.lower()
+            and "not a supergroup forum" not in e.message.lower()
+        ):
             log_throttled(
                 logger,
                 f"topic-reopen:{session.window_name}",
@@ -171,7 +174,6 @@ async def _sync_topic(
                 session.window_name,
                 e,
             )
-            return
     except TelegramError as e:
         log_throttled(
             logger,
@@ -180,7 +182,6 @@ async def _sync_topic(
             session.window_name,
             e,
         )
-        return
 
     name = _topic_name(session)
     try:

@@ -216,3 +216,51 @@ async def test_bind_command_usage() -> None:
         await topic_binding.bind_command(update, context)
 
     reply.assert_awaited_once_with(update.message, "Usage: //bind <key>")
+
+
+async def test_rename_command_success() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.effective_chat.id = -100
+    context = MagicMock()
+    context.args = ["newname"]
+
+    session = _session("cc_oldname", (-100, 42))
+    client_mock = MagicMock(edit_forum_topic=AsyncMock(return_value=True))
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch.object(topic_binding, "find_topic_session", new=AsyncMock(return_value=session)),
+        patch.object(topic_binding.tmux_manager, "rename_session", new=AsyncMock(return_value=True)) as mock_rename,
+        patch.object(topic_binding.tmux_manager, "set_session_topic", new=AsyncMock(return_value=True)),
+        patch.object(topic_binding, "PTBTelegramClient", return_value=client_mock),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.rename_command(update, context)
+
+    mock_rename.assert_awaited_once_with("cc_oldname", "cc_newname")
+    client_mock.edit_forum_topic.assert_awaited_once_with(-100, 42, name="newname")
+    reply.assert_awaited_once_with(update.message, "cc_newname (топик: newname)")
+
+
+async def test_rename_command_usage_when_empty_args() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.effective_chat.id = -100
+    context = MagicMock()
+    context.args = []
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.rename_command(update, context)
+
+    reply.assert_awaited_once_with(update.message, "Usage: /rename <new_name>")
+
