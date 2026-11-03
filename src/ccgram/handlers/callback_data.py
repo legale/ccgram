@@ -82,23 +82,12 @@ CB_PANE_LIFECYCLE_TOGGLE = "pn:lc:"  # pn:lc:<window_id> — per-window toggle
 # Screenshot control keys
 CB_KEYS_PREFIX = "kb:"  # kb:<key_id>:<window>
 
-# Toolbar — single prefix; the suffix encodes "<window_id>:<action_name>".
-# The action_name is looked up in the loaded ToolbarConfig.actions pool to
-# determine dispatch (key send / text send / builtin handler).
-CB_TOOLBAR = "tb:"  # tb:<window_id>:<action_name>
-
 # Sync command
 CB_SYNC_FIX = "sync:fix"
 CB_SYNC_DISMISS = "sync:x"
 
 # Voice transcription confirm/discard
 CB_VOICE = "vc:"  # vc:send:<msg_id> / vc:drop:<msg_id>
-
-# Shell command approval
-CB_SHELL_RUN = "sh:run:"  # sh:run:<window_id>
-CB_SHELL_EDIT = "sh:edt:"  # sh:edt:<window_id>
-CB_SHELL_CANCEL = "sh:x:"  # sh:x:<window_id>
-CB_SHELL_CONFIRM_DANGER = "sh:dng:"  # sh:dng:<window_id> (dangerous confirm)
 
 # Live view (auto-refreshing screenshot)
 CB_LIVE_START = "lv:go:"  # lv:go:<target> (window_id or window_id:pane_id)

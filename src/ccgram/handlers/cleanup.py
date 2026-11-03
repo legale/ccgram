@@ -40,7 +40,6 @@ from .polling.polling_state import (
 )
 from .status.topic_emoji import clear_topic_emoji_state
 from .status.topic_status_diff import clear_topic_status_diff_state
-from .toolbar.toolbar_keyboard import clear_toolbar_labels
 
 logger = structlog.get_logger()
 
@@ -86,7 +85,6 @@ def _clear_all_topic_state(
     if window_id:
         _safe_call(terminal_poll_state.clear_state, window_id)
         _safe_call(interactive_strategy.clear_pane_alerts, window_id)
-        _safe_call(clear_toolbar_labels, window_id)
         _safe_call(clear_vim_state, window_id)
         _safe_call(tmux_manager.forget_sidecar_pane, window_id)
 

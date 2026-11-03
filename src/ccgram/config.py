@@ -50,21 +50,6 @@ def _parse_bool_env(name: str, default: bool = False) -> bool:
     return raw.strip().lower() in ("1", "true", "yes")
 
 
-def _resolve_toolbar_path() -> str:
-    """Resolve the toolbar TOML config path: env var → ~/.ccgram → empty.
-
-    Order:
-      1. ``$CCGRAM_TOOLBAR_CONFIG`` if set (used as-is, even if missing)
-      2. ``~/.ccgram/toolbar.toml`` if it exists
-      3. ``""`` (use built-in defaults)
-    """
-    env = os.getenv("CCGRAM_TOOLBAR_CONFIG", "").strip()
-    if env:
-        return env
-    fallback = ccgram_dir() / "toolbar.toml"
-    return str(fallback) if fallback.exists() else ""
-
-
 class Config:
     """Application configuration loaded from environment variables."""
 
@@ -150,7 +135,6 @@ class Config:
             "CCGRAM_ACK_REACTION", "CCBOT_ACK_REACTION"
         )
 
-        self.toolbar_config_path: str = _resolve_toolbar_path()
         self._init_messaging()
         self._init_live_view()
         self._init_send()

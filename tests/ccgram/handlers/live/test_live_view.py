@@ -29,7 +29,6 @@ from ccgram.handlers.live.screenshot_callbacks import (
     _handle_live_stop,
     build_screenshot_keyboard,
 )
-from ccgram.handlers.toolbar import build_toolbar_keyboard
 
 
 @pytest.fixture(autouse=True)
@@ -219,31 +218,6 @@ class TestBuildScreenshotKeyboard:
         live_btn = [btn for btn in flat if "Live" in btn.text][0]
         assert isinstance(live_btn.callback_data, str)
         assert "@0:%5" in live_btn.callback_data
-
-
-class TestBuildToolbarKeyboard:
-    def test_has_live_button(self):
-        kb = build_toolbar_keyboard("@0")
-        flat = [btn for row in kb.inline_keyboard for btn in row]
-        labels = [btn.text for btn in flat]
-        assert any("Live" in label for label in labels)
-
-    def test_live_replaces_esc_in_row1(self):
-        kb = build_toolbar_keyboard("@0")
-        row1_labels = [btn.text for btn in kb.inline_keyboard[0]]
-        assert any("Live" in label for label in row1_labels)
-
-    def test_live_callback_data(self):
-        # After the toolbar refactor, all buttons use the single CB_TOOLBAR
-        # prefix; the suffix is "<window_id>:<action_name>". The live action
-        # dispatches internally to the screenshot handler with CB_LIVE_START.
-        from ccgram.handlers.callback_data import CB_TOOLBAR
-
-        kb = build_toolbar_keyboard("@0")
-        flat = [btn for row in kb.inline_keyboard for btn in row]
-        live_btn = [btn for btn in flat if "Live" in btn.text][0]
-        assert isinstance(live_btn.callback_data, str)
-        assert live_btn.callback_data == f"{CB_TOOLBAR}@0:live"
 
 
 # ── Tick function ────────────────────────────────────────────────────────
