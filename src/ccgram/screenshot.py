@@ -1,55 +1,30 @@
 """Terminal text → PNG screenshot renderer.
 
 Converts captured tmux pane text (with optional ANSI color codes) into a
-dark-background PNG image. Supports full ANSI color parsing (16/256/RGB)
-and a three-tier font fallback chain:
-  1. JetBrains Mono — Latin, symbols, box-drawing
-  2. Noto Sans Mono CJK SC — CJK characters
-  3. Symbola — remaining special symbols
+dark-background PNG image using JetBrains Mono font. Supports full ANSI
+color parsing (16/256/RGB).
 
 Key function: text_to_image(text, font_size, with_ansi) → PNG bytes.
 """
 
 import asyncio
 import io
-import structlog
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
+import structlog
 
 _RE_ANSI_SGR = re.compile(r"\x1b\[([0-9;]*)m")
 
 logger = structlog.get_logger()
 
-_FONTS_DIR = Path(__file__).parent / "fonts"
-
-# Font fallback chain (highest priority first):
-#   1. JetBrains Mono (OFL-1.1) — Latin, symbols, box-drawing, blocks
-#   2. Noto Sans Mono CJK SC (OFL-1.1) — CJK, additional symbols
-#   3. Symbola (free license) — remaining miscellaneous symbols, dingbats
-_FONT_PATHS: list[Path] = [
-    _FONTS_DIR / "JetBrainsMono-Regular.ttf",
-    _FONTS_DIR / "NotoSansMonoCJKsc-Regular.otf",
-    _FONTS_DIR / "Symbola.ttf",
+_FONT_CANDIDATES: list[Path] = [
+    Path(__file__).parent / "fonts" / "JetBrainsMono-Regular.ttf",
+    Path("/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf"),
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"),
 ]
-
-# Pre-computed codepoint sets for characters NOT in JetBrains Mono.
-# Tier 2: present in Noto Sans Mono CJK SC (CJK ideographs, fullwidth punctuation, etc.)
-_NOTO_CODEPOINTS: set[int] = {
-    0x23BF,  # ⎿ DENTISTRY SYMBOL LIGHT VERTICAL AND BOTTOM RIGHT
-}
-# Tier 3: only in Symbola (misc symbols not in either JB or Noto)
-_SYMBOLA_CODEPOINTS: set[int] = {
-    0x23EA,  # ⏪ BLACK LEFT-POINTING DOUBLE TRIANGLE
-    0x23F5,  # ⏵ BLACK MEDIUM RIGHT-POINTING TRIANGLE
-    0x2714,  # ✔ HEAVY CHECK MARK
-    0x274C,  # ❌ CROSS MARK
-    0x1F3B2,  # 🎲 GAME DIE
-    0x1F4A5,  # 💥 COLLISION SYMBOL
-    0x1F7E1,  # 🟡 LARGE YELLOW CIRCLE
-}
 
 # ANSI color mapping (basic 16 colors)
 _ANSI_COLORS: dict[int, tuple[int, int, int]] = {
@@ -92,43 +67,27 @@ class StyledSegment:
 
     text: str
     style: TextStyle
-    font_tier: int
 
 
-_font_cache: dict[tuple[str, int], ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+_font_cache: dict[int, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
 
 
-def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Load a TrueType/OpenType font, falling back to Pillow default. Results are cached."""
-    key = (str(path), size)
-    if key not in _font_cache:
-        try:
-            _font_cache[key] = ImageFont.truetype(str(path), size)
-        except OSError:
-            logger.warning("Failed to load font %s, using Pillow default", path)
-            _font_cache[key] = ImageFont.load_default(size=size)
-    return _font_cache[key]
-
-
-def _font_tier(ch: str) -> int:
-    """Return 0 (JetBrains), 1 (Noto CJK), or 2 (Symbola) for a character."""
-    cp = ord(ch)
-    if cp in _SYMBOLA_CODEPOINTS:
-        return 2
-    # CJK Unified Ideographs + CJK compat + fullwidth forms + known Noto-only codepoints
-    if (
-        cp in _NOTO_CODEPOINTS
-        or cp >= 0x2E80
-        and (
-            cp <= 0x9FFF  # CJK radicals, kangxi, ideographs
-            or 0xF900 <= cp <= 0xFAFF  # CJK compat ideographs
-            or 0xFE30 <= cp <= 0xFE4F  # CJK compat forms
-            or 0xFF00 <= cp <= 0xFFEF  # fullwidth forms
-            or 0x20000 <= cp <= 0x2FA1F  # CJK extension B+
-        )
-    ):
-        return 1
-    return 0
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Load JetBrains Mono font, falling back to system mono or Pillow default."""
+    if size not in _font_cache:
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+        for path in _FONT_CANDIDATES:
+            if path.exists():
+                try:
+                    font = ImageFont.truetype(str(path), size)
+                    break
+                except OSError:
+                    continue
+        if font is None:
+            logger.warning("JetBrains Mono font not found, using Pillow default")
+            font = ImageFont.load_default(size=size)
+        _font_cache[size] = font
+    return _font_cache[size]
 
 
 def _parse_ansi_line(line: str) -> list[StyledSegment]:
@@ -138,37 +97,27 @@ def _parse_ansi_line(line: str) -> list[StyledSegment]:
     pos = 0
 
     for match in _RE_ANSI_SGR.finditer(line):
-        # Add text before this escape code
         text_before = line[pos : match.start()]
         if text_before:
-            # Split by font tier
-            for seg_text, tier in _split_line_segments_plain(text_before):
-                if seg_text:
-                    segments.append(StyledSegment(seg_text, current_style, tier))
+            segments.append(StyledSegment(text_before, current_style))
 
-        # Parse escape code
         codes = match.group(1)
         if codes:
             current_style = _apply_ansi_codes(current_style, codes)
         else:
-            # Empty code means reset
             current_style = TextStyle()
 
         pos = match.end()
 
-    # Add remaining text after last escape code
     text_after = line[pos:]
     if text_after:
-        for seg_text, tier in _split_line_segments_plain(text_after):
-            if seg_text:
-                segments.append(StyledSegment(seg_text, current_style, tier))
+        segments.append(StyledSegment(text_after, current_style))
 
-    return segments if segments else [StyledSegment("", TextStyle(), 0)]
+    return segments if segments else [StyledSegment("", TextStyle())]
 
 
 def _apply_ansi_codes(style: TextStyle, codes: str) -> TextStyle:
     """Apply ANSI color codes to a text style."""
-    # Create a new style (copy current)
     new_style = TextStyle(
         fg_color=style.fg_color,
         bg_color=style.bg_color,
@@ -190,7 +139,6 @@ def _apply_ansi_codes(style: TextStyle, codes: str) -> TextStyle:
                     if color_idx < 16:
                         new_style.fg_color = _ANSI_COLORS[color_idx]
                     else:
-                        # Approximate 256 colors (simplified)
                         new_style.fg_color = _approximate_256_color(color_idx)
                     i += 2
             elif (
@@ -232,37 +180,14 @@ def _approximate_256_color(idx: int) -> tuple[int, int, int]:
     """Approximate a 256-color palette index to RGB."""
     if idx < 16:
         return _ANSI_COLORS[idx]
-    elif idx < 232:
-        # 216 color cube: 16 + 36*r + 6*g + b
+    if idx < 232:
         idx -= 16
         r = (idx // 36) * 51
         g = ((idx % 36) // 6) * 51
         b = (idx % 6) * 51
         return (r, g, b)
-    else:
-        # Grayscale: 232-255
-        gray = 8 + (idx - 232) * 10
-        return (gray, gray, gray)
-
-
-def _split_line_segments_plain(line: str) -> list[tuple[str, int]]:
-    """Split a line into (text, font_tier) segments.
-
-    Consecutive characters sharing the same tier are merged.
-    """
-    if not line:
-        return [("", 0)]
-    segments: list[tuple[str, int]] = []
-    cur_tier = _font_tier(line[0])
-    start = 0
-    for i in range(1, len(line)):
-        tier = _font_tier(line[i])
-        if tier != cur_tier:
-            segments.append((line[start:i], cur_tier))
-            cur_tier = tier
-            start = i
-    segments.append((line[start:], cur_tier))
-    return segments
+    gray = 8 + (idx - 232) * 10
+    return (gray, gray, gray)
 
 
 async def text_to_image(
@@ -273,20 +198,7 @@ async def text_to_image(
     live_mode: bool = False,
     palette_colors: int | None = None,
 ) -> bytes:
-    """Render monospace text onto a dark-background image and return PNG bytes.
-
-    Args:
-        text: The text to render (may contain ANSI color codes)
-        font_size: Font size in pixels (defaults to config.screenshot_font_size)
-        with_ansi: If True, parse and render ANSI color codes
-        live_mode: If True, optimize for repeated streaming (smaller font,
-            palette quantization, max compression)
-        palette_colors: Palette quantization colors (defaults to
-            config.screenshot_palette_colors, 0 to disable)
-
-    Returns:
-        PNG image bytes
-    """
+    """Render monospace text onto a dark-background image and return PNG bytes."""
     # Lazy: config resolved at call time for testability
     from .config import config
 
@@ -296,24 +208,15 @@ async def text_to_image(
     )
 
     def _render_image() -> bytes:
-        fonts = [_load_font(p, effective_font_size) for p in _FONT_PATHS]
+        font = _load_font(effective_font_size)
 
         lines = text.split("\n")
         padding = 16
 
-        # Parse lines into styled segments
         if with_ansi:
             line_segments = [_parse_ansi_line(line) for line in lines]
         else:
-            # Legacy plain text mode
-            line_segments_plain = [_split_line_segments_plain(line) for line in lines]
-            line_segments = [
-                [
-                    StyledSegment(seg_text, TextStyle(), tier)
-                    for seg_text, tier in segments
-                ]
-                for segments in line_segments_plain
-            ]
+            line_segments = [[StyledSegment(line, TextStyle())] for line in lines]
 
         # Measure text size
         dummy = Image.new("RGB", (1, 1))
@@ -323,7 +226,7 @@ async def text_to_image(
         for segments in line_segments:
             w = 0
             for seg in segments:
-                bbox = draw.textbbox((0, 0), seg.text, font=fonts[seg.font_tier])
+                bbox = draw.textbbox((0, 0), seg.text, font=font)
                 w += bbox[2] - bbox[0]
             max_width = max(max_width, w)
 
@@ -340,19 +243,14 @@ async def text_to_image(
         for segments in line_segments:
             x = padding
             for seg in segments:
-                f = fonts[seg.font_tier]
-
-                # Draw background if specified
                 if seg.style.bg_color:
-                    bbox = draw.textbbox((x, y), seg.text, font=f)
+                    bbox = draw.textbbox((x, y), seg.text, font=font)
                     draw.rectangle(
                         [bbox[0], y, bbox[2], y + line_height], fill=seg.style.bg_color
                     )
 
-                # Draw text with foreground color
-                draw.text((x, y), seg.text, fill=seg.style.fg_color, font=f)
-
-                bbox = draw.textbbox((0, 0), seg.text, font=f)
+                draw.text((x, y), seg.text, fill=seg.style.fg_color, font=font)
+                bbox = draw.textbbox((0, 0), seg.text, font=font)
                 x += bbox[2] - bbox[0]
             y += line_height
 
@@ -373,5 +271,4 @@ async def text_to_image(
                 img.save(buf, format="PNG", optimize=True)
         return buf.getvalue()
 
-    # Run CPU-intensive image rendering in thread pool
     return await asyncio.to_thread(_render_image)
