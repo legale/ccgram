@@ -247,7 +247,7 @@ class TestEmptyAndOverlongGuards:
         assert result is None
         assert client.call_count("send_message") == 0
 
-    async def test_overlong_text_truncates_under_limit(
+    async def test_overlong_text_splits_under_limit(
         self, client: FakeTelegramClient
     ) -> None:
         from ccgram.telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
@@ -256,11 +256,11 @@ class TestEmptyAndOverlongGuards:
         long_text = "x" * 8000
         await _send_with_fallback(client, 123, long_text)
 
-        last = client.last_call("send_message")
-        assert last is not None
-        sent_text = last.kwargs["text"]
-        assert len(sent_text) <= TELEGRAM_MAX_MESSAGE_LENGTH
-        assert sent_text.endswith("…")
+        calls = [c for c in client.calls if c.method == "send_message"]
+        assert len(calls) == 3
+        for call in calls:
+            assert len(call.kwargs["text"]) <= TELEGRAM_MAX_MESSAGE_LENGTH
+        assert "".join(c.kwargs["text"] for c in calls) == long_text
 
 
 class TestFallbackNoSentinelLeak:
@@ -306,18 +306,21 @@ class TestChunkedDelivery:
         assert all(p["message_thread_id"] == 42 for p in parts)
 
     async def test_safe_reply_delivers_all_parts(self):
+        from typing import Any
         from ccgram.handlers.messaging_pipeline.message_sender import safe_reply
 
-        message = _fake_message()
-        returned = _fake_message()
+        message: Any = _fake_message()
+        returned: Any = _fake_message()
         returned.chat_id = 123
         returned.message_thread_id = 42
         returned.message_id = 789
         message.reply_text.return_value = returned
         text = "z" * 7000
         await safe_reply(message, text)
-        parts = [c.kwargs["text"] if "text" in c.kwargs else c.args[0]
-                 for c in message.reply_text.await_args_list]
+        parts = [
+            c.kwargs["text"] if "text" in c.kwargs else c.args[0]
+            for c in message.reply_text.await_args_list
+        ]
         assert "".join(parts) == text
         assert len(parts) == 3
 
