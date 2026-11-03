@@ -168,7 +168,7 @@ async def test_bind_command_replies_session_name_on_success() -> None:
     reply.assert_awaited_once_with(update.message, "cc_mykey")
 
 
-async def test_new_command_creates_and_binds_session() -> None:
+async def test_new_command_creates_session_without_binding() -> None:
     from ccgram.handlers.topics import topic_binding
 
     update = MagicMock()
@@ -178,34 +178,21 @@ async def test_new_command_creates_and_binds_session() -> None:
     context = MagicMock()
     context.args = ["see"]
 
-    mock_proc = MagicMock()
-    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
-    client = MagicMock(edit_forum_topic=AsyncMock())
-
     with (
         patch.object(topic_binding.config, "is_user_allowed", return_value=True),
         patch.object(topic_binding, "get_thread_id", return_value=42),
-        patch(
-            "asyncio.create_subprocess_exec",
-            new=AsyncMock(return_value=mock_proc),
-        ) as switch,
         patch.object(
             topic_binding,
-            "ensure_topic_session",
-            new=AsyncMock(return_value=("cc_see:@1", None)),
-        ) as ensure,
-        patch.object(
-            topic_binding.tmux_manager, "topic_session_name", return_value="cc_see"
-        ),
-        patch.object(topic_binding, "PTBTelegramClient", return_value=client),
+            "_create_session",
+            new=AsyncMock(
+                return_value=(TmuxWindow("cc_see:@1", "cc_see", "/tmp"), None)
+            ),
+        ) as create_session,
         patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
     ):
         await topic_binding.new_command(update, context)
 
-    ensure.assert_awaited_once_with(1, -100, 42, "see", rebind=True)
-    switch.assert_awaited_once()
-    assert switch.await_args.args == ("tmux", "switch-client", "-t", "cc_see")
-    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="see")
+    create_session.assert_awaited_once_with("see")
     reply.assert_awaited_once_with(update.message, "cc_see")
 
 
