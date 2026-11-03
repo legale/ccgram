@@ -19,7 +19,6 @@ import structlog
 
 from telegram.error import TelegramError
 
-from .handlers.messaging_pipeline.message_queue import shutdown_workers
 from .handlers.polling.polling_coordinator import status_poll_loop
 from .session import session_manager
 from .utils import task_done_callback
@@ -129,8 +128,6 @@ async def shutdown_runtime() -> None:
             await _status_poll_task
         _status_poll_task = None
         logger.info("Status polling stopped")
-
-    await shutdown_workers()
 
     # Lazy: main → bot → bootstrap cycle (same as start path).
     from .main import stop_miniapp_if_enabled

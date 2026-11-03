@@ -20,9 +20,6 @@ from ....config import config
 from ....telegram_client import PTBTelegramClient
 from ....thread_router import thread_router
 from ....tmux_manager import tmux_manager
-from ...messaging_pipeline.message_queue import (
-    clear_tool_msg_ids_for_topic,
-)
 from ...messaging_pipeline.message_sender import rate_limit_send_message
 from ...status.topic_emoji import update_topic_emoji
 from ...status.topic_status_diff import update_topic_status_diff
@@ -90,7 +87,6 @@ async def _handle_dead_window_notification(
         return
     terminal_poll_state.clear_seen_status(wid)
 
-    clear_tool_msg_ids_for_topic(user_id, thread_id)
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
     display = thread_router.get_display_name(wid)
     client = PTBTelegramClient(bot)

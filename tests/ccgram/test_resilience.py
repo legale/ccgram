@@ -6,47 +6,7 @@ poll state cleanup, shutdown notification lifecycle.
 """
 
 import asyncio
-import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
-
-
-class TestDeadWorkerRespawn:
-    async def test_dead_worker_is_respawned(self):
-        from ccgram.handlers.messaging_pipeline.message_queue import (
-            _message_queues,
-            _queue_locks,
-            _queue_workers,
-            get_or_create_queue,
-        )
-
-        bot = MagicMock()
-        user_id = 99999
-
-        _message_queues.pop(user_id, None)
-        _queue_locks.pop(user_id, None)
-        _queue_workers.pop(user_id, None)
-
-        queue = get_or_create_queue(bot, user_id)
-        assert user_id in _queue_workers
-        first_worker = _queue_workers[user_id]
-
-        first_worker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await first_worker
-        assert first_worker.done()
-
-        queue2 = get_or_create_queue(bot, user_id)
-        assert queue2 is queue
-        second_worker = _queue_workers[user_id]
-        assert second_worker is not first_worker
-        assert not second_worker.done()
-
-        second_worker.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await second_worker
-        _message_queues.pop(user_id, None)
-        _queue_locks.pop(user_id, None)
-        _queue_workers.pop(user_id, None)
 
 
 class TestRateLimitSendLocking:

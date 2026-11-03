@@ -32,12 +32,7 @@ from .callback_helpers import get_thread_id
 from .command_history import clear_history
 from .command_meta import command
 from .live.live_view import clear_live_view
-from .messaging_pipeline.message_queue import (
-    clear_tool_msg_ids_for_topic,
-    enqueue_status_update,
-)
 from .messaging_pipeline.message_sender import safe_reply
-from .messaging_pipeline.tool_batch import clear_batch_for_topic
 from .polling.polling_state import (
     interactive_strategy,
     lifecycle_strategy,
@@ -78,8 +73,6 @@ def _clear_all_topic_state(
     # Topic scope (user_id, thread_id)
     _safe_call(clear_history, user_id, thread_id)
     _safe_call(clear_live_view, user_id, thread_id)
-    _safe_call(clear_tool_msg_ids_for_topic, user_id, thread_id)
-    _safe_call(clear_batch_for_topic, user_id, thread_id)
     _safe_call(clear_topic_status_diff_state, user_id, thread_id)
     _safe_call(lifecycle_strategy.clear_state, user_id, thread_id)
     _safe_call(lifecycle_strategy.clear_dead_notification, user_id, thread_id)
@@ -101,7 +94,7 @@ def _clear_all_topic_state(
 async def clear_topic_state(
     user_id: int,
     thread_id: int,
-    client: TelegramClient | None = None,
+    client: TelegramClient | None = None,  # noqa: ARG001 - callback API
     user_data: dict[str, Any] | None = None,  # noqa: ARG001 - callback API
     window_id: str | None = None,
     *,
@@ -125,15 +118,6 @@ async def clear_topic_state(
     qualified_id: str | None = None
     if window_id and window_dead:
         qualified_id = f"{config.tmux_session_name}:{window_id}"
-
-    if client is not None:
-        await enqueue_status_update(
-            client,
-            user_id,
-            window_id or "",
-            None,
-            thread_id=thread_id,
-        )
 
     # Direct explicit dispatch — all module-specific per-topic/window/chat state.
     # Always pass window_id so window-scope state (toolbar, monitor state, etc.) clears even when the window is still alive.
@@ -195,7 +179,6 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     session.topic_ref = None
-    await enqueue_status_update(client, user.id, window_id, None, thread_id)
     await clear_topic_state(
         user.id,
         thread_id,
