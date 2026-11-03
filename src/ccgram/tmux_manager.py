@@ -81,6 +81,7 @@ class PaneInfo:
     path: str  # Working directory
     width: int
     height: int
+    dead: bool = False
 
 
 @dataclass
@@ -777,9 +778,12 @@ class TmuxManager:
         tracked = self._sidecar_panes.get(window_id)
         if tracked:
             panes = await self.list_panes(window_id)
-            if any(p.pane_id == tracked for p in panes):
+            tracked_pane = next((p for p in panes if p.pane_id == tracked), None)
+            if tracked_pane is not None and not tracked_pane.dead:
                 logger.info("Sidecar is already running in %s", tracked)
                 return None, None
+            if tracked_pane is not None:
+                await self.kill_pane(tracked, window_id=window_id)
             self.forget_sidecar_pane(window_id)
 
         panes = await self.list_panes(window_id)
@@ -793,7 +797,7 @@ class TmuxManager:
 
         session_name, wid = self._split_qualified(window_id)
         target = f"{session_name}:{wid}" if session_name else wid
-        marker = f"__CCGRAM_SIDECAR_DONE_{uuid4().hex}__"
+        marker = f"__CCG_DONE_{uuid4().hex[:12]}__"
         wrapped = (
             "tmux set-option -p -t \"$TMUX_PANE\" remain-on-exit on "
             "2>/dev/null || true; "
@@ -893,6 +897,7 @@ class TmuxManager:
                             path=pane.pane_current_path or "",
                             width=int(pane.pane_width or 0),
                             height=int(pane.pane_height or 0),
+                            dead=getattr(pane, "pane_dead", "0") == "1",
                         )
                     )
                 return result
