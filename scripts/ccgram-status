@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+printf 'enabled='
+systemctl --user is-enabled ccgram.service || true
+printf 'active='
+systemctl --user is-active ccgram.service || true
+printf '\n'
+
+if [ -r "$HOME/.ccgram/.env" ]; then
+  set -a
+  . "$HOME/.ccgram/.env"
+  set +a
+  tmux_session_name=${TMUX_SESSION_NAME:-ccgram}
+  "$HOME/venv/bin/ccgram" status || true
+  printf '\n'
+  if tmux has-session -t "$tmux_session_name" 2>/dev/null; then
+    tmux list-windows -t "$tmux_session_name"
+  else
+    printf 'tmux session not found: %s\n' "$tmux_session_name"
+  fi
+fi

@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+REPO_DIR=/home/ruslan/ccgram
+VENV_DIR="$HOME/venv"
+PYTHON="$VENV_DIR/bin/python"
+
+if [ ! -f "$REPO_DIR/pyproject.toml" ]; then
+    echo "ccgram source tree not found: $REPO_DIR" >&2
+    exit 1
+fi
+
+"$PYTHON" -m pip install --no-deps -q --editable "$REPO_DIR"
+
+installed_path=$(
+    REPO_DIR="$REPO_DIR" "$PYTHON" -c '
+import os
+from pathlib import Path
+import ccgram
+
+source = Path(os.environ["REPO_DIR"]).resolve()
+loaded = Path(ccgram.__file__).resolve()
+if source not in loaded.parents:
+    raise SystemExit(f"ccgram loaded from {loaded}, expected under {source}")
+print(loaded)
+'
+)
+
+systemctl --user restart ccgram.service
+systemctl --user is-active --quiet ccgram.service
+echo "Switched to custom ccgram (/home/ruslan/ccgram)"
+echo "Loaded local source: $installed_path"
+"$HOME/bin/ccgram-status"

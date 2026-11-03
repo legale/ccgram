@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+exec journalctl --user -u ccgram.service -f

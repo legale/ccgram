@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+systemctl --user stop ccgram.service
+
+if [ -r "$HOME/.ccgram/.env" ]; then
+  set -a
+  . "$HOME/.ccgram/.env"
+  set +a
+  tmux_session_name=${TMUX_SESSION_NAME:-ccgram}
+  tmux kill-session -t "$tmux_session_name" 2>/dev/null || true
+fi

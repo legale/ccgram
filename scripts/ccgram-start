@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+systemctl --user daemon-reload
+systemctl --user enable --now ccgram.service
+systemctl --user is-enabled ccgram.service
+systemctl --user is-active ccgram.service
