@@ -281,6 +281,23 @@ async def test_capture_pane_with_ansi(tmux, tmp_path) -> None:
     assert "red" in ansi
 
 
+async def test_capture_pane_can_include_history(tmux, tmp_path) -> None:
+    ok, _msg, _name, window_id = await tmux.create_window(
+        str(tmp_path), window_name="history-test", start_agent=False
+    )
+    assert ok
+
+    await tmux.send_keys(window_id, "yes HISTORY-MARKER | head -80")
+    await asyncio.sleep(0.5)
+
+    visible = await tmux.capture_pane(window_id, with_ansi=True)
+    history = await tmux.capture_pane(window_id, with_ansi=True, include_history=True)
+    assert visible is not None
+    assert history is not None
+    assert len(history.splitlines()) > len(visible.splitlines())
+    assert "HISTORY-MARKER" in history
+
+
 async def test_create_window_does_not_inject_environment_commands(
     tmux, tmp_path
 ) -> None:

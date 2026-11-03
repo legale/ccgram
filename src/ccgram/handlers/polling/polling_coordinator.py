@@ -56,6 +56,7 @@ async def _handle_dead_session(
         mark_dead_notified,
         start_autoclose_timer,
     )
+
     # Lazy: message_sender helpers resolved at tick time
     from ..messaging_pipeline.message_sender import rate_limit_send_message
 
@@ -95,7 +96,9 @@ async def _poll_window(
             wid, str(Path(window.cwd).expanduser().resolve())
         )
 
-    pane_text = await tmux_manager.capture_pane(window.window_id, with_ansi=True)
+    pane_text = await tmux_manager.capture_pane(
+        window.window_id, with_ansi=True, include_history=True
+    )
     if not pane_text:
         return
 
@@ -112,7 +115,10 @@ async def _poll_window(
         sidecar_pane_id = tmux_manager.get_sidecar_pane_id(wid)
         if isinstance(sidecar_pane_id, str) and sidecar_pane_id:
             sidecar_text = await tmux_manager.capture_pane_by_id(
-                sidecar_pane_id, with_ansi=True, window_id=wid
+                sidecar_pane_id,
+                with_ansi=True,
+                include_history=True,
+                window_id=wid,
             )
             if sidecar_text is not None:
                 await update_topic_status_diff(
@@ -150,8 +156,10 @@ async def status_poll_loop(bot: "Bot") -> None:
     """Background task to poll terminal status for all thread-bound windows."""
     # Lazy: config resolved at runtime
     from ...config import config as _cfg
+
     # Lazy: PTBTelegramClient resolved at runtime
     from ...telegram_client import PTBTelegramClient
+
     # Lazy: periodic_tasks cycle avoidance
     from .periodic_tasks import run_lifecycle_tasks, run_periodic_tasks
 

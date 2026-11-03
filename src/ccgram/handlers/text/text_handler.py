@@ -246,7 +246,10 @@ async def _handle_sidecar_command(
     async def _quick_sidecar_tick() -> None:
         await asyncio.sleep(0.3)
         text = await tmux_manager.capture_pane_by_id(
-            sidecar_pane_id, with_ansi=True, window_id=window_id
+            sidecar_pane_id,
+            with_ansi=True,
+            include_history=True,
+            window_id=window_id,
         )
         if text:
             await update_topic_status_diff(

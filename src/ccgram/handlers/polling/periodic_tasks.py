@@ -101,7 +101,9 @@ async def _bind_runtime(
         )
 
     if changed:
-        pane_text = await tmux_manager.capture_pane(session.window_id, with_ansi=True)
+        pane_text = await tmux_manager.capture_pane(
+            session.window_id, with_ansi=True, include_history=True
+        )
         if pane_text:
             prime_topic_status_diff(chat_id, thread_id, session.window_id, pane_text)
     return changed

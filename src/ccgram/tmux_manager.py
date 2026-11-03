@@ -407,12 +407,19 @@ class TmuxManager:
                 )
         return None
 
-    async def capture_pane(self, window_id: str, with_ansi: bool = False) -> str | None:
-        """Capture the visible text content of a window's active pane.
+    async def capture_pane(
+        self,
+        window_id: str,
+        with_ansi: bool = False,
+        *,
+        include_history: bool = False,
+    ) -> str | None:
+        """Capture text content of a window's active pane.
 
         Args:
             window_id: The window ID to capture
             with_ansi: If True, capture with ANSI color codes
+            include_history: If True, capture the tmux scrollback buffer too
 
         Returns:
             The captured text (stripped of trailing whitespace),
@@ -423,9 +430,13 @@ class TmuxManager:
             await self._ensure_managed_window_size(session_name, pane_id)
 
         if with_ansi:
-            return await self._capture_pane_ansi(window_id)
+            return await self._capture_pane_ansi(
+                window_id, include_history=include_history
+            )
 
-        return await self._capture_pane_plain(window_id)
+        return await self._capture_pane_plain(
+            window_id, include_history=include_history
+        )
 
     async def _ensure_managed_window_size(
         self, session_name: str, window_id: str
@@ -491,17 +502,19 @@ class TmuxManager:
             logger.exception("Unexpected error capturing pane raw %s", window_id)
             return None
 
-    async def _capture_pane_ansi(self, window_id: str) -> str | None:
+    async def _capture_pane_ansi(
+        self, window_id: str, *, include_history: bool = False
+    ) -> str | None:
         """Capture pane with ANSI colors via tmux subprocess."""
         proc: asyncio.subprocess.Process | None = None
         try:
+            args = ["capture-pane", "-e", "-p"]
+            if include_history:
+                args.extend(["-S", "-"])
+            args.extend(["-t", window_id])
             proc = await asyncio.create_subprocess_exec(
                 "tmux",
-                "capture-pane",
-                "-e",
-                "-p",
-                "-t",
-                window_id,
+                *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -524,7 +537,9 @@ class TmuxManager:
             logger.exception("Unexpected error capturing pane %s", window_id)
             return None
 
-    async def _capture_pane_plain(self, window_id: str) -> str | None:
+    async def _capture_pane_plain(
+        self, window_id: str, *, include_history: bool = False
+    ) -> str | None:
         """Capture pane as plain text via libtmux.
 
         Foreign windows (emdash) are captured via subprocess instead.
@@ -542,7 +557,8 @@ class TmuxManager:
                 pane = window.active_pane
                 if not pane:
                     return None
-                lines = pane.capture_pane()
+                start = "-" if include_history else None
+                lines = pane.capture_pane(start=start)
                 text = "\n".join(lines) if isinstance(lines, list) else str(lines)
                 text = text.rstrip()
                 return text if text else None
@@ -832,15 +848,18 @@ class TmuxManager:
         pane_id: str,
         *,
         with_ansi: bool = False,
+        include_history: bool = False,
         window_id: str | None = None,
     ) -> str | None:
-        """Capture visible text of a specific pane (by stable pane ID like '%3').
+        """Capture text of a specific pane (by stable pane ID like '%3').
 
         Unlike capture_pane() which targets the active pane of a window,
         this targets a specific pane regardless of whether it is active.
 
         When window_id is given, the pane must belong to that window (prevents
         cross-window access via crafted pane IDs).
+
+        When include_history is True, the tmux scrollback buffer is included.
         """
         if window_id:
             session_name, window = self._split_qualified(window_id)
@@ -853,7 +872,9 @@ class TmuxManager:
                 if not any(p.pane_id == pane_id for p in panes):
                     logger.warning("Pane %s not found in window %s", pane_id, window_id)
                     return None
-            return await self._capture_pane_ansi(pane_id)
+            return await self._capture_pane_ansi(
+                pane_id, include_history=include_history
+            )
 
         def _sync_capture() -> str | None:
             session_name, wid = (
@@ -866,7 +887,8 @@ class TmuxManager:
                 pane = self._find_pane(pane_id, session, window_id=wid)
                 if not pane:
                     return None
-                lines = pane.capture_pane()
+                start = "-" if include_history else None
+                lines = pane.capture_pane(start=start)
                 text = "\n".join(lines) if isinstance(lines, list) else str(lines)
                 text = text.rstrip()
                 return text if text else None

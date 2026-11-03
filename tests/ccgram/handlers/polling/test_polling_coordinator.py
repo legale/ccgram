@@ -14,7 +14,9 @@ from ccgram.tmux_manager import TmuxWindow
 from tests.ccgram._helpers import FakeTelegramClient
 
 
-def _make_window(window_id: str, window_name: str = "test", cwd: str = "/tmp") -> TmuxWindow:
+def _make_window(
+    window_id: str, window_name: str = "test", cwd: str = "/tmp"
+) -> TmuxWindow:
     return TmuxWindow(window_id=window_id, window_name=window_name, cwd=cwd)
 
 
@@ -26,8 +28,12 @@ class TestPollSessions:
         window_lookup = {"s1:@1": window}
 
         with (
-            patch("ccgram.handlers.polling.polling_coordinator.tmux_manager") as mock_tm,
-            patch("ccgram.handlers.polling.polling_coordinator.thread_router") as mock_tr,
+            patch(
+                "ccgram.handlers.polling.polling_coordinator.tmux_manager"
+            ) as mock_tm,
+            patch(
+                "ccgram.handlers.polling.polling_coordinator.thread_router"
+            ) as mock_tr,
             patch(
                 "ccgram.handlers.status.topic_status_diff.update_topic_status_diff",
                 new_callable=AsyncMock,
@@ -42,8 +48,12 @@ class TestPollSessions:
             await poll_sessions(client, bindings, window_lookup)
 
             mock_set_cwd.assert_called_once()
-            mock_tm.capture_pane.assert_awaited_once_with("s1:@1", with_ansi=True)
-            mock_diff.assert_awaited_once_with(client, -100, 100, "s1:@1", "bash$ echo hi\n")
+            mock_tm.capture_pane.assert_awaited_once_with(
+                "s1:@1", with_ansi=True, include_history=True
+            )
+            mock_diff.assert_awaited_once_with(
+                client, -100, 100, "s1:@1", "bash$ echo hi\n"
+            )
 
     async def test_dead_window_sends_notification(self):
         client = AsyncMock()
@@ -51,11 +61,22 @@ class TestPollSessions:
         window_lookup: dict[str, TmuxWindow] = {}
 
         with (
-            patch("ccgram.handlers.polling.polling_coordinator.tmux_manager") as mock_tm,
-            patch("ccgram.handlers.polling.polling_coordinator.thread_router") as mock_tr,
-            patch("ccgram.handlers.topics.topic_lifecycle.is_dead_notified", return_value=False),
-            patch("ccgram.handlers.topics.topic_lifecycle.mark_dead_notified") as mock_mark,
-            patch("ccgram.handlers.topics.topic_lifecycle.start_autoclose_timer") as mock_timer,
+            patch(
+                "ccgram.handlers.polling.polling_coordinator.tmux_manager"
+            ) as mock_tm,
+            patch(
+                "ccgram.handlers.polling.polling_coordinator.thread_router"
+            ) as mock_tr,
+            patch(
+                "ccgram.handlers.topics.topic_lifecycle.is_dead_notified",
+                return_value=False,
+            ),
+            patch(
+                "ccgram.handlers.topics.topic_lifecycle.mark_dead_notified"
+            ) as mock_mark,
+            patch(
+                "ccgram.handlers.topics.topic_lifecycle.start_autoclose_timer"
+            ) as mock_timer,
             patch(
                 "ccgram.handlers.messaging_pipeline.message_sender.rate_limit_send_message",
                 new_callable=AsyncMock,
