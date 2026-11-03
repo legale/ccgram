@@ -179,6 +179,60 @@ async def ensure_topic_session(  # noqa: C901, PLR0911, PLR0912
     ), None
 
 
+@command("new", "Create tmux session", params="<key>")
+async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//new key`` — create and bind a new tmux session."""
+    user = update.effective_user
+    message = update.message
+    chat = update.effective_chat
+    if not user or not config.is_user_allowed(user.id) or not message or not chat:
+        return
+
+    thread_id = get_thread_id(update)
+    if thread_id is None:
+        await safe_reply(message, "Error: not inside a topic")
+        return
+
+    args = list(context.args or [])
+    if len(args) != 1 or not _valid_name(args[0].strip()):  # noqa: PLR2004
+        await safe_reply(message, "Usage: //new <key>")
+        return
+
+    name = args[0].strip()
+    window_id, error = await ensure_topic_session(
+        user.id,
+        chat.id,
+        thread_id,
+        name,
+        rebind=True,
+    )
+    if error or not window_id:
+        await safe_reply(message, error or "Failed to create tmux session.")
+        return
+
+    target = tmux_manager.topic_session_name(name)
+    switch_proc = await asyncio.create_subprocess_exec(
+        "tmux",
+        "switch-client",
+        "-t",
+        target,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    await switch_proc.communicate()
+
+    client = PTBTelegramClient(context.bot)
+    try:
+        await client.edit_forum_topic(chat.id, thread_id, name=name)
+    except BadRequest as exc:
+        if "topic_not_modified" not in exc.message.lower():
+            logger.warning("Topic rename failed on //new: %s", exc)
+    except TelegramError as exc:
+        logger.warning("Topic rename failed on //new: %s", exc)
+
+    await safe_reply(message, target)
+
+
 @command("bind", "Bind topic to session", params="<key>")
 async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """``//bind key`` — attach to prefix_key session and bind the topic."""
@@ -345,4 +399,4 @@ async def rename_command(  # noqa: C901
     await safe_reply(message, f"{target} (топик: {name})")
 
 
-COMMAND_HANDLERS = (bind_command, rename_command)
+COMMAND_HANDLERS = (new_command, bind_command, rename_command)

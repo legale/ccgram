@@ -168,6 +168,47 @@ async def test_bind_command_replies_session_name_on_success() -> None:
     reply.assert_awaited_once_with(update.message, "cc_mykey")
 
 
+async def test_new_command_creates_and_binds_session() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//new see"
+    update.effective_chat.id = -100
+    context = MagicMock()
+    context.args = ["see"]
+
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    client = MagicMock(edit_forum_topic=AsyncMock())
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=mock_proc),
+        ) as switch,
+        patch.object(
+            topic_binding,
+            "ensure_topic_session",
+            new=AsyncMock(return_value=("cc_see:@1", None)),
+        ) as ensure,
+        patch.object(
+            topic_binding.tmux_manager, "topic_session_name", return_value="cc_see"
+        ),
+        patch.object(topic_binding, "PTBTelegramClient", return_value=client),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.new_command(update, context)
+
+    ensure.assert_awaited_once_with(1, -100, 42, "see", rebind=True)
+    switch.assert_awaited_once()
+    assert switch.await_args.args == ("tmux", "switch-client", "-t", "cc_see")
+    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="see")
+    reply.assert_awaited_once_with(update.message, "cc_see")
+
+
 async def test_bind_command_replies_error_when_session_not_found() -> None:
     from ccgram.handlers.topics import topic_binding
 
@@ -233,9 +274,19 @@ async def test_rename_command_success() -> None:
     with (
         patch.object(topic_binding.config, "is_user_allowed", return_value=True),
         patch.object(topic_binding, "get_thread_id", return_value=42),
-        patch.object(topic_binding, "find_topic_session", new=AsyncMock(return_value=session)),
-        patch.object(topic_binding.tmux_manager, "rename_session", new=AsyncMock(return_value=True)) as mock_rename,
-        patch.object(topic_binding.tmux_manager, "set_session_topic", new=AsyncMock(return_value=True)),
+        patch.object(
+            topic_binding, "find_topic_session", new=AsyncMock(return_value=session)
+        ),
+        patch.object(
+            topic_binding.tmux_manager,
+            "rename_session",
+            new=AsyncMock(return_value=True),
+        ) as mock_rename,
+        patch.object(
+            topic_binding.tmux_manager,
+            "set_session_topic",
+            new=AsyncMock(return_value=True),
+        ),
         patch.object(topic_binding, "PTBTelegramClient", return_value=client_mock),
         patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
     ):
@@ -263,4 +314,3 @@ async def test_rename_command_usage_when_empty_args() -> None:
         await topic_binding.rename_command(update, context)
 
     reply.assert_awaited_once_with(update.message, "Usage: /rename <new_name>")
-

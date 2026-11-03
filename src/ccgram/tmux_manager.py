@@ -14,7 +14,9 @@ Key class: TmuxManager (singleton instantiated as `tmux_manager`).
 
 import asyncio
 import contextlib
+import shlex
 import subprocess
+from uuid import uuid4
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -89,6 +91,7 @@ class TmuxManager:
         self.session_name = session_name or config.tmux_session_name
         self._server: libtmux.Server | None = None
         self._sidecar_panes: dict[str, str] = {}
+        self._sidecar_completion_markers: dict[str, str] = {}
 
     @property
     def server(self) -> libtmux.Server:
@@ -734,6 +737,11 @@ class TmuxManager:
     def forget_sidecar_pane(self, window_id: str) -> None:
         """Remove tracked sidecar pane for a window."""
         self._sidecar_panes.pop(window_id, None)
+        self._sidecar_completion_markers.pop(window_id, None)
+
+    def get_sidecar_completion_marker(self, window_id: str) -> str | None:
+        """Get the completion marker for the active sidecar command."""
+        return self._sidecar_completion_markers.get(window_id)
 
     async def ensure_sidecar_pane(self, window_id: str) -> str | None:
         """Ensure a sidecar pane exists for the window, strictly enforcing max 2 panes.
@@ -806,6 +814,60 @@ class TmuxManager:
             return None
 
         return None
+
+    async def send_sidecar_command(
+        self,
+        pane_id: str,
+        command: str,
+        *,
+        window_id: str | None = None,
+    ) -> tuple[bool, str | None]:
+        """Run a command and append a unique marker when it finishes.
+
+        The command runs in a child shell so commands such as ``exit`` cannot
+        prevent the marker from being emitted by the sidecar shell.
+        """
+        marker = f"__CCGRAM_SIDECAR_DONE_{uuid4().hex}__"
+        wrapped = (
+            f"/bin/sh -c {shlex.quote(command)}; "
+            f"_ccgram_status=$?; printf '\\n%s:%s\\n' "
+            f'{shlex.quote(marker)} "$_ccgram_status"'
+        )
+        sent = await self.send_keys_to_pane(
+            pane_id,
+            wrapped,
+            enter=True,
+            literal=True,
+            window_id=window_id,
+        )
+        if not sent:
+            return False, None
+        if window_id is not None:
+            self._sidecar_completion_markers[window_id] = marker
+        return True, marker
+
+    async def kill_pane(self, pane_id: str, *, window_id: str | None = None) -> bool:
+        """Kill a pane by its stable ID without killing its tmux window."""
+
+        def _sync_kill() -> bool:
+            session_name, wid = (
+                self._split_qualified(window_id) if window_id else (None, None)
+            )
+            session = self.get_session(session_name)
+            if not session:
+                return False
+            try:
+                pane = self._find_pane(pane_id, session, window_id=wid)
+                if not pane:
+                    return False
+                pane.kill()
+                logger.info("Killed pane %s", pane_id)
+                return True
+            except _TmuxError:
+                logger.exception("Failed to kill pane %s", pane_id)
+                return False
+
+        return await asyncio.to_thread(_sync_kill)
 
     async def list_panes(self, window_id: str) -> list[PaneInfo]:
         """List all panes in a window.

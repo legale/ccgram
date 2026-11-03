@@ -165,9 +165,9 @@ async def test_handle_sidecar_command_execution() -> None:
             new=AsyncMock(return_value="%2"),
         ) as ensure_pane,
         patch(
-            "ccgram.tmux_manager.tmux_manager.send_keys_to_pane",
-            new=AsyncMock(return_value=True),
-        ) as send_keys,
+            "ccgram.tmux_manager.tmux_manager.send_sidecar_command",
+            new=AsyncMock(return_value=(True, "marker")),
+        ) as send_command,
         patch(
             "ccgram.handlers.status.topic_status_diff.start_sidecar_diff"
         ) as start_diff,
@@ -185,7 +185,5 @@ async def test_handle_sidecar_command_execution() -> None:
     ensure_pane.assert_awaited_once_with("cc_foo:@1")
     start_diff.assert_called_once()
     assert "⚡ Sidecar: git status" in start_diff.call_args.kwargs["title"]
-    send_keys.assert_awaited_once_with(
-        "%2", "git status", enter=True, literal=True, window_id="cc_foo:@1"
-    )
+    send_command.assert_awaited_once_with("%2", "git status", window_id="cc_foo:@1")
     ack.assert_awaited_once_with(client, -100, 999)

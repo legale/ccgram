@@ -106,6 +106,12 @@ def test_find_handler_help_alias():
     assert _match("help")[0] is commands_command
 
 
+def test_find_handler_new():
+    from ccgram.handlers.topics.topic_binding import new_command
+
+    assert _match("new")[0] is new_command
+
+
 def test_find_handler_ses_alias():
     from ccgram.handlers.sessions_dashboard import sessions_command
 
@@ -140,6 +146,7 @@ def test_command_metadata_is_attached_to_handlers():
         "screenshot",
         "live",
         "sessions",
+        "new",
         "bind",
         "rename",
         "unbind",

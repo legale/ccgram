@@ -7,6 +7,7 @@ from telegram.error import TelegramError
 
 from ccgram.handlers.polling.polling_coordinator import (
     _BACKOFF_MIN,
+    _sidecar_command_completed,
     poll_sessions,
     status_poll_loop,
 )
@@ -21,6 +22,14 @@ def _make_window(
 
 
 class TestPollSessions:
+    def test_sidecar_completion_ignores_marker_in_shell_echo(self):
+        marker = "__CCGRAM_SIDECAR_DONE_marker__"
+
+        assert not _sidecar_command_completed(
+            f"$ printf '%s:%s' {marker} \"$status\"", marker
+        )
+        assert _sidecar_command_completed(f"{marker}:1", marker)
+
     async def test_active_window_updates_status_diff(self):
         client = FakeTelegramClient()
         window = _make_window("s1:@1", "s1", cwd="/tmp/project")
@@ -91,6 +100,50 @@ class TestPollSessions:
             mock_timer.assert_called_once()
             mock_send.assert_awaited_once()
             mock_mark.assert_called_once_with(1, 100, "dead:@1")
+
+    async def test_completed_sidecar_is_shown_then_closed(self):
+        client = FakeTelegramClient()
+        window = _make_window("s1:@1", "s1", cwd="/tmp/project")
+        bindings = [(1, 100, "s1:@1")]
+        window_lookup = {"s1:@1": window}
+        marker = "__CCGRAM_SIDECAR_DONE_marker__"
+
+        with (
+            patch(
+                "ccgram.handlers.polling.polling_coordinator.tmux_manager"
+            ) as mock_tm,
+            patch(
+                "ccgram.handlers.polling.polling_coordinator.thread_router"
+            ) as mock_tr,
+            patch(
+                "ccgram.handlers.status.topic_status_diff.update_topic_status_diff",
+                new_callable=AsyncMock,
+            ) as mock_diff,
+            patch("ccgram.session.session_manager.set_window_cwd"),
+            patch("ccgram.config.config.topic_status_diff_enabled", True),
+        ):
+            mock_tm.capture_pane = AsyncMock(return_value="bash$ echo hi\n")
+            mock_tm.get_sidecar_pane_id.return_value = "%2"
+            mock_tm.capture_pane_by_id = AsyncMock(
+                return_value=f"bash$ command\noutput\n{marker}:0\n"
+            )
+            mock_tm.get_sidecar_completion_marker.return_value = marker
+            mock_tm.kill_pane = AsyncMock(return_value=True)
+            mock_tr.resolve_chat_id.return_value = -100
+
+            await poll_sessions(client, bindings, window_lookup)
+
+            mock_diff.assert_any_await(
+                client,
+                -100,
+                100,
+                "s1:@1",
+                "bash$ command\noutput",
+                target="sidecar",
+                force=True,
+            )
+            mock_tm.kill_pane.assert_awaited_once_with("%2", window_id="s1:@1")
+            mock_tm.forget_sidecar_pane.assert_called_once_with("s1:@1")
 
 
 class TestStatusPollLoop:

@@ -252,6 +252,7 @@ async def update_topic_status_diff(
     *,
     target: str = "main",
     active: bool = True,
+    force: bool = False,
 ) -> None:
     if not config.topic_status_diff_enabled or not pane_text or not active:
         return
@@ -310,7 +311,7 @@ async def update_topic_status_diff(
     if text == state.last_display_text:
         return
 
-    if now - state.last_edit_ts < config.topic_status_diff_interval:
+    if not force and now - state.last_edit_ts < config.topic_status_diff_interval:
         return
 
     if await _edit_or_send(client, chat_id, thread_id, state, text):

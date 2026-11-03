@@ -135,6 +135,30 @@ async def test_ensure_sidecar_pane_enforces_max_two_panes_by_killing_excess() ->
 async def test_forget_sidecar_pane() -> None:
     tm = TmuxManager("test-session")
     tm._sidecar_panes["@1"] = "%2"
+    tm._sidecar_completion_markers["@1"] = "marker"
     assert tm.get_sidecar_pane_id("@1") == "%2"
+    assert tm.get_sidecar_completion_marker("@1") == "marker"
     tm.forget_sidecar_pane("@1")
     assert tm.get_sidecar_pane_id("@1") is None
+    assert tm.get_sidecar_completion_marker("@1") is None
+
+
+async def test_send_sidecar_command_tracks_completion_marker() -> None:
+    tm = TmuxManager("test-session")
+
+    with patch.object(
+        tm, "send_keys_to_pane", new=AsyncMock(return_value=True)
+    ) as send:
+        sent, marker = await tm.send_sidecar_command(
+            "%2", "echo 'hello world'", window_id="@1"
+        )
+
+    assert sent is True
+    assert marker is not None
+    assert tm.get_sidecar_completion_marker("@1") == marker
+    send.assert_awaited_once()
+    wrapped = send.await_args.args[1]
+    assert "/bin/sh -c" in wrapped
+    assert "echo" in wrapped
+    assert "hello world" in wrapped
+    assert marker in wrapped

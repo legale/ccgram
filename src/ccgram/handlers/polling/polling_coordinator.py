@@ -35,6 +35,23 @@ _BACKOFF_MAX = 30.0
 _LoopError = (TelegramError, OSError, RuntimeError, ValueError)
 
 
+def _is_sidecar_completion_line(line: str, marker: str) -> bool:
+    status = line.strip().removeprefix(f"{marker}:")
+    return status != line.strip() and status.isdigit()
+
+
+def _sidecar_command_completed(text: str, marker: str) -> bool:
+    return any(_is_sidecar_completion_line(line, marker) for line in text.splitlines())
+
+
+def _remove_sidecar_completion_marker(text: str, marker: str) -> str:
+    return "\n".join(
+        line
+        for line in text.splitlines()
+        if not _is_sidecar_completion_line(line, marker)
+    ).rstrip()
+
+
 def _as_client(bot_or_client: Any) -> "TelegramClient":
     # Lazy: avoid circular/early PTB load
     from ...telegram_client import PTBTelegramClient, TelegramClient
@@ -99,33 +116,50 @@ async def _poll_window(
     pane_text = await tmux_manager.capture_pane(
         window.window_id, with_ansi=True, include_history=True
     )
-    if not pane_text:
-        return
-
     # Lazy: config resolved at tick time
     from ...config import config
 
-    if config.topic_status_diff_enabled:
-        # Lazy: diff updater resolved at tick time
-        from ..status.topic_status_diff import update_topic_status_diff
+    # Lazy: diff updater resolved at tick time
+    from ..status.topic_status_diff import update_topic_status_diff
 
-        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+    if config.topic_status_diff_enabled and pane_text:
         await update_topic_status_diff(client, chat_id, thread_id, wid, pane_text)
 
-        sidecar_pane_id = tmux_manager.get_sidecar_pane_id(wid)
-        if isinstance(sidecar_pane_id, str) and sidecar_pane_id:
-            sidecar_text = await tmux_manager.capture_pane_by_id(
-                sidecar_pane_id,
-                with_ansi=True,
-                include_history=True,
-                window_id=wid,
+    sidecar_pane_id = tmux_manager.get_sidecar_pane_id(wid)
+    if isinstance(sidecar_pane_id, str) and sidecar_pane_id:
+        sidecar_text = await tmux_manager.capture_pane_by_id(
+            sidecar_pane_id,
+            with_ansi=True,
+            include_history=True,
+            window_id=wid,
+        )
+        if sidecar_text is not None:
+            marker = tmux_manager.get_sidecar_completion_marker(wid)
+            completed = bool(
+                marker and _sidecar_command_completed(sidecar_text, marker)
             )
-            if sidecar_text is not None:
+            if completed and marker is not None:
+                sidecar_text = _remove_sidecar_completion_marker(sidecar_text, marker)
+            if config.topic_status_diff_enabled:
                 await update_topic_status_diff(
-                    client, chat_id, thread_id, wid, sidecar_text, target="sidecar"
+                    client,
+                    chat_id,
+                    thread_id,
+                    wid,
+                    sidecar_text,
+                    target="sidecar",
+                    force=completed,
                 )
-            else:
-                tmux_manager.forget_sidecar_pane(wid)
+            if completed:
+                killed = await tmux_manager.kill_pane(
+                    sidecar_pane_id,
+                    window_id=wid,
+                )
+                if killed:
+                    tmux_manager.forget_sidecar_pane(wid)
+        else:
+            tmux_manager.forget_sidecar_pane(wid)
 
 
 async def poll_sessions(

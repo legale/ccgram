@@ -24,6 +24,14 @@ from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..sessions_dashboard import apply_session_rename
 
 logger = structlog.get_logger()
+
+
+def _is_sidecar_completion_line(line: str, marker: str) -> bool:
+    stripped = line.strip()
+    status = stripped.removeprefix(f"{marker}:")
+    return status != stripped and status.isdigit()
+
+
 if TYPE_CHECKING:
     from telegram import Bot, Chat
     from telegram.ext import ContextTypes
@@ -228,11 +236,9 @@ async def _handle_sidecar_command(
         title=title,
     )
 
-    sent = await tmux_manager.send_keys_to_pane(
+    sent, _marker = await tmux_manager.send_sidecar_command(
         sidecar_pane_id,
         command,
-        enter=True,
-        literal=True,
         window_id=window_id,
     )
     if not sent:
@@ -252,6 +258,14 @@ async def _handle_sidecar_command(
             window_id=window_id,
         )
         if text:
+            if _marker and any(
+                _is_sidecar_completion_line(line, _marker) for line in text.splitlines()
+            ):
+                text = "\n".join(
+                    line
+                    for line in text.splitlines()
+                    if not _is_sidecar_completion_line(line, _marker)
+                ).rstrip()
             await update_topic_status_diff(
                 client, chat_id, thread_id, window_id, text, target="sidecar"
             )
