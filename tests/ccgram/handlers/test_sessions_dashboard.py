@@ -29,6 +29,7 @@ def _patch_deps():
         router.get_display_name.side_effect = lambda wid: wid
         router.iter_thread_bindings.return_value = []
         tmux.list_sessions = AsyncMock(return_value=[])
+        tmux.set_session_topic = AsyncMock()
         tmux.topic_name_from_session_name.side_effect = lambda name: name
         tmux.topic_session_name.side_effect = lambda name: f"cc_{name}"
         config.tmux_session_prefix = "cc_"
@@ -67,8 +68,8 @@ class TestBuildDashboard:
 
         text, keyboard = await _build_dashboard(100)
 
-        assert "+ cc_foo /work/foo" in text
-        assert "o cc_bar /work/bar" in text
+        assert "+ cc_foo — /work/foo" in text
+        assert "o cc_bar — /work/bar" in text
 
     async def test_actions_use_managed_window_id(self, _patch_deps) -> None:
         router, tmux, _config = _patch_deps
@@ -76,12 +77,12 @@ class TestBuildDashboard:
         tmux.list_sessions.return_value = [_session("cc_foo", wid="@7")]
 
         _text, keyboard = await _build_dashboard(100)
-        name_row, actions_row = keyboard.inline_keyboard
+        session_row = keyboard.inline_keyboard[0]
 
-        assert name_row[0].text == "+ cc_foo"
-        assert name_row[0].callback_data == f"{CB_SESSIONS_RENAME}cc_foo:@7"
-        assert actions_row[0].callback_data == f"{CB_SESSIONS_SCREENSHOT}cc_foo:@7"
-        assert actions_row[1].callback_data == "sess:kill:cc_foo:@7"
+        assert session_row[0].text == "✏️ cc_foo"
+        assert session_row[0].callback_data == f"{CB_SESSIONS_RENAME}cc_foo:@7"
+        assert session_row[1].callback_data == f"{CB_SESSIONS_SCREENSHOT}cc_foo:@7"
+        assert session_row[2].callback_data == "sess:kill:cc_foo:@7"
 
 
 class TestSessionsKill:
@@ -225,6 +226,8 @@ class TestRename:
             "_session_rename_thread_id": 42,
         }
         message = AsyncMock()
+        bot = AsyncMock()
+        message.get_bot = MagicMock(return_value=bot)
 
         with patch(
             "ccgram.handlers.sessions_dashboard.safe_reply", new_callable=AsyncMock

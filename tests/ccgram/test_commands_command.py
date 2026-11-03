@@ -55,7 +55,7 @@ class TestCommandsCommand:
 
         mock_reply.assert_called_once()
         text = mock_reply.call_args.args[1]
-        assert "Команды бота" in text
+        assert "Bot commands" in text
         assert "//commands" in text
         assert "//screenshot" in text
         assert "//live" in text

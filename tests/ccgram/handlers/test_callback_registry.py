@@ -234,8 +234,8 @@ class TestLoadHandlers:
         prefixes = set(_registry.keys())
         assert len(prefixes) > 0
         for expected in (
-            "sh:",
             "sess:",
+            "lv:",
         ):
             assert any(p.startswith(expected) for p in prefixes), (
                 f"expected prefix starting with {expected!r} in registry"
@@ -245,7 +245,6 @@ class TestLoadHandlers:
         load_handlers()
         expected_modules = [
             "ccgram.handlers.live.screenshot_callbacks",
-            "ccgram.handlers.shell.shell_commands",
             "ccgram.handlers.sessions_dashboard",
         ]
         for mod in expected_modules:

@@ -99,7 +99,7 @@ def _validate_file(target: Path, cwd: Path, file_arg: str) -> str | None:
     return None
 
 
-@command("send", "Send file from session directory to Telegram", params="<file>")
+@command("send", "Send file to Telegram", params="<file>")
 async def send_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle //send <relative_path> — send a file from session's CWD to Telegram."""
     if not update.message:

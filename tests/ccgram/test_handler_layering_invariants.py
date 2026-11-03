@@ -43,9 +43,8 @@ _PTB_BOT_ALLOWLIST = frozenset(
         "commands/menu_sync.py",
         "file_handler.py",
         "live/screenshot_callbacks.py",
-        "messaging_pipeline/topic_commands.py",
+        "sessions_dashboard.py",
         "sync_command.py",
-        "toolbar/toolbar_callbacks.py",
     }
 )
 
@@ -75,14 +74,9 @@ _SINGLETON_ALLOWLIST = frozenset(
         "polling/window_tick/apply.py",
         "send/send_command.py",
         "sessions_dashboard.py",
-        "shell/shell_capture.py",
-        "shell/shell_commands.py",
-        "status/topic_emoji.py",
-        "sync_command.py",
         "text/text_handler.py",
-        "toolbar/toolbar_callbacks.py",
+        "topics/topic_binding.py",
         "topics/topic_lifecycle.py",
-        "topics/topic_orchestration.py",
     }
 )
 

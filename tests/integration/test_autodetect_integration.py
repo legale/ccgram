@@ -1,10 +1,12 @@
 """Integration tests for tmux auto-detection with a real tmux server."""
 
 import asyncio
+import contextlib
 import shutil
 import subprocess
 
 import pytest
+from libtmux.exc import LibTmuxException
 
 from ccgram.tmux_manager import TmuxManager
 from ccgram.utils import check_duplicate_ccgram, detect_tmux_context
@@ -20,11 +22,25 @@ TEST_SESSION = "cc_autodetect_test"
 @pytest.fixture()
 def tmux():
     mgr = TmuxManager(session_name=TEST_SESSION)
+    created: list[str] = [TEST_SESSION]
     mgr.get_or_create_session()
+    orig = mgr.create_session
+
+    async def track(
+        session_name: str,
+        work_dir: str,
+        window_name: str | None = None,
+    ) -> tuple[bool, str, str, str]:
+        created.append(session_name)
+        return await orig(session_name, work_dir, window_name=window_name)
+
+    mgr.create_session = track
     yield mgr
-    session = mgr.get_session()
-    if session:
-        session.kill()
+    for s in created:
+        sess = mgr.get_session(s)
+        if sess:
+            with contextlib.suppress(LibTmuxException, OSError):
+                sess.kill()
 
 
 def test_detect_tmux_context_real(monkeypatch):
@@ -57,32 +73,25 @@ async def test_list_windows_skips_own_window(tmux, tmp_path, monkeypatch):
 
     windows_before = await tmux.list_windows()
     all_ids = [w.window_id for w in windows_before]
-    assert f"{TEST_SESSION}:{window_id}" in all_ids
-    assert f"{TEST_SESSION}:{own_id}" in all_ids
+    assert window_id in all_ids
+    assert own_id in all_ids
 
     from ccgram.config import config
 
-    monkeypatch.setattr(config, "own_window_id", f"{TEST_SESSION}:{own_id}")
+    monkeypatch.setattr(config, "own_window_id", own_id)
     windows_after = await tmux.list_windows()
     filtered_ids = [w.window_id for w in windows_after]
-    assert f"{TEST_SESSION}:{window_id}" in filtered_ids
-    assert f"{TEST_SESSION}:{own_id}" not in filtered_ids
+    assert window_id in filtered_ids
+    assert own_id not in filtered_ids
 
 
 async def test_check_duplicate_with_ccgram_process(tmux, tmp_path, monkeypatch):
     """Duplicate detection finds ccgram process in another pane."""
     monkeypatch.setenv("TMUX_PANE", "%99999")
 
-    ok, _msg, _name, window_id = await tmux.create_window(
-        str(tmp_path), window_name="fake-ccgram", start_agent=False
-    )
-    assert ok
-
     session = tmux.get_session()
     assert session
-    window = session.windows.get(window_id=window_id, default=None)
-    assert window
-    pane = window.active_pane
+    pane = session.windows[0].active_pane
     assert pane
 
     pane.send_keys("exec bash -c 'exec -a ccgram sleep 60'", enter=True)

@@ -200,7 +200,7 @@ def register_all(
     )
     application.add_handler(
         MessageHandler(
-            filters.StatusUpdate.FORUM_TOPIC_EDITED,
+            filters.StatusUpdate.FORUM_TOPIC_EDITED & group_filter,
             topic_edited_handler,
         )
     )

@@ -106,7 +106,7 @@ def _load_font(path: Path, size: int) -> ImageFont.FreeTypeFont | ImageFont.Imag
             _font_cache[key] = ImageFont.truetype(str(path), size)
         except OSError:
             logger.warning("Failed to load font %s, using Pillow default", path)
-            _font_cache[key] = ImageFont.load_default()
+            _font_cache[key] = ImageFont.load_default(size=size)
     return _font_cache[key]
 
 

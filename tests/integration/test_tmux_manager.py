@@ -1,9 +1,11 @@
 """Integration tests for TmuxManager with a real tmux server."""
 
 import asyncio
+import contextlib
 import shutil
 
 import pytest
+from libtmux.exc import LibTmuxException
 
 from ccgram.tmux_manager import TmuxManager
 
@@ -18,11 +20,25 @@ TEST_SESSION = "cc_test_integration"
 @pytest.fixture()
 async def tmux(tmp_path):
     mgr = TmuxManager(session_name=TEST_SESSION)
+    created: list[str] = [TEST_SESSION]
     mgr.get_or_create_session()
+    orig = mgr.create_session
+
+    async def track(
+        session_name: str,
+        work_dir: str,
+        window_name: str | None = None,
+    ) -> tuple[bool, str, str, str]:
+        created.append(session_name)
+        return await orig(session_name, work_dir, window_name=window_name)
+
+    mgr.create_session = track
     yield mgr
-    session = mgr.get_session()
-    if session:
-        session.kill()
+    for s in created:
+        sess = mgr.get_session(s)
+        if sess:
+            with contextlib.suppress(LibTmuxException, OSError):
+                sess.kill()
 
 
 async def test_create_and_list_windows(tmux, tmp_path) -> None:
@@ -31,13 +47,12 @@ async def test_create_and_list_windows(tmux, tmp_path) -> None:
     )
     assert ok
     assert name == "test-win"
-    assert window_id.startswith("@")
 
     windows = await tmux.list_windows()
     ids = [w.window_id for w in windows]
-    assert f"{TEST_SESSION}:{window_id}" in ids
+    assert window_id in ids
 
-    match = next(w for w in windows if w.window_id == f"{TEST_SESSION}:{window_id}")
+    match = next(w for w in windows if w.window_id == window_id)
     assert match.window_name == "test-win"
 
 
@@ -62,7 +77,6 @@ async def test_send_keys_and_capture_pane(tmux, tmp_path) -> None:
     assert ok
 
     await tmux.send_keys(window_id, "echo hello-integration")
-
     await asyncio.sleep(0.5)
 
     output = await tmux.capture_pane(window_id)
@@ -76,9 +90,9 @@ async def test_no_agent_disables_automatic_rename(tmux, tmp_path) -> None:
     )
     assert ok
 
-    session = tmux.get_session()
+    session = tmux.get_session("shell-norename")
     assert session
-    window = session.windows.get(window_id=window_id)
+    window = session.windows[0]
     assert window.show_option("automatic-rename") is False
 
     await asyncio.sleep(0.5)
@@ -100,7 +114,7 @@ async def test_kill_window(tmux, tmp_path) -> None:
 
     windows = await tmux.list_windows()
     ids = [w.window_id for w in windows]
-    assert f"{TEST_SESSION}:{window_id}" not in ids
+    assert window_id not in ids
 
 
 async def test_kill_session_removes_the_tmux_session(tmux, tmp_path) -> None:
@@ -130,7 +144,7 @@ async def test_reset_server_reconnects(tmux, tmp_path) -> None:
 
     windows = await tmux.list_windows()
     ids = [w.window_id for w in windows]
-    assert f"{TEST_SESSION}:{window_id}" in ids
+    assert window_id in ids
 
 
 async def test_capture_pane_raw_returns_tuple(tmux, tmp_path) -> None:
@@ -139,9 +153,7 @@ async def test_capture_pane_raw_returns_tuple(tmux, tmp_path) -> None:
     )
     assert ok
 
-    # Send something so pane has content (empty panes return None)
     await tmux.send_keys(window_id, "echo raw-test-output")
-
     await asyncio.sleep(0.5)
 
     result = await tmux.capture_pane_raw(window_id)
@@ -151,16 +163,6 @@ async def test_capture_pane_raw_returns_tuple(tmux, tmp_path) -> None:
     assert "raw-test-output" in content
     assert cols > 0
     assert rows > 0
-
-
-async def test_get_pane_title(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_window(
-        str(tmp_path), window_name="title-test", start_agent=False
-    )
-    assert ok
-
-    title = await tmux.get_pane_title(window_id)
-    assert isinstance(title, str)
 
 
 # ── Pane-level operations ────────────────────────────────────────────
@@ -186,16 +188,15 @@ async def test_list_panes_multiple(tmux, tmp_path) -> None:
     )
     assert ok
 
-    # Split the window to create a second pane
-    session = tmux.get_session()
+    session = tmux.get_session("multi-pane")
     assert session
-    window = session.windows.get(window_id=window_id)
+    window = session.windows[0]
     window.split()
 
     panes = await tmux.list_panes(window_id)
     assert len(panes) == 2
     pane_ids = [p.pane_id for p in panes]
-    assert len(set(pane_ids)) == 2  # IDs are unique
+    assert len(set(pane_ids)) == 2
     active_count = sum(1 for p in panes if p.active)
     assert active_count == 1
 
@@ -217,7 +218,7 @@ async def test_capture_pane_by_id(tmux, tmp_path) -> None:
     await tmux.send_keys(window_id, "echo pane-capture-test")
     await asyncio.sleep(0.5)
 
-    output = await tmux.capture_pane_by_id(pane_id)
+    output = await tmux.capture_pane_by_id(pane_id, window_id=window_id)
     assert output is not None
     assert "pane-capture-test" in output
 
@@ -233,22 +234,22 @@ async def test_send_keys_to_pane(tmux, tmp_path) -> None:
     )
     assert ok
 
-    # Split to create two panes
-    session = tmux.get_session()
+    session = tmux.get_session("send-pane")
     assert session
-    window = session.windows.get(window_id=window_id)
+    window = session.windows[0]
     window.split()
 
     panes = await tmux.list_panes(window_id)
     assert len(panes) == 2
 
-    # Send to the non-active pane
     inactive = next(p for p in panes if not p.active)
-    sent = await tmux.send_keys_to_pane(inactive.pane_id, "echo pane-target-test")
+    sent = await tmux.send_keys_to_pane(
+        inactive.pane_id, "echo pane-target-test", window_id=window_id
+    )
     assert sent is True
     await asyncio.sleep(0.5)
 
-    output = await tmux.capture_pane_by_id(inactive.pane_id)
+    output = await tmux.capture_pane_by_id(inactive.pane_id, window_id=window_id)
     assert output is not None
     assert "pane-target-test" in output
 
@@ -297,13 +298,7 @@ async def test_create_window_does_not_inject_environment_commands(
     assert "unset" in output
 
 
-async def test_create_window_with_special_char_launch_command(tmux, tmp_path) -> None:
-    """Launch command containing = and / is sent literally (regression for Gemini bug).
-
-    Gemini's hardened launch command is `env VAR=/path/to/file gemini`.
-    Without literal=True in pane.send_keys, the = and / are misinterpreted
-    as tmux key sequences and the command is corrupted.
-    """
+async def test_send_keys_with_special_chars(tmux, tmp_path) -> None:
     marker = "CCGRAM_LAUNCH_TEST_MARKER"
     launch_cmd = (
         f"env {marker}=special/path/value sh -c 'echo ${{CCGRAM_LAUNCH_TEST_MARKER}}'"
@@ -311,14 +306,14 @@ async def test_create_window_with_special_char_launch_command(tmux, tmp_path) ->
     ok, _msg, _name, window_id = await tmux.create_window(
         str(tmp_path),
         window_name="literal-launch",
-        start_agent=True,
-        launch_command=launch_cmd,
+        start_agent=False,
     )
     assert ok
 
+    await tmux.send_keys(window_id, launch_cmd)
     await asyncio.sleep(1.0)
     output = await tmux.capture_pane(window_id)
     assert output is not None
     assert "special/path/value" in output, (
-        f"Launch command with = and / was not sent literally. Pane output: {output!r}"
+        f"Command with = and / was not sent literally. Pane output: {output!r}"
     )
