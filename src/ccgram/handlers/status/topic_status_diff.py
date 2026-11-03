@@ -11,7 +11,7 @@ import structlog
 
 import contextlib
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.error import RetryAfter, TelegramError
 
@@ -89,6 +89,8 @@ def build_screen_diff_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton("-25%", callback_data=f"{CB_SCREEN_DIFF}-25"),
                 InlineKeyboardButton("+25%", callback_data=f"{CB_SCREEN_DIFF}+25"),
+                InlineKeyboardButton("Ent", callback_data=f"{CB_SCREEN_DIFF}ent"),
+                InlineKeyboardButton("Esc", callback_data=f"{CB_SCREEN_DIFF}esc"),
             ]
         ]
     )
@@ -179,6 +181,39 @@ async def _send_new(
     record_message(chat_id, thread_id, state.message_id)
     state.diff_ts = state.last_msg_ts
     return True
+
+
+async def _send_screen_diff_key(
+    update: Update,
+    query: CallbackQuery,
+    key: str,
+) -> None:
+    """Send a control key to the main pane bound to the callback topic."""
+    # Lazy: avoid loading tmux/topic routing during status module import.
+    from ...tmux_manager import tmux_manager
+    from ..callback_helpers import get_bound_window, get_thread_id
+
+    user = update.effective_user
+    thread_id = get_thread_id(update)
+    if user is None or thread_id is None:
+        await query.answer("Use this button inside a topic", show_alert=True)
+        return
+
+    window_id = get_bound_window(user.id, thread_id)
+    if not window_id:
+        await query.answer("This topic is not bound to a tmux session", show_alert=True)
+        return
+
+    sent = await tmux_manager.send_keys(
+        window_id,
+        key,
+        enter=False,
+        literal=False,
+    )
+    if sent:
+        await query.answer(key)
+    else:
+        await query.answer("Failed to send key", show_alert=True)
 
 
 async def _edit_or_send(
@@ -356,6 +391,11 @@ async def _handle_screen_diff_resize(
 ) -> None:
     query = update.callback_query
     if query is None or not query.data:
+        return
+
+    if query.data in (f"{CB_SCREEN_DIFF}ent", f"{CB_SCREEN_DIFF}esc"):
+        key = "Enter" if query.data.endswith("ent") else "Escape"
+        await _send_screen_diff_key(update, query, key)
         return
 
     if query.data not in (f"{CB_SCREEN_DIFF}-25", f"{CB_SCREEN_DIFF}+25"):

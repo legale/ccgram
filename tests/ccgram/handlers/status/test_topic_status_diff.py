@@ -86,8 +86,41 @@ def test_screen_diff_keyboard_has_resize_buttons() -> None:
     keyboard = topic_status_diff.build_screen_diff_keyboard()
     buttons = [button for row in keyboard.inline_keyboard for button in row]
 
-    assert [button.text for button in buttons] == ["-25%", "+25%"]
-    assert [button.callback_data for button in buttons] == ["sd:-25", "sd:+25"]
+    assert [button.text for button in buttons] == ["-25%", "+25%", "Ent", "Esc"]
+    assert [button.callback_data for button in buttons] == [
+        "sd:-25",
+        "sd:+25",
+        "sd:ent",
+        "sd:esc",
+    ]
+
+
+async def test_screen_diff_key_sends_enter_or_escape(monkeypatch) -> None:
+    for data, key in (("sd:ent", "Enter"), ("sd:esc", "Escape")):
+        query = MagicMock()
+        query.data = data
+        query.message.message_thread_id = 2
+        query.answer = AsyncMock()
+        update = MagicMock()
+        update.message = None
+        update.callback_query = query
+        update.effective_user.id = 1
+
+        send = AsyncMock(return_value=True)
+        router = MagicMock()
+        router.get_window_for_thread.return_value = "cc_foo:@1"
+        tmux = MagicMock()
+        tmux.send_keys = send
+        monkeypatch.setattr(
+            "ccgram.handlers.callback_helpers.get_bound_window",
+            router.get_window_for_thread,
+        )
+        monkeypatch.setattr("ccgram.tmux_manager.tmux_manager", tmux)
+
+        await topic_status_diff._handle_screen_diff_resize(update, MagicMock())
+
+        send.assert_awaited_once_with("cc_foo:@1", key, enter=False, literal=False)
+        query.answer.assert_awaited_once_with(key)
 
 
 async def test_screen_diff_resize_changes_topic_limit(monkeypatch) -> None:
