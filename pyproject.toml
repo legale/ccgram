@@ -25,11 +25,9 @@ dependencies = [
     "libtmux>=0.50.0",
     "Pillow>=10.0.0",
     "telegramify-markdown>=1.0.0",
-    "aiofiles>=24.0.0",
     "structlog>=24.0.0",
     "click>=8.1.0",
     "pathspec>=0.12",
-    "aiohttp>=3.10",
 ]
 
 [project.urls]

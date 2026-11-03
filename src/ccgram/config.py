@@ -194,7 +194,6 @@ class Config:
         self.autoclose_dead_minutes: int = int(
             os.getenv("AUTOCLOSE_DEAD_MINUTES", "10")
         )
-        self._init_miniapp()
 
     def _init_topic_status(self) -> None:
         self.topic_status_diff_enabled: bool = _parse_bool_env(
@@ -213,14 +212,6 @@ class Config:
             1, _parse_int_env("CCGRAM_TOPIC_IDLE_DELAY", 10)
         )
         self.topic_idle_text: str = os.getenv("CCGRAM_TOPIC_IDLE_TEXT", "idle")
-
-    def _init_miniapp(self) -> None:
-        # Mini App backend (Phase 3 / Theme 6) — disabled when base URL is empty.
-        # base_url is the externally reachable URL Telegram uses to open the
-        # WebApp; host/port control the local aiohttp listener.
-        self.miniapp_base_url: str = os.getenv("CCGRAM_MINIAPP_BASE_URL", "").strip()
-        self.miniapp_host: str = os.getenv("CCGRAM_MINIAPP_HOST", "127.0.0.1")
-        self.miniapp_port: int = _parse_int_env("CCGRAM_MINIAPP_PORT", 8765)
 
     def _init_screenshots(self) -> None:
         self.screenshot_font_size: int = max(

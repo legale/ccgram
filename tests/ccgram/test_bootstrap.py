@@ -16,7 +16,7 @@ def test_reset_for_testing_clears_poll_task() -> None:
     assert bootstrap._status_poll_task is None
 
 
-async def test_bootstrap_starts_polling_before_miniapp() -> None:
+async def test_bootstrap_starts_polling() -> None:
     order: list[str] = []
     with (
         patch("ccgram.bootstrap.install_global_exception_handler"),
@@ -25,13 +25,9 @@ async def test_bootstrap_starts_polling_before_miniapp() -> None:
             "ccgram.bootstrap.start_status_polling",
             side_effect=lambda _app: order.append("polling"),
         ),
-        patch(
-            "ccgram.main.start_miniapp_if_enabled",
-            new=AsyncMock(side_effect=lambda: order.append("miniapp")),
-        ),
     ):
         await bootstrap.bootstrap_application(_app())
-    assert order == ["polling", "miniapp"]
+    assert order == ["polling"]
 
 
 async def test_shutdown_cancels_polling_and_flushes_state() -> None:
@@ -39,11 +35,7 @@ async def test_shutdown_cancels_polling_and_flushes_state() -> None:
         return None
 
     bootstrap._status_poll_task = asyncio.create_task(_noop())
-    with (
-        patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
-        patch("ccgram.main.stop_miniapp_if_enabled", new_callable=AsyncMock),
-        patch("ccgram.bootstrap.session_manager") as manager,
-    ):
+    with patch("ccgram.bootstrap.session_manager") as manager:
         await bootstrap.shutdown_runtime()
     assert bootstrap._status_poll_task is None
     manager.flush_state.assert_called_once()

@@ -110,13 +110,6 @@ async def bootstrap_application(application: Application) -> None:
     start_status_polling(application)
     await sync_bot_commands(application)
 
-    # Lazy: main imports bot at top, bot imports bootstrap; hoisting forms
-    # main → bot → bootstrap → main on cold import.
-    # Lazy: bootstrap ↔ main cycle
-    from .main import start_miniapp_if_enabled
-
-    await start_miniapp_if_enabled()
-
 
 async def shutdown_runtime() -> None:
     """Run the post_shutdown teardown sequence."""
@@ -128,11 +121,6 @@ async def shutdown_runtime() -> None:
             await _status_poll_task
         _status_poll_task = None
         logger.info("Status polling stopped")
-
-    # Lazy: main → bot → bootstrap cycle (same as start path).
-    from .main import stop_miniapp_if_enabled
-
-    await stop_miniapp_if_enabled()
 
     session_manager.flush_state()
 
