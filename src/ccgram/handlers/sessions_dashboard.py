@@ -315,23 +315,17 @@ async def apply_session_rename(
         # Lazy: PTBTelegramClient needed only when updating topic after dashboard rename
         from ..telegram_client import PTBTelegramClient
 
-        # Lazy: lifecycle_strategy needed only when updating topic after dashboard rename
-        from .polling.polling_state import lifecycle_strategy
-
-        # Lazy: update_stored_topic_name needed only when updating topic after dashboard rename
-        from .status.topic_emoji import update_stored_topic_name
-
         # Lazy: bind helpers needed only when updating topic after dashboard rename
         from .topics.topic_binding import bind_runtime, find_topic_session
+        # Lazy: lifecycle helpers needed only when updating topic after dashboard rename
+        from .topics.topic_lifecycle import clear_topic_lifecycle_state
 
-        lifecycle_strategy.clear_dead_notification(user.id, pending_thread)
-        lifecycle_strategy.clear_autoclose_timer(user.id, pending_thread)
+        clear_topic_lifecycle_state(user.id, pending_thread)
         target_session = name
         await tmux_manager.set_session_topic(target_session, chat.id, pending_thread)
         session = await find_topic_session(chat.id, pending_thread)
         if session:
             bind_runtime(user.id, chat.id, pending_thread, session)
-        update_stored_topic_name(chat.id, pending_thread, name)
         try:
             client = PTBTelegramClient(message.get_bot())
             await client.edit_forum_topic(chat.id, pending_thread, name=name)

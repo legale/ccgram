@@ -5,17 +5,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ccgram.handlers.polling.polling_state import lifecycle_strategy
+from ccgram.handlers.topics.topic_lifecycle import (
+    reset_lifecycle_state,
+    start_autoclose_timer,
+)
 from ccgram.tmux_manager import TmuxWindow
 
 
 @pytest.fixture(autouse=True)
 def _clean_strategy_state():
-    lifecycle_strategy._states.clear()
-    lifecycle_strategy._dead_notified.clear()
+    reset_lifecycle_state()
     yield
-    lifecycle_strategy._states.clear()
-    lifecycle_strategy._dead_notified.clear()
+    reset_lifecycle_state()
 
 
 async def test_topic_created_claims_strict_name_match() -> None:
@@ -42,9 +43,6 @@ async def test_topic_created_claims_strict_name_match() -> None:
             "ensure_topic_session",
             new=AsyncMock(return_value=("cc_foo:@1", None)),
         ) as ensure,
-        patch(
-            "ccgram.handlers.status.topic_emoji.sync_topic_name", new_callable=AsyncMock
-        ),
         patch.object(
             topic_lifecycle, "PTBTelegramClient", return_value=MagicMock()
         ) as client_cls,
@@ -63,7 +61,7 @@ async def test_topic_created_claims_strict_name_match() -> None:
 async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:
     from ccgram.handlers.topics import topic_lifecycle
 
-    lifecycle_strategy.start_autoclose_timer(1, 42, "done", time.monotonic() - 9999)
+    start_autoclose_timer(1, 42, "done", time.monotonic() - 9999)
     client = AsyncMock()
     session = TmuxWindow("cc_foo:@1", "cc_foo", "/tmp", topic_ref=(-100, 42))
     router = MagicMock()

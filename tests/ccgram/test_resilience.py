@@ -49,38 +49,6 @@ class TestRateLimitSendLocking:
         _rate_limit_locks.pop(chat_id, None)
 
 
-class TestProbeFailureClearing:
-    def test_clear_probe_failures_resets_counter(self):
-        from ccgram.handlers.polling.polling_state import (
-            lifecycle_strategy,
-            terminal_poll_state,
-        )
-
-        _window_poll_state = terminal_poll_state._states
-        ws = terminal_poll_state.get_state("@test-probe")
-        ws.probe_failures = 5
-
-        lifecycle_strategy.clear_probe_failures("@test-probe")
-
-        ws2 = _window_poll_state.get("@test-probe")
-        assert ws2 is not None
-        assert ws2.probe_failures == 0
-
-        _window_poll_state.pop("@test-probe", None)
-
-
-class TestPollStateCleanup:
-    def test_clear_window_poll_state_removes_entry(self):
-        from ccgram.handlers.polling.polling_state import terminal_poll_state
-
-        _window_poll_state = terminal_poll_state._states
-        terminal_poll_state.get_state("@cleanup-test")
-        assert "@cleanup-test" in _window_poll_state
-
-        terminal_poll_state.clear_state("@cleanup-test")
-        assert "@cleanup-test" not in _window_poll_state
-
-
 class TestGlobalExceptionHandler:
     def test_handler_logs_exception(self):
         from ccgram.bootstrap import _global_exception_handler
@@ -123,7 +91,6 @@ class TestShutdownNotificationLifecycle:
             ) as mock_send,
             patch("ccgram.bootstrap._status_poll_task", None),
             patch("ccgram.bootstrap.session_manager"),
-            patch("ccgram.bootstrap.shutdown_workers", new_callable=AsyncMock),
         ):
             await post_shutdown(application)
 

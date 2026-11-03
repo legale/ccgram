@@ -17,6 +17,7 @@ from ccgram.utils import (
     log_throttle_sweep,
     log_throttled,
     shorten_path,
+    strip_emoji_prefix,
 )
 
 
@@ -417,3 +418,13 @@ class TestIsGeneralTopic:
         message.chat = None
         message.message_thread_id = None
         assert is_general_topic(message) is False
+
+
+class TestStripEmojiPrefix:
+    def test_strips_legacy_prefix(self) -> None:
+        assert strip_emoji_prefix("\U0001f7e2 my-topic") == "my-topic"
+        assert strip_emoji_prefix("\u2705 done-task") == "done-task"
+
+    def test_leaves_clean_name_untouched(self) -> None:
+        assert strip_emoji_prefix("clean-topic") == "clean-topic"
+

@@ -271,7 +271,7 @@ async def rename_command(  # noqa: C901
         return
 
     # Lazy: avoid circular imports
-    from ..status.topic_emoji import strip_emoji_prefix, update_stored_topic_name
+    from ...utils import strip_emoji_prefix
 
     raw_name = strip_emoji_prefix(args[0].strip()).strip()
     name = raw_name.removeprefix(config.tmux_session_prefix).strip()
@@ -313,14 +313,12 @@ async def rename_command(  # noqa: C901
         session.topic_ref = (chat.id, thread_id)
         bind_runtime(user.id, chat.id, thread_id, session)
 
-    update_stored_topic_name(chat.id, thread_id, name)
     bind_runtime(user.id, chat.id, thread_id, session)
 
     # Lazy: clear dead notification and autoclose if a rename race occurred
-    from ..polling.polling_state import lifecycle_strategy
+    from .topic_lifecycle import clear_topic_lifecycle_state
 
-    lifecycle_strategy.clear_dead_notification(user.id, thread_id)
-    lifecycle_strategy.clear_autoclose_timer(user.id, thread_id)
+    clear_topic_lifecycle_state(user.id, thread_id)
 
     # Rename Telegram topic if supported
     tg_renamed = False

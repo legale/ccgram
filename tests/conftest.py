@@ -41,10 +41,4 @@ def _clear_window_store():
     _clear()
 
 
-@pytest.fixture(autouse=True)
-def _clear_topic_names():
-    from ccgram.handlers.status.topic_emoji import _topic_names
 
-    _topic_names.clear()
-    yield
-    _topic_names.clear()

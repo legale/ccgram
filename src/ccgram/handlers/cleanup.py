@@ -33,12 +33,6 @@ from .command_history import clear_history
 from .command_meta import command
 from .live.live_view import clear_live_view
 from .messaging_pipeline.message_sender import safe_reply
-from .polling.polling_state import (
-    interactive_strategy,
-    lifecycle_strategy,
-    terminal_poll_state,
-)
-from .status.topic_emoji import clear_topic_emoji_state
 from .status.topic_status_diff import clear_topic_status_diff_state
 
 logger = structlog.get_logger()
@@ -73,18 +67,17 @@ def _clear_all_topic_state(
     _safe_call(clear_history, user_id, thread_id)
     _safe_call(clear_live_view, user_id, thread_id)
     _safe_call(clear_topic_status_diff_state, user_id, thread_id)
-    _safe_call(lifecycle_strategy.clear_state, user_id, thread_id)
-    _safe_call(lifecycle_strategy.clear_dead_notification, user_id, thread_id)
+    # Lazy: avoid circular import with topic_lifecycle
+    from .topics.topic_lifecycle import clear_topic_lifecycle_state
+
+    _safe_call(clear_topic_lifecycle_state, user_id, thread_id)
 
     # Chat scope (chat_id, thread_id)
     if chat_id is not None:
-        _safe_call(clear_topic_emoji_state, chat_id, thread_id)
         _safe_call(clear_topic_tail_state, chat_id, thread_id)
 
     # Window scope (window_id)
     if window_id:
-        _safe_call(terminal_poll_state.clear_state, window_id)
-        _safe_call(interactive_strategy.clear_pane_alerts, window_id)
         _safe_call(clear_vim_state, window_id)
         _safe_call(tmux_manager.forget_sidecar_pane, window_id)
 

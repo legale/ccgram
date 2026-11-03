@@ -21,14 +21,52 @@ from .topic_binding import (
     ensure_topic_session,
     find_topic_session,
 )
-from ..polling.polling_state import (
-    lifecycle_strategy,
-)
+from ...utils import strip_emoji_prefix
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
 logger = structlog.get_logger()
+
+# ── Lifecycle tracking state ──────────────────────────────────────────────
+
+_autoclose_timers: dict[tuple[int, int], tuple[str, float]] = {}
+_dead_notified: set[tuple[int, int, str]] = set()
+
+
+def is_dead_notified(user_id: int, thread_id: int, window_id: str) -> bool:
+    return (user_id, thread_id, window_id) in _dead_notified
+
+
+def mark_dead_notified(user_id: int, thread_id: int, window_id: str) -> None:
+    _dead_notified.add((user_id, thread_id, window_id))
+
+
+def clear_dead_notification(user_id: int, thread_id: int) -> None:
+    _dead_notified.difference_update(
+        {k for k in _dead_notified if k[0] == user_id and k[1] == thread_id}
+    )
+
+
+def start_autoclose_timer(user_id: int, thread_id: int, state: str, now: float) -> None:
+    existing = _autoclose_timers.get((user_id, thread_id))
+    if existing is None or existing[0] != state:
+        _autoclose_timers[(user_id, thread_id)] = (state, now)
+
+
+def clear_autoclose_timer(user_id: int, thread_id: int) -> None:
+    _autoclose_timers.pop((user_id, thread_id), None)
+
+
+def clear_topic_lifecycle_state(user_id: int, thread_id: int) -> None:
+    clear_autoclose_timer(user_id, thread_id)
+    clear_dead_notification(user_id, thread_id)
+
+
+def reset_lifecycle_state() -> None:
+    """Reset all lifecycle tracking (for tests)."""
+    _autoclose_timers.clear()
+    _dead_notified.clear()
 
 
 # ── Autoclose timer management ────────────────────────────────────────────
@@ -36,16 +74,12 @@ logger = structlog.get_logger()
 
 async def check_autoclose_timers(client: TelegramClient) -> None:
     """Close topics whose done/dead timers have expired."""
-    all_topics = lifecycle_strategy.iter_topic_states()
-    if not all_topics:
+    if not _autoclose_timers:
         return
 
     now = time.monotonic()
     expired: list[tuple[int, int]] = []
-    for user_id, thread_id, ts in all_topics:
-        if ts.autoclose is None:
-            continue
-        state, entered_at = ts.autoclose
+    for (user_id, thread_id), (state, entered_at) in list(_autoclose_timers.items()):
         if state == "done":
             timeout = config.autoclose_done_minutes * 60
         elif state == "dead":
@@ -92,7 +126,7 @@ async def _close_expired_topic(
         logger.warning("Autoclose: failed to kill %s", session.window_name)
         return
 
-    lifecycle_strategy.clear_autoclose_timer(user_id, thread_id)
+    clear_autoclose_timer(user_id, thread_id)
     logger.info(
         "auto_removed_topic", chat_id=chat_id, thread_id=thread_id, user_id=user_id
     )
@@ -135,7 +169,7 @@ async def topic_closed_handler(
     if not await tmux_manager.kill_session(session.window_name):
         logger.warning("Failed to close tmux session %s", session.window_name)
         return
-    lifecycle_strategy.clear_autoclose_timer(user.id, thread_id)
+    clear_autoclose_timer(user.id, thread_id)
     await clear_topic_state(
         user.id,
         thread_id,
@@ -162,16 +196,12 @@ async def topic_created_handler(
     # Lazy: callback helpers are needed only while handling topic events.
     from ..callback_helpers import get_thread_id
 
-    # Lazy: topic name synchronization is needed only on topic creation.
-    from ..status.topic_emoji import strip_emoji_prefix, sync_topic_name
-
     thread_id = get_thread_id(update)
     if thread_id is None:
         return
 
     client = PTBTelegramClient(context.bot)
     topic_name = strip_emoji_prefix(created.name)
-    await sync_topic_name(client, chat.id, thread_id, topic_name)
 
     # First try binding to existing tmux session with rebind=True (analogous to //bind)
     target = tmux_manager.topic_session_name(topic_name)
@@ -254,9 +284,6 @@ async def topic_edited_handler(  # noqa: C901, PLR0912
     # Lazy: callback helpers are needed only while handling topic events.
     from ..callback_helpers import get_thread_id
 
-    # Lazy: topic name cache is needed only on topic edits.
-    from ..status.topic_emoji import strip_emoji_prefix, update_stored_topic_name
-
     thread_id = get_thread_id(update)
     if thread_id is None:
         thread_id = getattr(message, "message_thread_id", None) or getattr(
@@ -326,7 +353,6 @@ async def topic_edited_handler(  # noqa: C901, PLR0912
             logger.warning(
                 "Failed to remove tmux prefix from topic %d: %s", thread_id, exc
             )
-    update_stored_topic_name(chat.id, thread_id, name)
     logger.info(
         "Renamed bound topic session %s -> %s (chat=%d, thread=%d)",
         old_name,

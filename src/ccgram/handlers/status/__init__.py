@@ -1,21 +1,13 @@
-"""Status subpackage — topic status diff and topic emoji normalization."""
+"""Status subpackage — topic status diff."""
 
-from .topic_emoji import (
-    clear_topic_emoji_state,
-    format_topic_name_for_mode,
-    reset_all_state,
-    strip_emoji_prefix,
-    sync_topic_name,
-    update_stored_topic_name,
-    update_topic_emoji,
+from .topic_status_diff import (
+    clear_topic_status_diff_state,
+    prime_topic_status_diff,
+    update_topic_status_diff,
 )
 
 __all__ = [
-    "clear_topic_emoji_state",
-    "format_topic_name_for_mode",
-    "reset_all_state",
-    "strip_emoji_prefix",
-    "sync_topic_name",
-    "update_stored_topic_name",
-    "update_topic_emoji",
+    "clear_topic_status_diff_state",
+    "prime_topic_status_diff",
+    "update_topic_status_diff",
 ]

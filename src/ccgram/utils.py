@@ -29,6 +29,26 @@ from telegram.error import TelegramError
 
 logger = structlog.get_logger()
 
+_LEGACY_PREFIXES = (
+    "\U0001f7e2",
+    "\U0001f7e1",
+    "\u2705",
+    "\U0001f4a5",
+    "\U0001f3b2",
+    "\U0001f4e1",
+    "⚫",
+    "❌",
+)
+
+
+def strip_emoji_prefix(name: str) -> str:
+    """Remove old status/approval emoji prefixes from a topic name."""
+    for emoji in _LEGACY_PREFIXES:
+        prefix = f"{emoji} "
+        if name.startswith(prefix):
+            name = name[len(prefix) :]
+    return name
+
 # --- Log throttling -----------------------------------------------------------
 
 _throttle_state: dict[str, tuple[float, str]] = {}

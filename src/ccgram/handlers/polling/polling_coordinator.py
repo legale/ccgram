@@ -9,7 +9,9 @@ Key components:
 """
 
 import asyncio
-from typing import TYPE_CHECKING
+import time
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from telegram.error import TelegramError
@@ -17,10 +19,10 @@ from telegram.error import TelegramError
 from ...thread_router import thread_router
 from ...tmux_manager import tmux_manager
 from ...utils import log_throttled
-from . import window_tick
 
 if TYPE_CHECKING:
     from telegram import Bot
+    from ...telegram_client import TelegramClient
     from ...tmux_manager import TmuxWindow
 
 logger = structlog.get_logger()
@@ -33,21 +35,106 @@ _BACKOFF_MAX = 30.0
 _LoopError = (TelegramError, OSError, RuntimeError, ValueError)
 
 
+def _as_client(bot_or_client: Any) -> "TelegramClient":
+    # Lazy: avoid circular/early PTB load
+    from ...telegram_client import PTBTelegramClient, TelegramClient
+
+    if isinstance(bot_or_client, TelegramClient):
+        return bot_or_client
+    return PTBTelegramClient(bot_or_client)
+
+
 # ── Main loop ─────────────────────────────────────────────────────────────
 
 
+async def _handle_dead_session(
+    client: "TelegramClient", user_id: int, thread_id: int, wid: str
+) -> None:
+    # Lazy: topic lifecycle state resolved at tick time
+    from ..topics.topic_lifecycle import (
+        is_dead_notified,
+        mark_dead_notified,
+        start_autoclose_timer,
+    )
+    # Lazy: message_sender helpers resolved at tick time
+    from ..messaging_pipeline.message_sender import rate_limit_send_message
+
+    session_name = wid.split(":", 1)[0]
+    if await tmux_manager.session_exists(session_name):
+        return
+    if is_dead_notified(user_id, thread_id, wid):
+        return
+    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+    display = thread_router.get_display_name(wid)
+    start_autoclose_timer(user_id, thread_id, "dead", time.monotonic())
+    await rate_limit_send_message(
+        client,
+        chat_id,
+        f"Session `{display}` ended.",
+        message_thread_id=thread_id,
+    )
+    mark_dead_notified(user_id, thread_id, wid)
+
+
+async def _poll_window(
+    client: "TelegramClient",
+    user_id: int,
+    thread_id: int,
+    wid: str,
+    window: "TmuxWindow | None",
+) -> None:
+    if window is None:
+        await _handle_dead_session(client, user_id, thread_id, wid)
+        return
+
+    if window.cwd:
+        # Lazy: session_manager resolved at tick time
+        from ...session import session_manager
+
+        session_manager.set_window_cwd(
+            wid, str(Path(window.cwd).expanduser().resolve())
+        )
+
+    pane_text = await tmux_manager.capture_pane(window.window_id, with_ansi=True)
+    if not pane_text:
+        return
+
+    # Lazy: config resolved at tick time
+    from ...config import config
+
+    if config.topic_status_diff_enabled:
+        # Lazy: diff updater resolved at tick time
+        from ..status.topic_status_diff import update_topic_status_diff
+
+        chat_id = thread_router.resolve_chat_id(user_id, thread_id)
+        await update_topic_status_diff(client, chat_id, thread_id, wid, pane_text)
+
+        sidecar_pane_id = tmux_manager.get_sidecar_pane_id(wid)
+        if isinstance(sidecar_pane_id, str) and sidecar_pane_id:
+            sidecar_text = await tmux_manager.capture_pane_by_id(
+                sidecar_pane_id, with_ansi=True, window_id=wid
+            )
+            if sidecar_text is not None:
+                await update_topic_status_diff(
+                    client, chat_id, thread_id, wid, sidecar_text, target="sidecar"
+                )
+            else:
+                tmux_manager.forget_sidecar_pane(wid)
+
+
 async def poll_sessions(
-    bot: "Bot",
+    bot_or_client: Any,
     bindings: list[tuple[int, int, str]],
     window_lookup: dict[str, "TmuxWindow"],
 ) -> None:
     """Poll bound tmux windows sequentially in the caller's task."""
+    client = _as_client(bot_or_client)
     for user_id, thread_id, wid in bindings:
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(window_id=wid)
         try:
             window = window_lookup.get(wid)
-            await window_tick.tick_window(bot, user_id, thread_id, wid, window)
+            await _poll_window(client, user_id, thread_id, wid, window)
         except (TelegramError, OSError) as e:
             log_throttled(
                 logger,
@@ -61,20 +148,11 @@ async def poll_sessions(
 
 async def status_poll_loop(bot: "Bot") -> None:
     """Background task to poll terminal status for all thread-bound windows."""
-    # Lazy: status_poll_loop is launched once during bootstrap; keep the
-    # config + telegram_client imports tied to the call site so the
-    # polling package's cold path does not pull PTB.
-    # Lazy: config singleton resolved at call time
+    # Lazy: config resolved at runtime
     from ...config import config as _cfg
-
-    # Lazy: PTBTelegramClient wraps the live PTB bot — resolved per-tick
+    # Lazy: PTBTelegramClient resolved at runtime
     from ...telegram_client import PTBTelegramClient
-
-    # Lazy: periodic_tasks transitively imports topics.topic_lifecycle,
-    # which imports polling_state. Hoisting forms a cycle through
-    # polling/__init__.py whenever a module reaches polling_state
-    # before polling_coordinator finishes loading.
-    # Lazy: periodic_tasks ↔ coordinator cycle
+    # Lazy: periodic_tasks cycle avoidance
     from .periodic_tasks import run_lifecycle_tasks, run_periodic_tasks
 
     poll_interval = _cfg.status_poll_interval
@@ -91,7 +169,7 @@ async def status_poll_loop(bot: "Bot") -> None:
             window_lookup = {w.window_id: w for w in all_windows}
 
             await poll_sessions(
-                bot,
+                client,
                 list(thread_router.iter_thread_bindings()),
                 window_lookup,
             )
