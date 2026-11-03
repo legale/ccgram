@@ -17,19 +17,13 @@ from telegram.constants import ChatAction
 from ...config import config
 from ...telegram_client import PTBTelegramClient
 from ...thread_router import thread_router
-from ...tmux_manager import send_to_window
+from ...tmux_manager import extract_sidecar_output, send_to_window
 from ...utils import handle_general_topic_message, is_general_topic
 from ..callback_helpers import get_thread_id as _get_thread_id
 from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
 from ..sessions_dashboard import apply_session_rename
 
 logger = structlog.get_logger()
-
-
-def _is_sidecar_completion_line(line: str, marker: str) -> bool:
-    stripped = line.strip()
-    status = stripped.removeprefix(f"{marker}:")
-    return status != stripped and status.isdigit()
 
 
 if TYPE_CHECKING:
@@ -220,8 +214,14 @@ async def _handle_sidecar_command(
         update_topic_status_diff,
     )
 
-    sidecar_pane_id = await tmux_manager.ensure_sidecar_pane(window_id)
-    if not sidecar_pane_id:
+    if tmux_manager.get_sidecar_pane_id(window_id):
+        await safe_reply(message, "⚠️ A sidecar command is already running.")
+        return
+
+    sidecar_pane_id, marker = await tmux_manager.start_sidecar_command(
+        window_id, command
+    )
+    if not sidecar_pane_id or not marker:
         await safe_reply(message, "❌ Failed to create or access sidecar pane.")
         return
 
@@ -236,38 +236,28 @@ async def _handle_sidecar_command(
         title=title,
     )
 
-    sent, _marker = await tmux_manager.send_sidecar_command(
-        sidecar_pane_id,
-        command,
-        window_id=window_id,
-    )
-    if not sent:
-        await safe_reply(
-            message, f"❌ Failed to send command to sidecar pane {sidecar_pane_id}."
-        )
-        return
-
     await ack_reaction(client, chat_id, message.message_id)
 
     async def _quick_sidecar_tick() -> None:
         await asyncio.sleep(0.3)
         text = await tmux_manager.capture_pane_by_id(
             sidecar_pane_id,
-            with_ansi=True,
+            with_ansi=False,
             include_history=True,
             window_id=window_id,
         )
         if text:
-            if _marker and any(
-                _is_sidecar_completion_line(line, _marker) for line in text.splitlines()
-            ):
-                text = "\n".join(
-                    line
-                    for line in text.splitlines()
-                    if not _is_sidecar_completion_line(line, _marker)
-                ).rstrip()
+            text, completed = extract_sidecar_output(text, marker)
+            if text is None:
+                return
             await update_topic_status_diff(
-                client, chat_id, thread_id, window_id, text, target="sidecar"
+                client,
+                chat_id,
+                thread_id,
+                window_id,
+                text or "(no output)",
+                target="sidecar",
+                force=completed,
             )
 
     asyncio.create_task(_quick_sidecar_tick())

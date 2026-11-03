@@ -40,6 +40,28 @@ _TmuxError = (
 _TOPIC_OPTION = "@ccgram_topic"
 
 
+def extract_sidecar_output(text: str, marker: str) -> tuple[str | None, bool]:
+    """Return output between the sidecar begin and completion markers."""
+    lines = text.splitlines()
+    begin_marker = f"{marker}:BEGIN"
+    start = next(
+        (index for index, line in enumerate(lines) if line.strip() == begin_marker),
+        None,
+    )
+    if start is None:
+        return None, False
+
+    end = None
+    for index in range(start + 1, len(lines)):
+        status = lines[index].strip().removeprefix(f"{marker}:")
+        if status != lines[index].strip() and status.isdigit():
+            end = index
+            break
+
+    output = lines[start + 1 : end]
+    return "\n".join(output).rstrip(), end is not None
+
+
 async def _kill_timed_out_proc(proc: asyncio.subprocess.Process | None) -> None:
     if proc is None:
         return
@@ -743,39 +765,44 @@ class TmuxManager:
         """Get the completion marker for the active sidecar command."""
         return self._sidecar_completion_markers.get(window_id)
 
-    async def ensure_sidecar_pane(self, window_id: str) -> str | None:
-        """Ensure a sidecar pane exists for the window, strictly enforcing max 2 panes.
+    async def start_sidecar_command(
+        self, window_id: str, command: str
+    ) -> tuple[str | None, str | None]:
+        """Start a one-shot command in a fresh pane using the active pane cwd.
 
-        Returns the sidecar pane ID (e.g. '%2'), or None on failure.
+        The command is started as the pane process instead of being typed into
+        an interactive shell. This prevents stale input, prompts, and heredocs
+        from becoming part of the command.
         """
+        tracked = self._sidecar_panes.get(window_id)
+        if tracked:
+            panes = await self.list_panes(window_id)
+            if any(p.pane_id == tracked for p in panes):
+                logger.info("Sidecar is already running in %s", tracked)
+                return None, None
+            self.forget_sidecar_pane(window_id)
+
         panes = await self.list_panes(window_id)
         if not panes:
-            return None
+            return None, None
+        active = next((pane for pane in panes if pane.active), panes[0])
+        cwd = active.path
+        if not cwd or not Path(cwd).is_dir():
+            logger.warning("Invalid sidecar cwd for %s: %r", window_id, cwd)
+            return None, None
 
-        # If already 2 or more panes exist:
-        if len(panes) >= 2:
-            tracked = self._sidecar_panes.get(window_id)
-            if tracked and any(p.pane_id == tracked for p in panes):
-                sidecar_id = tracked
-            else:
-                sidecar_id = panes[1].pane_id
-                self._sidecar_panes[window_id] = sidecar_id
-
-            # Strictly enforce invariant: kill any excess panes beyond main and sidecar
-            if len(panes) > 2:
-                for p in panes[2:]:
-                    try:
-                        proc = await asyncio.create_subprocess_exec(
-                            "tmux", "kill-pane", "-t", p.pane_id
-                        )
-                        await proc.wait()
-                    except Exception:
-                        pass
-            return sidecar_id
-
-        # Only 1 pane exists: split window in background (-d) keeping current path
         session_name, wid = self._split_qualified(window_id)
         target = f"{session_name}:{wid}" if session_name else wid
+        marker = f"__CCGRAM_SIDECAR_DONE_{uuid4().hex}__"
+        wrapped = (
+            "tmux set-option -p -t \"$TMUX_PANE\" remain-on-exit on "
+            "2>/dev/null || true; "
+            f"printf '\\n%s:BEGIN\\n' {shlex.quote(marker)}; "
+            f"/bin/sh -c {shlex.quote(command)}; "
+            f"_ccgram_status=$?; printf '\\n%s:%s\\n' "
+            f'{shlex.quote(marker)} "$_ccgram_status"'
+        )
+        shell_command = shlex.join(["/bin/sh", "-c", wrapped])
         proc: asyncio.subprocess.Process | None = None
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -785,10 +812,11 @@ class TmuxManager:
                 "-t",
                 target,
                 "-c",
-                "#{pane_current_path}",
+                cwd,
                 "-P",
                 "-F",
                 "#{pane_id}",
+                shell_command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -800,51 +828,21 @@ class TmuxManager:
                     target,
                     stderr.decode("utf-8", errors="replace"),
                 )
-                return None
+                return None, None
             new_pane_id = stdout.decode("utf-8", errors="replace").strip()
             if new_pane_id:
                 self._sidecar_panes[window_id] = new_pane_id
-                return new_pane_id
+                self._sidecar_completion_markers[window_id] = marker
+                return new_pane_id, marker
         except TimeoutError:
             logger.warning("Timed out splitting window %s for sidecar", target)
             await _kill_timed_out_proc(proc)
-            return None
+            return None, None
         except OSError:
             logger.exception("Unexpected error splitting window %s for sidecar", target)
-            return None
+            return None, None
 
-        return None
-
-    async def send_sidecar_command(
-        self,
-        pane_id: str,
-        command: str,
-        *,
-        window_id: str | None = None,
-    ) -> tuple[bool, str | None]:
-        """Run a command and append a unique marker when it finishes.
-
-        The command runs in a child shell so commands such as ``exit`` cannot
-        prevent the marker from being emitted by the sidecar shell.
-        """
-        marker = f"__CCGRAM_SIDECAR_DONE_{uuid4().hex}__"
-        wrapped = (
-            f"/bin/sh -c {shlex.quote(command)}; "
-            f"_ccgram_status=$?; printf '\\n%s:%s\\n' "
-            f'{shlex.quote(marker)} "$_ccgram_status"'
-        )
-        sent = await self.send_keys_to_pane(
-            pane_id,
-            wrapped,
-            enter=True,
-            literal=True,
-            window_id=window_id,
-        )
-        if not sent:
-            return False, None
-        if window_id is not None:
-            self._sidecar_completion_markers[window_id] = marker
-        return True, marker
+        return None, None
 
     async def kill_pane(self, pane_id: str, *, window_id: str | None = None) -> bool:
         """Kill a pane by its stable ID without killing its tmux window."""

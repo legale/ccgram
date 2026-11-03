@@ -7,11 +7,10 @@ from telegram.error import TelegramError
 
 from ccgram.handlers.polling.polling_coordinator import (
     _BACKOFF_MIN,
-    _sidecar_command_completed,
     poll_sessions,
     status_poll_loop,
 )
-from ccgram.tmux_manager import TmuxWindow
+from ccgram.tmux_manager import TmuxWindow, extract_sidecar_output
 from tests.ccgram._helpers import FakeTelegramClient
 
 
@@ -22,13 +21,14 @@ def _make_window(
 
 
 class TestPollSessions:
-    def test_sidecar_completion_ignores_marker_in_shell_echo(self):
+    def test_sidecar_output_ignores_pane_history(self):
         marker = "__CCGRAM_SIDECAR_DONE_marker__"
 
-        assert not _sidecar_command_completed(
-            f"$ printf '%s:%s' {marker} \"$status\"", marker
+        output, completed = extract_sidecar_output(
+            f"$ old command\n{marker}:BEGIN\noutput\n{marker}:1", marker
         )
-        assert _sidecar_command_completed(f"{marker}:1", marker)
+        assert output == "output"
+        assert completed is True
 
     async def test_active_window_updates_status_diff(self):
         client = FakeTelegramClient()
@@ -125,7 +125,7 @@ class TestPollSessions:
             mock_tm.capture_pane = AsyncMock(return_value="bash$ echo hi\n")
             mock_tm.get_sidecar_pane_id.return_value = "%2"
             mock_tm.capture_pane_by_id = AsyncMock(
-                return_value=f"bash$ command\noutput\n{marker}:0\n"
+                return_value=f"bash$ old command\n{marker}:BEGIN\noutput\n{marker}:0\n"
             )
             mock_tm.get_sidecar_completion_marker.return_value = marker
             mock_tm.kill_pane = AsyncMock(return_value=True)
@@ -138,7 +138,7 @@ class TestPollSessions:
                 -100,
                 100,
                 "s1:@1",
-                "bash$ command\noutput",
+                "output",
                 target="sidecar",
                 force=True,
             )

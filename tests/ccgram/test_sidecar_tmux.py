@@ -1,24 +1,23 @@
-"""Tests for tmux sidecar pane management and invariant (max 2 panes)."""
+"""Tests for one-shot tmux sidecar pane management."""
 
 from unittest.mock import AsyncMock, patch
 
-from ccgram.tmux_manager import TmuxManager, PaneInfo
+from ccgram.tmux_manager import PaneInfo, TmuxManager, extract_sidecar_output
 
 
-async def test_ensure_sidecar_pane_splits_when_single_pane() -> None:
+async def test_start_sidecar_command_uses_active_pane_cwd() -> None:
     tm = TmuxManager("test-session")
     panes = [
         PaneInfo(
             pane_id="%1",
             index=0,
             active=True,
-            command="bash",
+            command="claude",
             path="/tmp",
             width=80,
             height=24,
         )
     ]
-
     mock_proc = AsyncMock()
     mock_proc.communicate.return_value = (b"%2\n", b"")
     mock_proc.returncode = 0
@@ -29,107 +28,50 @@ async def test_ensure_sidecar_pane_splits_when_single_pane() -> None:
             "asyncio.create_subprocess_exec", new=AsyncMock(return_value=mock_proc)
         ) as exec_mock,
     ):
-        sidecar_id = await tm.ensure_sidecar_pane("@1")
+        sidecar_id, marker = await tm.start_sidecar_command(
+            "test-session:@1", "cat <<'EOF'\nhello\nEOF"
+        )
 
     assert sidecar_id == "%2"
-    assert tm.get_sidecar_pane_id("@1") == "%2"
-    exec_mock.assert_awaited_once()
-    assert exec_mock.await_args is not None
+    assert marker is not None
+    assert tm.get_sidecar_pane_id("test-session:@1") == "%2"
+    assert tm.get_sidecar_completion_marker("test-session:@1") == marker
     cmd = exec_mock.await_args.args
     assert "split-window" in cmd
     assert "-d" in cmd
+    assert cmd[cmd.index("-c") + 1] == "/tmp"
+    assert "send_keys_to_pane" not in cmd
+    assert marker in cmd[-1]
+    assert ":BEGIN" in cmd[-1]
 
 
-async def test_ensure_sidecar_pane_reuses_when_two_panes_exist() -> None:
+async def test_start_sidecar_command_rejects_concurrent_command() -> None:
     tm = TmuxManager("test-session")
+    tm._sidecar_panes["test-session:@1"] = "%2"
     panes = [
-        PaneInfo(
-            pane_id="%1",
-            index=0,
-            active=True,
-            command="bash",
-            path="/tmp",
-            width=80,
-            height=24,
-        ),
-        PaneInfo(
-            pane_id="%2",
-            index=1,
-            active=False,
-            command="bash",
-            path="/tmp",
-            width=80,
-            height=24,
-        ),
+        PaneInfo("%1", 0, True, "bash", "/tmp", 80, 24),
+        PaneInfo("%2", 1, False, "sh", "/tmp", 80, 24),
     ]
 
     with (
         patch.object(tm, "list_panes", new=AsyncMock(return_value=panes)),
         patch("asyncio.create_subprocess_exec", new=AsyncMock()) as exec_mock,
     ):
-        sidecar_id = await tm.ensure_sidecar_pane("@1")
+        sidecar_id, marker = await tm.start_sidecar_command("test-session:@1", "pwd")
 
-    assert sidecar_id == "%2"
-    assert tm.get_sidecar_pane_id("@1") == "%2"
-    exec_mock.assert_not_called()
+    assert sidecar_id is None
+    assert marker is None
+    exec_mock.assert_not_awaited()
 
 
-async def test_ensure_sidecar_pane_enforces_max_two_panes_by_killing_excess() -> None:
-    tm = TmuxManager("test-session")
-    panes = [
-        PaneInfo(
-            pane_id="%1",
-            index=0,
-            active=True,
-            command="bash",
-            path="/tmp",
-            width=80,
-            height=24,
-        ),
-        PaneInfo(
-            pane_id="%2",
-            index=1,
-            active=False,
-            command="bash",
-            path="/tmp",
-            width=80,
-            height=24,
-        ),
-        PaneInfo(
-            pane_id="%3",
-            index=2,
-            active=False,
-            command="bash",
-            path="/tmp",
-            width=80,
-            height=24,
-        ),
-        PaneInfo(
-            pane_id="%4",
-            index=3,
-            active=False,
-            command="bash",
-            path="/tmp",
-            width=80,
-            height=24,
-        ),
-    ]
+def test_extract_sidecar_output_ignores_pane_history() -> None:
+    marker = "__CCGRAM_SIDECAR_DONE_marker__"
+    text = f"old prompt\n$ cat <<EOF\n{marker}:BEGIN\npwd output\n{marker}:0\n"
 
-    kill_proc = AsyncMock()
-    kill_proc.wait.return_value = 0
+    output, completed = extract_sidecar_output(text, marker)
 
-    with (
-        patch.object(tm, "list_panes", new=AsyncMock(return_value=panes)),
-        patch(
-            "asyncio.create_subprocess_exec", new=AsyncMock(return_value=kill_proc)
-        ) as exec_mock,
-    ):
-        sidecar_id = await tm.ensure_sidecar_pane("@1")
-
-    assert sidecar_id == "%2"
-    assert exec_mock.await_count == 2  # Killed %3 and %4
-    killed = [call.args[3] for call in exec_mock.await_args_list]
-    assert killed == ["%3", "%4"]
+    assert output == "pwd output"
+    assert completed is True
 
 
 async def test_forget_sidecar_pane() -> None:
@@ -141,24 +83,3 @@ async def test_forget_sidecar_pane() -> None:
     tm.forget_sidecar_pane("@1")
     assert tm.get_sidecar_pane_id("@1") is None
     assert tm.get_sidecar_completion_marker("@1") is None
-
-
-async def test_send_sidecar_command_tracks_completion_marker() -> None:
-    tm = TmuxManager("test-session")
-
-    with patch.object(
-        tm, "send_keys_to_pane", new=AsyncMock(return_value=True)
-    ) as send:
-        sent, marker = await tm.send_sidecar_command(
-            "%2", "echo 'hello world'", window_id="@1"
-        )
-
-    assert sent is True
-    assert marker is not None
-    assert tm.get_sidecar_completion_marker("@1") == marker
-    send.assert_awaited_once()
-    wrapped = send.await_args.args[1]
-    assert "/bin/sh -c" in wrapped
-    assert "echo" in wrapped
-    assert "hello world" in wrapped
-    assert marker in wrapped

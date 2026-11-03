@@ -297,7 +297,7 @@ def test_single_slash_path_does_not_match_double_slash_regex():
 
 
 @pytest.mark.asyncio
-async def test_dispatch_single_slash_command():
+async def test_dispatch_single_slash_command_is_ignored():
     from ccgram.handlers.registry import _dispatch_double_slash
 
     update = MagicMock(spec=Update)
@@ -315,4 +315,4 @@ async def test_dispatch_single_slash_command():
     ):
         command("rename", "", params="<name>")(mock_rename)
         await _dispatch_double_slash(update, context)
-        mock_rename.assert_awaited_once_with(update, context)
+        mock_rename.assert_not_awaited()

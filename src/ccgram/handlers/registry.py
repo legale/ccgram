@@ -22,7 +22,6 @@ Full names are always valid; the shortest unambiguous prefix works too.
 
 from __future__ import annotations
 
-import re
 from typing import TypeAlias
 
 import structlog
@@ -126,12 +125,9 @@ async def _dispatch_double_slash(update: Update, context) -> None:  # type: igno
     record_telegram_message(message)
 
     text = message.text.strip()
-    if text.startswith(COMMAND_PREFIX):
-        body = text[len(COMMAND_PREFIX) :]
-    elif text.startswith("/"):
-        body = text[1:]
-    else:
+    if not text.startswith(COMMAND_PREFIX):
         return
+    body = text[len(COMMAND_PREFIX) :]
 
     tokens = body.split()
     if not tokens:
@@ -173,16 +169,9 @@ def register_all(
     A single MessageHandler on ``^//`` dispatches all bot commands via
     iproute2-style prefix matching instead of per-name PrefixHandlers.
     """
-    command_names = [
-        re.escape(name)
-        for handler in COMMAND_HANDLERS
-        for info in (get_command_info(handler),)
-        for name in (info.name, *info.aliases)
-    ]
-    command_pattern = rf"^//|^/(?:{'|'.join(command_names)})(?:\s|$)"
     application.add_handler(
         MessageHandler(
-            filters.TEXT & filters.Regex(command_pattern) & group_filter,
+            filters.TEXT & filters.Regex(r"^//") & group_filter,
             _dispatch_double_slash,
         )
     )
