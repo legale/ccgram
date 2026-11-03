@@ -4,8 +4,6 @@ Provides:
   - ccgram_dir(): resolve config directory from CCBOT_DIR env var.
   - tmux_session_name(): resolve tmux session name from env.
   - atomic_write_json(): crash-safe JSON file writes via temp+rename.
-  - read_cwd_from_jsonl(): extract the cwd field from the first JSONL entry.
-  - read_session_metadata_from_jsonl(): single-pass extraction of (cwd, summary).
   - task_done_callback(): log unhandled exceptions from background asyncio tasks.
   - log_throttled(): suppress repeated identical debug messages per key.
   - detect_tmux_context(): auto-detect tmux session name and own window ID.
@@ -86,11 +84,6 @@ def log_throttle_sweep(
 CCGRAM_DIR_ENV = "CCGRAM_DIR"
 _LEGACY_DIR_ENV = "CCBOT_DIR"
 
-# Maximum number of JSONL lines to scan when extracting session metadata.
-_SCAN_LINES = 20
-
-_SUMMARY_MAX_CHARS = 80
-
 
 def ccgram_dir() -> Path:
     """Resolve config directory from CCGRAM_DIR env var or default ~/.ccgram.
@@ -150,72 +143,6 @@ def atomic_write_json(path: Path, data: Any, indent: int = 2) -> None:
         with contextlib.suppress(OSError):
             os.unlink(tmp_path)
         raise
-
-
-def read_cwd_from_jsonl(file_path: str | Path) -> str:
-    """Read the cwd field from the first JSONL entry that has one.
-
-    Scans up to _SCAN_LINES lines. Shared by session.py and session_monitor.py.
-    """
-    cwd, _ = read_session_metadata_from_jsonl(file_path)
-    return cwd
-
-
-def _extract_user_text(msg: dict[str, object]) -> str:
-    """Extract display text from a user message's content field."""
-    content = msg.get("content", "")
-    if isinstance(content, list):
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
-                if isinstance(text, str) and text:
-                    return text[:_SUMMARY_MAX_CHARS]
-    elif isinstance(content, str) and content:
-        return content[:_SUMMARY_MAX_CHARS]
-    return ""
-
-
-def _extract_metadata_from_entry(data: dict, cwd: str, summary: str) -> tuple[str, str]:
-    """Extract cwd and summary fields from a single parsed JSONL entry."""
-    if not cwd:
-        found_cwd = data.get("cwd")
-        if found_cwd and isinstance(found_cwd, str):
-            cwd = found_cwd
-    if not summary and data.get("type") == "user":
-        msg = data.get("message", {})
-        if isinstance(msg, dict):
-            summary = _extract_user_text(msg)
-    return cwd, summary
-
-
-def read_session_metadata_from_jsonl(file_path: str | Path) -> tuple[str, str]:
-    """Extract cwd and summary from a JSONL transcript in a single file read.
-
-    Scans up to _SCAN_LINES lines. Returns (cwd, summary) where either
-    may be empty if not found.
-    """
-    cwd = ""
-    summary = ""
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            for i, line in enumerate(f):
-                if i >= _SCAN_LINES:
-                    break
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(data, dict):
-                    continue
-                cwd, summary = _extract_metadata_from_entry(data, cwd, summary)
-                if cwd and summary:
-                    break
-    except OSError:
-        pass
-    return cwd, summary
 
 
 def detect_tmux_context() -> tuple[str | None, str | None]:

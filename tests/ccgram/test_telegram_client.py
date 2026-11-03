@@ -9,10 +9,10 @@ from telegram import BotCommand, InputMedia, Message
 from telegram.error import TelegramError
 
 from ccgram.telegram_client import (
-    FakeTelegramClient,
     PTBTelegramClient,
     TelegramClient,
 )
+from tests.ccgram._helpers import FakeTelegramClient
 
 if TYPE_CHECKING:
     pass

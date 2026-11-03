@@ -13,7 +13,7 @@ from ccgram.handlers.messaging_pipeline.message_sender import (
     edit_with_fallback,
     rate_limit_send,
 )
-from ccgram.telegram_client import FakeTelegramClient
+from tests.ccgram._helpers import FakeTelegramClient
 
 import pytest
 
