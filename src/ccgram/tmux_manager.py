@@ -1,81 +1,32 @@
 """Tmux session/window management via libtmux.
 
-Wraps libtmux to provide async-friendly operations on a single tmux session:
-  - list_windows / find_window_by_name: discover agent windows.
+Wraps libtmux to provide async-friendly operations on tmux sessions:
+  - list_sessions / find_window_by_id: discover and route sessions.
   - capture_pane: read terminal content (plain or with ANSI colors).
-  - send_keys: forward user input or control keys to a window.
-  - create_window / kill_window: lifecycle management.
+  - send_keys: forward user input directly to the active pane.
+  - create_session / kill_session: lifecycle management.
   - list_panes / capture_pane_by_id / send_keys_to_pane: pane-level ops.
-  - Vim mode detection: auto-enter INSERT mode before sending text when
-    The agent's /vim mode is active and the TUI is in NORMAL mode.
 
 All blocking libtmux calls are wrapped in asyncio.to_thread().
 
 Key class: TmuxManager (singleton instantiated as `tmux_manager`).
-Module-level: _vim_state cache, _vim_locks for per-window send serialization.
 """
 
 import asyncio
 import contextlib
-
-import re
-import structlog
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import libtmux
 from libtmux.exc import LibTmuxException
+import structlog
 
 from .config import config
 from .thread_router import thread_router
 
 logger = structlog.get_logger()
-
-# ── Vim mode state cache ───────────────────────────────────────────────
-# window_id → True (vim mode on) / False (vim mode off)
-# Missing key = unknown; first send must not type probe keys into user input.
-_vim_state: dict[str, bool] = {}
-
-# Per-window locks to serialize vim probe + send sequences,
-# preventing interleaved keystrokes from concurrent send_keys() calls.
-_vim_locks: dict[str, asyncio.Lock] = {}
-
-# Delay between sending probe 'i' and recapturing pane (seconds).
-_VIM_PROBE_DELAY = 0.12
-
-
-_VIM_INSERT_RE = re.compile(r"^--\s*INSERT\s*--\s*$")
-
-
-def has_insert_indicator(pane_text: str) -> bool:
-    """Check if vim's ``-- INSERT --`` appears in the last 3 lines of pane text.
-
-    Only matches lines where ``-- INSERT --`` is the sole content (with optional
-    whitespace), avoiding false positives from the agent's own status bar which
-    renders ``-- INSERT -- ⏸ plan mode on ...`` with trailing text.
-    """
-    return any(
-        _VIM_INSERT_RE.search(line.strip()) for line in pane_text.splitlines()[-3:]
-    )
-
-
-def notify_vim_insert_seen(window_id: str) -> None:
-    """Record that vim INSERT mode was observed (called from status polling)."""
-    _vim_state[window_id] = True
-
-
-def clear_vim_state(window_id: str) -> None:
-    """Remove vim state cache entry and lock for a window (called on cleanup)."""
-    _vim_state.pop(window_id, None)
-    _vim_locks.pop(window_id, None)
-
-
-def reset_vim_state() -> None:
-    """Reset all vim state (for testing)."""
-    _vim_state.clear()
-    _vim_locks.clear()
-
 
 _TmuxError = (
     LibTmuxException,
@@ -573,58 +524,6 @@ class TmuxManager:
             logger.exception("Unexpected error capturing pane %s", window_id)
             return None
 
-    async def get_pane_title(self, window_id: str) -> str:
-        """Get the terminal title of a window's active pane.
-
-        Some CLIs (e.g. Gemini) broadcast state via OSC escape sequences
-        that set the terminal title. Returns empty string on failure.
-        """
-        proc: asyncio.subprocess.Process | None = None
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "tmux",
-                "display-message",
-                "-p",
-                "-t",
-                window_id,
-                "#{pane_title}",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            async with asyncio.timeout(5.0):
-                stdout, _ = await proc.communicate()
-            if proc.returncode != 0:
-                return ""
-            return stdout.decode("utf-8", errors="replace").strip()
-        except TimeoutError:
-            await _kill_timed_out_proc(proc)
-            return ""
-        except OSError:
-            return ""
-
-    async def stamp_pane_title(self, window_id: str, provider_name: str) -> None:
-        """Set pane title to ``ccgram:<provider>`` for instant re-detection.
-
-        Uses ``tmux select-pane -T`` to set the title directly, avoiding
-        ``send_keys`` which would deliver the command as input to agent CLIs.
-        """
-        title = f"ccgram:{provider_name}"
-        target = f"{self.session_name}:{window_id}"
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "tmux",
-                "select-pane",
-                "-t",
-                target,
-                "-T",
-                title,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            await proc.communicate()
-        except OSError:
-            pass
-
     async def _capture_pane_plain(self, window_id: str) -> str | None:
         """Capture pane as plain text via libtmux.
 
@@ -685,106 +584,6 @@ class TmuxManager:
             logger.exception("Failed to send keys to window %s", window_id)
             return False
 
-    async def _ensure_vim_insert_mode(self, window_id: str) -> None:
-        """Detect vim NORMAL mode and auto-enter INSERT before sending text.
-
-        Uses a per-window cache (_vim_state) to minimize overhead:
-        - False (vim off): returns immediately, zero cost.
-        - True (vim on): captures pane to check INSERT indicator.
-          If missing (NORMAL mode), sends ``i`` to enter INSERT.
-        - Missing (unknown): only observes current pane; no synthetic input.
-        """
-        cached = _vim_state.get(window_id)
-
-        # Fast path: vim is definitely off
-        if cached is False:
-            return
-
-        # Check current pane for INSERT indicator
-        pane_text = await self.capture_pane(window_id)
-        if not pane_text:
-            return
-
-        if has_insert_indicator(pane_text):
-            _vim_state[window_id] = True
-            return
-
-        # No INSERT indicator visible.
-        # If cache is None (unknown), don't probe by typing `i` + Backspace:
-        # in a plain shell that can race with real input and eat its first byte.
-        if cached is not True:
-            _vim_state[window_id] = False
-            return
-
-        # If cache is True (was vim), INSERT disappeared → likely NORMAL mode.
-        if not await asyncio.to_thread(
-            self._pane_send, window_id, "i", enter=False, literal=True
-        ):
-            return
-
-        await asyncio.sleep(_VIM_PROBE_DELAY)
-
-        pane_text = await self.capture_pane(window_id)
-        if not pane_text:
-            # Transient capture failure — leave state unchanged, don't backspace
-            return
-
-        if has_insert_indicator(pane_text):
-            # Vim is on — we just entered INSERT mode
-            _vim_state[window_id] = True
-            return
-
-        # No INSERT indicator → vim is off (or was turned off)
-        _vim_state[window_id] = False
-        # Clean up the stray 'i' we typed
-        await asyncio.to_thread(
-            self._pane_send, window_id, "BSpace", enter=False, literal=False
-        )
-
-    async def _send_literal_then_enter(self, window_id: str, text: str) -> bool:
-        """Send literal text followed by Enter with a delay.
-
-        The agent's TUI sometimes interprets a rapid-fire Enter
-        (arriving in the same input batch as the text) as a newline
-        rather than submit.  A 500ms gap lets the TUI process the
-        text before receiving Enter.
-
-        Auto-detects vim NORMAL mode and enters INSERT before sending.
-        Serialized per-window via _vim_locks to prevent interleaved probes.
-
-        Handles ``!`` command mode: sends ``!`` first so the TUI switches
-        to bash mode, waits 1s, then sends the rest.
-        """
-        lock = _vim_locks.setdefault(window_id, asyncio.Lock())
-        async with lock:
-            return await self._send_literal_then_enter_locked(window_id, text)
-
-    async def _send_literal_then_enter_locked(self, window_id: str, text: str) -> bool:
-        """Inner send implementation (must be called under per-window lock)."""
-        await self._ensure_vim_insert_mode(window_id)
-
-        if text.startswith("!"):
-            if not await asyncio.to_thread(
-                self._pane_send, window_id, "!", enter=False, literal=True
-            ):
-                return False
-            rest = text[1:]
-            if rest:
-                await asyncio.sleep(1.0)
-                if not await asyncio.to_thread(
-                    self._pane_send, window_id, rest, enter=False, literal=True
-                ):
-                    return False
-        else:
-            if not await asyncio.to_thread(
-                self._pane_send, window_id, text, enter=False, literal=True
-            ):
-                return False
-        await asyncio.sleep(0.5)
-        return await asyncio.to_thread(
-            self._pane_send, window_id, "Enter", enter=False, literal=False
-        )
-
     async def send_keys(
         self,
         window_id: str,
@@ -794,23 +593,8 @@ class TmuxManager:
         *,
         raw: bool = False,
     ) -> bool:
-        """Send keys to a specific window.
-
-        Args:
-            window_id: The window ID to send to
-            text: Text to send
-            enter: Whether to press enter after the text
-            literal: If True, send text literally. If False, interpret special keys
-                     like "Up", "Down", "Left", "Right", "Escape", "Enter".
-            raw: If True, bypass TUI-specific workarounds (``!`` prefix splitting,
-                 vim mode detection, Enter delay). Use for plain shell windows.
-
-        Returns:
-            True if successful, False otherwise
-        """
-        if literal and enter and not raw:
-            return await self._send_literal_then_enter(window_id, text)
-
+        """Send keys directly to the active pane of a window."""
+        _ = raw
         return await asyncio.to_thread(
             self._pane_send, window_id, text, enter=enter, literal=literal
         )
@@ -1152,116 +936,52 @@ class TmuxManager:
                     return pane
         return None
 
-    @staticmethod
-    def _start_agent_in_pane(
-        pane: libtmux.Pane,
-        launch_command: str,
-        agent_args: str,
-    ) -> None:
-        """Send launch command to pane, appending agent_args if provided."""
-        cmd = launch_command
-        if agent_args:
-            cmd = f"{cmd} {agent_args}"
-        pane.send_keys(cmd, enter=True, literal=True)
+    async def create_session(
+        self,
+        session_name: str,
+        work_dir: str,
+        window_name: str | None = None,
+    ) -> tuple[bool, str, str, str]:
+        """Create a new dedicated tmux session for a topic."""
+        path = Path(work_dir).expanduser().resolve()
+        if not path.exists() or not path.is_dir():
+            return False, f"Directory does not exist: {work_dir}", "", ""
+
+        final_name = window_name or session_name
+
+        def _sync_create() -> tuple[bool, str, str, str]:
+            try:
+                session = self.server.new_session(
+                    session_name=session_name,
+                    start_directory=str(path),
+                )
+                window = session.windows[0]
+                window.rename_window(final_name)
+                window.set_option("automatic-rename", "off")
+                wid = f"{session_name}:{window.window_id or ''}"
+                logger.info(
+                    "Created tmux session %s (window %s, path %s)",
+                    session_name,
+                    final_name,
+                    path,
+                )
+                return True, f"Created session {session_name}", final_name, wid
+            except _TmuxError as e:
+                logger.exception("Failed to create tmux session %s", session_name)
+                return False, f"Failed to create session: {e}", "", ""
+
+        return await asyncio.to_thread(_sync_create)
 
     async def create_window(
         self,
         work_dir: str,
         window_name: str | None = None,
         session_name: str | None = None,
-        start_agent: bool = True,
-        agent_args: str = "",
-        launch_command: str | None = None,
+        **_kwargs: Any,
     ) -> tuple[bool, str, str, str]:
-        """Create a new tmux window and optionally start an agent CLI.
-
-        Args:
-            work_dir: Working directory for the new window
-            window_name: Optional window name (defaults to directory name)
-            start_agent: Whether to start the agent CLI command
-            agent_args: Extra arguments appended to the launch command
-                        (e.g. "--continue", "--resume <id>")
-            launch_command: The CLI command to run (e.g. "claude", "codex", "gemini")
-
-        Returns:
-            Tuple of (success, message, window_name, window_id)
-        """
-        # Validate directory first
-        path = Path(work_dir).expanduser().resolve()
-        if not path.exists():
-            return False, f"Directory does not exist: {work_dir}", "", ""
-        if not path.is_dir():
-            return False, f"Not a directory: {work_dir}", "", ""
-
-        # Create window name, adding suffix if name already exists
-        final_window_name = window_name if window_name else path.name
-
-        # Check for existing window name
-        base_name = final_window_name
-        counter = 2
-        while await self.find_window_by_name(final_window_name):
-            final_window_name = f"{base_name}-{counter}"
-            counter += 1
-
-        # Create window in thread
-        def _create_and_start() -> tuple[bool, str, str, str]:
-            try:
-                session = self.get_session(session_name) if session_name else None
-                if session is None and session_name:
-                    session = self.server.new_session(
-                        session_name=session_name,
-                        start_directory=str(path),
-                    )
-                    window = session.windows[0]
-                    window.rename_window(final_window_name)
-                else:
-                    session = session or self.get_or_create_session()
-                    window = session.new_window(
-                        window_name=final_window_name,
-                        start_directory=str(path),
-                    )
-
-                new_window_id = window.window_id or ""
-                pane = window.active_pane
-
-                qualified_id = f"{session.session_name}:{new_window_id}"
-                returned_window_id = (
-                    qualified_id
-                    if session.session_name != self.session_name
-                    else new_window_id
-                )
-                if not (start_agent and launch_command):
-                    window.set_option("automatic-rename", "off")
-                elif pane:
-                    self._start_agent_in_pane(pane, launch_command, agent_args)
-
-                logger.info(
-                    "tmux_window_created",
-                    session_name=session.session_name,
-                    window_id=new_window_id,
-                    window_name=final_window_name,
-                    start_agent=start_agent,
-                    launch_command=launch_command,
-                )
-
-                logger.info(
-                    "Created window '%s' (id=%s) at %s",
-                    final_window_name,
-                    new_window_id,
-                    path,
-                )
-                return (
-                    True,
-                    f"Created window '{final_window_name}' at {path}",
-                    final_window_name,
-                    returned_window_id,
-                )
-
-            except _TmuxError as e:
-                logger.exception("Failed to create window")
-                return False, f"Failed to create window: {e}", "", ""
-
-        return await asyncio.to_thread(_create_and_start)
+        """Backwards-compatible wrapper creating a dedicated session."""
+        target = session_name or (window_name or self.session_name)
+        return await self.create_session(target, work_dir, window_name=window_name)
 
 
 # Global instance with default session name

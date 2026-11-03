@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 from ..config import config
 from ..thread_router import thread_router
-from ..tmux_manager import clear_vim_state, tmux_manager
+from ..tmux_manager import tmux_manager
 from ..topic_tail import clear_topic_tail_state
 from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
 from .callback_helpers import get_thread_id
@@ -78,7 +78,6 @@ def _clear_all_topic_state(
 
     # Window scope (window_id)
     if window_id:
-        _safe_call(clear_vim_state, window_id)
         _safe_call(tmux_manager.forget_sidecar_pane, window_id)
 
 
