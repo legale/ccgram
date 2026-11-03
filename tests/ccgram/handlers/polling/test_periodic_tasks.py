@@ -131,7 +131,7 @@ async def test_reconcile_proceeds_when_reopen_fails_for_non_supergroup() -> None
     client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
 
 
-async def test_reconcile_removes_session_when_telegram_topic_is_missing() -> None:
+async def test_reconcile_preserves_session_when_telegram_topic_is_missing() -> None:
     session = _session()
     client = AsyncMock()
     client.reopen_forum_topic.side_effect = BadRequest("Message thread not found")
@@ -146,18 +146,18 @@ async def test_reconcile_removes_session_when_telegram_topic_is_missing() -> Non
     ):
         tmux.list_sessions = AsyncMock(return_value=[session])
         tmux.capture_pane = AsyncMock(return_value=None)
-        tmux.kill_session = AsyncMock(return_value=True)
+        tmux.clear_session_topic = AsyncMock(return_value=True)
         config.tmux_session_prefix = "cc_"
         config.allowed_users = {1}
         await periodic_tasks.reconcile(client)
 
-    tmux.kill_session.assert_awaited_once_with("cc_foo")
+    tmux.clear_session_topic.assert_awaited_once_with("cc_foo")
     client.create_forum_topic.assert_not_called()
     assert session.topic_ref is None
     assert router.get_window_for_thread(1, 42) is None
 
 
-async def test_reconcile_checks_existing_binding_for_dead_topic() -> None:
+async def test_reconcile_detaches_existing_binding_for_missing_topic() -> None:
     session = _session()
     client = AsyncMock()
     client.reopen_forum_topic.side_effect = BadRequest("Message thread not found")
@@ -172,12 +172,12 @@ async def test_reconcile_checks_existing_binding_for_dead_topic() -> None:
         patch("ccgram.handlers.cleanup.clear_topic_state", new_callable=AsyncMock),
     ):
         tmux.list_sessions = AsyncMock(return_value=[session])
-        tmux.kill_session = AsyncMock(return_value=True)
+        tmux.clear_session_topic = AsyncMock(return_value=True)
         config.tmux_session_prefix = "cc_"
         await periodic_tasks.reconcile(client)
 
     client.reopen_forum_topic.assert_awaited_once_with(-100, 42)
-    tmux.kill_session.assert_awaited_once_with("cc_foo")
+    tmux.clear_session_topic.assert_awaited_once_with("cc_foo")
     assert router.get_window_for_thread(1, 42) is None
 
 

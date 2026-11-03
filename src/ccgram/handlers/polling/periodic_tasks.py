@@ -131,23 +131,24 @@ async def _delete_runtime_topic(
     return True
 
 
-async def _remove_missing_topic(
+async def _detach_missing_topic(
     client: TelegramClient,
     session: "TmuxWindow",
     chat_id: int,
     thread_id: int,
 ) -> None:
-    """Remove a tmux session whose Telegram topic was deleted."""
+    """Drop a missing Telegram binding without killing the tmux session."""
     session_name = session.window_name
-    if not await tmux_manager.kill_session(session_name):
+    if not await tmux_manager.clear_session_topic(session_name):
         logger.warning(
-            "Failed to remove tmux session %s after topic deletion", session_name
+            "Failed to clear stale Telegram binding from tmux session %s",
+            session_name,
         )
         return
     session.topic_ref = None
-    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=True)
+    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
     logger.info(
-        "Removed tmux session %s after Telegram topic deletion",
+        "Preserved tmux session %s after Telegram topic disappeared",
         session_name,
     )
 
@@ -163,7 +164,7 @@ async def _sync_topic(
         await client.reopen_forum_topic(chat_id, thread_id)
     except BadRequest as e:
         if is_thread_gone(e):
-            await _remove_missing_topic(client, session, chat_id, thread_id)
+            await _detach_missing_topic(client, session, chat_id, thread_id)
             return
         if (
             "topic_not_modified" not in e.message.lower()
@@ -192,7 +193,7 @@ async def _sync_topic(
         if "topic_not_modified" in e.message.lower():
             return
         if is_thread_gone(e):
-            await _remove_missing_topic(client, session, chat_id, thread_id)
+            await _detach_missing_topic(client, session, chat_id, thread_id)
             return
         log_throttled(
             logger,
@@ -289,7 +290,7 @@ async def _clear_dead_topics(
             await client.reopen_forum_topic(chat_id, thread_id)
         except BadRequest as exc:
             if is_thread_gone(exc):
-                await _remove_missing_topic(client, session, chat_id, thread_id)
+                await _detach_missing_topic(client, session, chat_id, thread_id)
         except TelegramError as exc:
             log_throttled(
                 logger,

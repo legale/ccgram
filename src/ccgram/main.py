@@ -165,22 +165,14 @@ def run_bot() -> None:
 
     logger = structlog.get_logger()
 
-    # Lazy: main runs `ccgram` startup; defer imports until the relevant subcommand executes
-    from .tmux_manager import tmux_manager
-
     logger.info("Allowed users: %s", config.allowed_users)
 
-    # In auto-detect mode, session must already exist
+    # When started inside tmux, use the existing session only to identify the
+    # daemon's own window. The daemon never needs a control session of its own.
     if auto_detected:
-        session = tmux_manager.get_session()
-        if not session:
-            logger.error("Tmux session '%s' not found", config.tmux_session_name)
-            sys.exit(1)
-        logger.info("Auto-detected tmux session '%s'", session.session_name)
+        logger.info("Auto-detected tmux session '%s'", config.tmux_session_name)
     else:
-        session = tmux_manager.get_or_create_session()
-
-    logger.info("Tmux session '%s' ready", session.session_name)
+        logger.info("Tmux session auto-detection disabled")
 
     # Lazy: main runs `ccgram` startup; defer imports until the relevant subcommand executes
     from . import __version__
