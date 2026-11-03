@@ -82,21 +82,30 @@ def test_screen_render_limits_body_to_3000_chars() -> None:
     assert len(body) <= 3000
 
 
-def test_screen_diff_keyboard_has_resize_buttons() -> None:
+@pytest.mark.parametrize(
+    ("limit", "label"),
+    [(1000, "buf=1k"), (3000, "buf=3k"), (3500, "buf=3500")],
+)
+def test_screen_diff_keyboard_has_buffer_button(monkeypatch, limit, label) -> None:
+    monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", limit)
     keyboard = topic_status_diff.build_screen_diff_keyboard()
     buttons = [button for row in keyboard.inline_keyboard for button in row]
 
-    assert [button.text for button in buttons] == ["-25%", "+25%", "Ent", "Esc"]
+    assert [button.text for button in buttons] == [label, "Ent", "Esc", "→"]
     assert [button.callback_data for button in buttons] == [
-        "sd:-25",
-        "sd:+25",
+        "sd:buf",
         "sd:ent",
         "sd:esc",
+        "sd:right",
     ]
 
 
-async def test_screen_diff_key_sends_enter_or_escape(monkeypatch) -> None:
-    for data, key in (("sd:ent", "Enter"), ("sd:esc", "Escape")):
+async def test_screen_diff_key_sends_control_keys(monkeypatch) -> None:
+    for data, key in (
+        ("sd:ent", "Enter"),
+        ("sd:esc", "Escape"),
+        ("sd:right", "Right"),
+    ):
         query = MagicMock()
         query.data = data
         query.message.message_thread_id = 2
@@ -123,14 +132,14 @@ async def test_screen_diff_key_sends_enter_or_escape(monkeypatch) -> None:
         query.answer.assert_awaited_once_with(key)
 
 
-async def test_screen_diff_resize_changes_topic_limit(monkeypatch) -> None:
+async def test_screen_diff_buffer_button_cycles_topic_limit(monkeypatch) -> None:
     monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", 3000)
     state = topic_status_diff._get_state(1, 2, "@7")
     state.last_display_text = "old"
     state.last_edit_ts = 10.0
 
     query = MagicMock()
-    query.data = "sd:-25"
+    query.data = "sd:buf"
     query.answer = AsyncMock()
     update = MagicMock()
     update.callback_query = query
@@ -138,10 +147,16 @@ async def test_screen_diff_resize_changes_topic_limit(monkeypatch) -> None:
 
     await topic_status_diff._handle_screen_diff_resize(update, context)
 
-    assert topic_status_diff.config.screen_diff_limit == 2250
+    assert topic_status_diff.config.screen_diff_limit == 4000
     assert state.last_display_text == ""
     assert state.last_edit_ts == 0.0
-    query.answer.assert_awaited_once_with("Screen buffer: 2250")
+    query.answer.assert_awaited_once_with("Screen buffer: 4000")
+
+    query.answer.reset_mock()
+    await topic_status_diff._handle_screen_diff_resize(update, context)
+
+    assert topic_status_diff.config.screen_diff_limit == 1000
+    query.answer.assert_awaited_once_with("Screen buffer: 1000")
 
 
 def test_screen_render_collapses_long_underscores() -> None:

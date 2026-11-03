@@ -16,7 +16,7 @@ Constants:
 CB_SCREENSHOT_REFRESH = "ss:ref:"
 
 # Screen diff buffer controls
-CB_SCREEN_DIFF = "sd:"  # sd:-25 / sd:+25
+CB_SCREEN_DIFF = "sd:"  # sd:buf / sd:ent / sd:esc / sd:right
 
 # Interactive UI (aq: prefix kept for backward compatibility)
 CB_ASK_UP = "aq:up:"  # aq:up:<window>

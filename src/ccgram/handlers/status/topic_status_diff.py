@@ -38,10 +38,6 @@ _RE_LONG_REPEATS = re.compile(r"([_─])\1{30,}")
 _RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 logger = structlog.get_logger()
 
-SCREEN_DIFF_MIN_LIMIT = 100
-SCREEN_DIFF_MAX_LIMIT = 4000
-
-
 @dataclass
 class _DiffState:
     window_id: str
@@ -82,15 +78,24 @@ def _tail_lines(text: str, limit: int | None = None) -> str:
     return "\n".join(reversed(kept))
 
 
+def _format_screen_diff_limit(limit: int) -> str:
+    if limit >= 1000 and limit % 1000 == 0:
+        return f"{limit // 1000}k"
+    return str(limit)
+
+
 def build_screen_diff_keyboard() -> InlineKeyboardMarkup:
     """Build runtime controls for the current Screen delta buffer."""
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("-25%", callback_data=f"{CB_SCREEN_DIFF}-25"),
-                InlineKeyboardButton("+25%", callback_data=f"{CB_SCREEN_DIFF}+25"),
+                InlineKeyboardButton(
+                    f"buf={_format_screen_diff_limit(config.screen_diff_limit)}",
+                    callback_data=f"{CB_SCREEN_DIFF}buf",
+                ),
                 InlineKeyboardButton("Ent", callback_data=f"{CB_SCREEN_DIFF}ent"),
                 InlineKeyboardButton("Esc", callback_data=f"{CB_SCREEN_DIFF}esc"),
+                InlineKeyboardButton("→", callback_data=f"{CB_SCREEN_DIFF}right"),
             ]
         ]
     )
@@ -393,20 +398,29 @@ async def _handle_screen_diff_resize(
     if query is None or not query.data:
         return
 
-    if query.data in (f"{CB_SCREEN_DIFF}ent", f"{CB_SCREEN_DIFF}esc"):
-        key = "Enter" if query.data.endswith("ent") else "Escape"
+    key_by_action = {
+        f"{CB_SCREEN_DIFF}ent": "Enter",
+        f"{CB_SCREEN_DIFF}esc": "Escape",
+        f"{CB_SCREEN_DIFF}right": "Right",
+    }
+    if query.data in key_by_action:
+        key = key_by_action[query.data]
         await _send_screen_diff_key(update, query, key)
         return
 
-    if query.data not in (f"{CB_SCREEN_DIFF}-25", f"{CB_SCREEN_DIFF}+25"):
+    if query.data != f"{CB_SCREEN_DIFF}buf":
         await query.answer("Unknown screen buffer action", show_alert=True)
         return
 
+    step = max(
+        config.screen_diff_min_limit,
+        int(round(config.screen_diff_max_limit * config.screen_diff_step_percent)),
+    )
     current = config.screen_diff_limit
-    factor = 0.75 if query.data == f"{CB_SCREEN_DIFF}-25" else 1.25
-    config.screen_diff_limit = min(
-        SCREEN_DIFF_MAX_LIMIT,
-        max(SCREEN_DIFF_MIN_LIMIT, int(round(current * factor))),
+    config.screen_diff_limit = (
+        step
+        if current >= config.screen_diff_max_limit
+        else min(config.screen_diff_max_limit, current + step)
     )
     for state in _diff_states.values():
         state.last_display_text = ""

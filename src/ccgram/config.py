@@ -54,6 +54,17 @@ def _parse_required_int_env(name: str) -> int:
         raise ValueError(f"{name} must be a valid integer: {exc}") from exc
 
 
+def _parse_required_float_env(name: str) -> float:
+    """Parse a required float environment variable without a code default."""
+    raw = os.getenv(name)
+    if raw is None:
+        raise ValueError(f"{name} environment variable is required")
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a valid number: {exc}") from exc
+
+
 def _parse_bool_env(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -190,8 +201,25 @@ class Config:
         self.topic_status_diff_interval: int = max(
             1, _parse_int_env("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", 3)
         )
+        self.screen_diff_min_limit: int = _parse_required_int_env(
+            "CCGRAM_SCREEN_DIFF_MIN_LIMIT"
+        )
+        self.screen_diff_max_limit: int = _parse_required_int_env(
+            "CCGRAM_SCREEN_DIFF_MAX_LIMIT"
+        )
+        self.screen_diff_step_percent: float = _parse_required_float_env(
+            "CCGRAM_SCREEN_DIFF_STEP_PERCENT"
+        )
+        if self.screen_diff_min_limit <= 0:
+            raise ValueError("CCGRAM_SCREEN_DIFF_MIN_LIMIT must be positive")
+        if self.screen_diff_max_limit < self.screen_diff_min_limit:
+            raise ValueError(
+                "CCGRAM_SCREEN_DIFF_MAX_LIMIT must be at least the minimum limit"
+            )
+        if self.screen_diff_step_percent <= 0:
+            raise ValueError("CCGRAM_SCREEN_DIFF_STEP_PERCENT must be positive")
         self.screen_diff_limit: int = max(
-            100, _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
+            self.screen_diff_min_limit, _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
         )
         self.topic_idle_enabled: bool = _parse_bool_env(
             "CCGRAM_TOPIC_IDLE_ENABLED", True

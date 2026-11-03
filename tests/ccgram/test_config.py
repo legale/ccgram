@@ -1,7 +1,7 @@
 import socket
 import pytest
 
-from ccgram.config import Config, _parse_required_int_env
+from ccgram.config import Config, _parse_required_float_env, _parse_required_int_env
 
 
 @pytest.fixture
@@ -245,13 +245,22 @@ class TestLimitsConfig:
         cfg = Config()
         assert cfg.live_view_limit == 2500
         assert cfg.screen_diff_limit == 3000
+        assert cfg.screen_diff_min_limit == 100
+        assert cfg.screen_diff_max_limit == 4000
+        assert cfg.screen_diff_step_percent == 0.25
 
     def test_custom_limits(self, monkeypatch):
         monkeypatch.setenv("CCGRAM_LIVE_VIEW_LIMIT", "500")
         monkeypatch.setenv("CCGRAM_SCREEN_DIFF_LIMIT", "800")
+        monkeypatch.setenv("CCGRAM_SCREEN_DIFF_MIN_LIMIT", "200")
+        monkeypatch.setenv("CCGRAM_SCREEN_DIFF_MAX_LIMIT", "8000")
+        monkeypatch.setenv("CCGRAM_SCREEN_DIFF_STEP_PERCENT", "0.2")
         cfg = Config()
         assert cfg.live_view_limit == 500
         assert cfg.screen_diff_limit == 800
+        assert cfg.screen_diff_min_limit == 200
+        assert cfg.screen_diff_max_limit == 8000
+        assert cfg.screen_diff_step_percent == 0.2
 
     def test_screen_diff_limit_has_no_code_fallback(self, monkeypatch):
         monkeypatch.delenv("CCGRAM_SCREEN_DIFF_LIMIT", raising=False)
@@ -259,6 +268,14 @@ class TestLimitsConfig:
             ValueError, match="CCGRAM_SCREEN_DIFF_LIMIT environment variable is required"
         ):
             _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
+
+    def test_screen_diff_step_has_no_code_fallback(self, monkeypatch):
+        monkeypatch.delenv("CCGRAM_SCREEN_DIFF_STEP_PERCENT", raising=False)
+        with pytest.raises(
+            ValueError,
+            match="CCGRAM_SCREEN_DIFF_STEP_PERCENT environment variable is required",
+        ):
+            _parse_required_float_env("CCGRAM_SCREEN_DIFF_STEP_PERCENT")
 
     def test_env_default_file_fallback(self, monkeypatch, tmp_path):
         default_file = tmp_path / ".env-default"
