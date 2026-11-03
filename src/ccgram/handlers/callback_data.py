@@ -92,10 +92,3 @@ CB_VOICE = "vc:"  # vc:send:<msg_id> / vc:drop:<msg_id>
 # Live view (auto-refreshing screenshot)
 CB_LIVE_START = "lv:go:"  # lv:go:<target> (window_id or window_id:pane_id)
 CB_LIVE_STOP = "lv:stop:"  # lv:stop:<target>
-
-# /send command file browser
-CB_SEND_FILE = "sf:f:"  # sf:f:<idx> — select file at index
-CB_SEND_DIR = "sf:d:"  # sf:d:<idx> — navigate into dir at index
-CB_SEND_PAGE = "sf:pg:"  # sf:pg:<page> — pagination
-CB_SEND_UP = "sf:up"  # navigate to parent directory
-CB_SEND_CANCEL = "sf:x"  # cancel /send browser

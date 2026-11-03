@@ -73,7 +73,6 @@ _SINGLETON_ALLOWLIST = frozenset(
         "polling/periodic_tasks.py",
         "polling/polling_state.py",
         "polling/window_tick/apply.py",
-        "send/send_callbacks.py",
         "send/send_command.py",
         "sessions_dashboard.py",
         "shell/shell_capture.py",
