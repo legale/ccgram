@@ -18,7 +18,7 @@ from ccgram.handlers.registry import (
     register_all,
 )
 from ccgram.handlers.arg_parser import match_command, matches
-from ccgram.handlers.command_meta import get_command_info
+from ccgram.handlers.command_meta import command, get_command_info
 
 
 # ---------------------------------------------------------------------------
@@ -300,10 +300,12 @@ async def test_dispatch_single_slash_command():
 
     context = MagicMock()
     with (
-        patch("ccgram.handlers.topics.topic_binding.rename_command", new_callable=AsyncMock) as mock_rename,
+        patch(
+            "ccgram.handlers.topics.topic_binding.rename_command",
+            new_callable=AsyncMock,
+        ) as mock_rename,
         patch("ccgram.handlers.registry.COMMAND_HANDLERS", (mock_rename,)),
     ):
-        mock_rename._command_info = MagicMock(name="rename", aliases=(), description="", params="<name>", menu_name=None)
+        command("rename", "", params="<name>")(mock_rename)
         await _dispatch_double_slash(update, context)
         mock_rename.assert_awaited_once_with(update, context)
-

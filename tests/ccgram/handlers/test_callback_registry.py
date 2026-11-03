@@ -246,6 +246,7 @@ class TestLoadHandlers:
         expected_modules = [
             "ccgram.handlers.live.screenshot_callbacks",
             "ccgram.handlers.sessions_dashboard",
+            "ccgram.handlers.status.topic_status_diff",
         ]
         for mod in expected_modules:
             assert mod in sys.modules, f"{mod} not imported by load_handlers()"

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -36,6 +36,11 @@ async def test_first_capture_renders_current_screen(monkeypatch) -> None:
     )
 
     send.assert_awaited_once()
+    assert send.await_args is not None
+    assert send.await_args.kwargs["reply_markup"] == (
+        topic_status_diff.build_screen_diff_keyboard()
+    )
+    assert send.await_args.kwargs["split_max_length"] == 4096
     assert "hello" in topic_status_diff._diff_states[(1, 2, "main")].last_display_text
 
 
@@ -75,6 +80,35 @@ def test_screen_render_limits_body_to_3000_chars() -> None:
     rendered = topic_status_diff._format_screen("@1", text)
     body = rendered.split("```\n")[1].rsplit("\n```", 1)[0]
     assert len(body) <= 3000
+
+
+def test_screen_diff_keyboard_has_resize_buttons() -> None:
+    keyboard = topic_status_diff.build_screen_diff_keyboard()
+    buttons = [button for row in keyboard.inline_keyboard for button in row]
+
+    assert [button.text for button in buttons] == ["-25%", "+25%"]
+    assert [button.callback_data for button in buttons] == ["sd:-25", "sd:+25"]
+
+
+async def test_screen_diff_resize_changes_topic_limit(monkeypatch) -> None:
+    monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", 3000)
+    state = topic_status_diff._get_state(1, 2, "@7")
+    state.last_display_text = "old"
+    state.last_edit_ts = 10.0
+
+    query = MagicMock()
+    query.data = "sd:-25"
+    query.answer = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    context = MagicMock()
+
+    await topic_status_diff._handle_screen_diff_resize(update, context)
+
+    assert topic_status_diff.config.screen_diff_limit == 2250
+    assert state.last_display_text == ""
+    assert state.last_edit_ts == 0.0
+    query.answer.assert_awaited_once_with("Screen buffer: 2250")
 
 
 def test_screen_render_collapses_long_underscores() -> None:
@@ -186,7 +220,7 @@ async def test_changed_after_interval_edits_when_last(monkeypatch) -> None:
     )
     send.reset_mock()
 
-    monotonic.v = 11.0
+    monotonic.v = 22.0
     await topic_status_diff.update_topic_status_diff(
         client,
         chat_id=1,
@@ -228,6 +262,33 @@ async def test_new_message_timestamp_forces_new_diff_message(monkeypatch) -> Non
 
     assert send.await_count == 1
     edit.assert_not_called()
+
+
+async def test_changed_screen_edits_with_resize_keyboard(monkeypatch) -> None:
+    client = AsyncMock()
+    sent = SimpleNamespace(message_id=10)
+    send = AsyncMock(return_value=sent)
+    edit = AsyncMock(return_value=True)
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", edit)
+    monkeypatch.setattr(topic_status_diff, "is_last", lambda *_args, **_kw: True)
+
+    monotonic = SimpleNamespace(v=11.0)
+    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
+
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "first\n", active=True
+    )
+    monotonic.v = 22.0
+    await topic_status_diff.update_topic_status_diff(
+        client, 1, 2, "@7", "second\n", active=True
+    )
+
+    edit.assert_awaited_once()
+    assert edit.await_args is not None
+    assert edit.await_args.kwargs["reply_markup"] == (
+        topic_status_diff.build_screen_diff_keyboard()
+    )
 
 
 async def test_changed_after_interval_sends_new_when_not_last(monkeypatch) -> None:

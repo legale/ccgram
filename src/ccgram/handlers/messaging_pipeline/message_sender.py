@@ -163,11 +163,12 @@ async def _send_text_parts(
     *,
     chat_id: int | None = None,
     track: bool = False,
+    split_max_length: int = 3000,
     **kwargs: Any,
 ) -> Message | None:
     """Send all parts instead of truncating at Telegram's message limit."""
     sent = None
-    for i, part in enumerate(split_message(text, max_length=3000)):
+    for i, part in enumerate(split_message(text, max_length=split_max_length)):
         if i:
             kwargs.pop("reply_markup", None)
             kwargs.pop("reply_to_message_id", None)
@@ -186,6 +187,7 @@ async def _send_with_fallback(
     client: TelegramClient,
     chat_id: int,
     text: str,
+    split_max_length: int = 3000,
     **kwargs: Any,
 ) -> Message | None:
     """Send message with entity formatting, falling back to plain text on failure.
@@ -198,7 +200,12 @@ async def _send_with_fallback(
         return await client.send_message(chat_id=chat_id, text=text, **kw)
 
     return await _send_text_parts(
-        _send, text, f"send message to {chat_id}", chat_id=chat_id, **kwargs
+        _send,
+        text,
+        f"send message to {chat_id}",
+        chat_id=chat_id,
+        split_max_length=split_max_length,
+        **kwargs,
     )
 
 

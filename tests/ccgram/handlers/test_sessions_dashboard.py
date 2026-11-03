@@ -235,4 +235,4 @@ class TestRename:
             handled = await apply_session_rename(user_data, 42, "bar", message)
 
         assert handled is True
-        tmux.rename_session.assert_awaited_once_with("cc_foo", "bar")
+        tmux.rename_session.assert_awaited_once_with("cc_foo", "cc_bar")

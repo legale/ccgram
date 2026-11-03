@@ -6,20 +6,28 @@ import time
 import asyncio
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 import structlog
 
 import contextlib
 
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.error import RetryAfter, TelegramError
 
 from ...config import config
 from ...telegram_client import TelegramClient
+from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH
 from ...topic_tail import is_last, record_message
+from ..callback_data import CB_SCREEN_DIFF
+from ..callback_registry import register
 from ..messaging_pipeline.message_sender import (
     edit_with_fallback,
     rate_limit_send_message,
 )
+
+if TYPE_CHECKING:
+    from telegram.ext import ContextTypes
 
 _RE_ANSI = re.compile(
     r"\x1b\[[0-?]*[ -/]*[@-~]|"
@@ -29,6 +37,9 @@ _RE_ANSI = re.compile(
 _RE_LONG_REPEATS = re.compile(r"([_─])\1{30,}")
 _RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 logger = structlog.get_logger()
+
+SCREEN_DIFF_MIN_LIMIT = 100
+SCREEN_DIFF_MAX_LIMIT = 4000
 
 
 @dataclass
@@ -71,9 +82,26 @@ def _tail_lines(text: str, limit: int | None = None) -> str:
     return "\n".join(reversed(kept))
 
 
-def _format_screen(window_id: str, pane_text: str, title: str | None = None) -> str:
+def build_screen_diff_keyboard() -> InlineKeyboardMarkup:
+    """Build runtime controls for the current Screen delta buffer."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("-25%", callback_data=f"{CB_SCREEN_DIFF}-25"),
+                InlineKeyboardButton("+25%", callback_data=f"{CB_SCREEN_DIFF}+25"),
+            ]
+        ]
+    )
+
+
+def _format_screen(
+    window_id: str,
+    pane_text: str,
+    title: str | None = None,
+    limit: int | None = None,
+) -> str:
     header = title or f"Screen delta {window_id}"
-    body = _tail_lines(pane_text, config.screen_diff_limit)
+    body = _tail_lines(pane_text, config.screen_diff_limit if limit is None else limit)
     return f"{header}\n```\n{body}\n```"
 
 
@@ -141,6 +169,8 @@ async def _send_new(
         chat_id,
         text,
         message_thread_id=thread_id,
+        reply_markup=build_screen_diff_keyboard(),
+        split_max_length=TELEGRAM_MAX_MESSAGE_LENGTH,
     )
     message_id = getattr(sent, "message_id", None)
     if message_id is None:
@@ -180,7 +210,13 @@ async def _edit_or_send(
 
     try:
         state.edit_task = asyncio.create_task(
-            edit_with_fallback(client, chat_id, state.message_id, text)
+            edit_with_fallback(
+                client,
+                chat_id,
+                state.message_id,
+                text,
+                reply_markup=build_screen_diff_keyboard(),
+            )
         )
         ok = await state.edit_task
     except asyncio.CancelledError:
@@ -222,7 +258,12 @@ async def update_topic_status_diff(
 
     state = _get_state(chat_id, thread_id, window_id, target=target)
     now = time.monotonic()
-    text = _format_screen(window_id, pane_text, title=state.title)
+    text = _format_screen(
+        window_id,
+        pane_text,
+        title=state.title,
+        limit=config.screen_diff_limit,
+    )
 
     # When screen content changes, record the timestamp of activity
     if text != state.last_display_text:
@@ -299,5 +340,34 @@ def prime_topic_status_diff(
     if not pane_text:
         return
     state = _get_state(chat_id, thread_id, window_id, target=target)
-    state.last_display_text = _format_screen(window_id, pane_text, title=state.title)
+    state.last_display_text = _format_screen(
+        window_id,
+        pane_text,
+        title=state.title,
+        limit=config.screen_diff_limit,
+    )
     state.last_edit_ts = time.monotonic()
+
+
+@register(CB_SCREEN_DIFF)
+async def _handle_screen_diff_resize(
+    update: Update, _context: "ContextTypes.DEFAULT_TYPE"
+) -> None:
+    query = update.callback_query
+    if query is None or not query.data:
+        return
+
+    if query.data not in (f"{CB_SCREEN_DIFF}-25", f"{CB_SCREEN_DIFF}+25"):
+        await query.answer("Unknown screen buffer action", show_alert=True)
+        return
+
+    current = config.screen_diff_limit
+    factor = 0.75 if query.data == f"{CB_SCREEN_DIFF}-25" else 1.25
+    config.screen_diff_limit = min(
+        SCREEN_DIFF_MAX_LIMIT,
+        max(SCREEN_DIFF_MIN_LIMIT, int(round(current * factor))),
+    )
+    for state in _diff_states.values():
+        state.last_display_text = ""
+        state.last_edit_ts = 0.0
+    await query.answer(f"Screen buffer: {config.screen_diff_limit}")

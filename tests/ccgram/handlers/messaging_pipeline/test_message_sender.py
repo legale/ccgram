@@ -108,6 +108,18 @@ class TestSendWithFallback:
         assert "entities" in last.kwargs
         assert "parse_mode" not in last.kwargs
 
+    async def test_custom_split_limit_is_not_forwarded_to_telegram(
+        self, client: FakeTelegramClient
+    ) -> None:
+        sent = _fake_message()
+        client.returns["send_message"] = sent
+
+        await _send_with_fallback(client, 123, "hello", split_max_length=4096)
+
+        last = client.last_call("send_message")
+        assert last is not None
+        assert "split_max_length" not in last.kwargs
+
     async def test_fallback_to_plain(self, client: FakeTelegramClient) -> None:
         sent = _fake_message()
         client.set_side_effect("send_message", [TelegramError("entity error"), sent])
