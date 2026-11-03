@@ -31,6 +31,7 @@ from .send_security import (
 )
 
 __all__ = [
+    "COMMAND_HANDLERS",
     "build_file_browser",
     "build_search_results",
     "check_gitleaks_rules",

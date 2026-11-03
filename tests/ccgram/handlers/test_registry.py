@@ -69,6 +69,8 @@ def test_find_handler_prefix_screenshot_unambiguous():
 
 
 def test_find_handler_prefix_screen_is_one_command():
+    from ccgram.handlers.live import screenshot_command
+
     # An alias belongs to its handler and does not create a duplicate candidate.
     assert _match("sc")[0] is screenshot_command
 

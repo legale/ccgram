@@ -43,8 +43,6 @@ from .polling.polling_state import (
     lifecycle_strategy,
     terminal_poll_state,
 )
-from .shell.shell_capture import clear_shell_monitor_state
-from .shell.shell_commands import clear_shell_hint_seen, clear_shell_pending
 from .status.topic_emoji import clear_topic_emoji_state
 from .status.topic_status_diff import clear_topic_status_diff_state
 from .toolbar.toolbar_keyboard import clear_toolbar_labels
@@ -88,8 +86,6 @@ def _clear_all_topic_state(
 
     # Chat scope (chat_id, thread_id)
     if chat_id is not None:
-        _safe_call(clear_shell_pending, chat_id, thread_id)
-        _safe_call(clear_shell_hint_seen, chat_id, thread_id)
         _safe_call(clear_topic_emoji_state, chat_id, thread_id)
         _safe_call(clear_topic_tail_state, chat_id, thread_id)
 
@@ -97,7 +93,6 @@ def _clear_all_topic_state(
     if window_id:
         _safe_call(terminal_poll_state.clear_state, window_id)
         _safe_call(interactive_strategy.clear_pane_alerts, window_id)
-        _safe_call(clear_shell_monitor_state, window_id)
         _safe_call(clear_toolbar_labels, window_id)
         _safe_call(clear_vim_state, window_id)
         _safe_call(tmux_manager.forget_sidecar_pane, window_id)
@@ -150,12 +145,6 @@ async def clear_topic_state(
         qualified_id=qualified_id,
         chat_id=chat_id,
     )
-    if window_id and window_dead:
-        # Lazy: cleanup → shell.shell_prompt_orchestrator → shell/__init__ →
-        # polling → window_tick → apply → cleanup forms a cycle. Keep lazy.
-        from .shell.shell_prompt_orchestrator import clear_state as _clear_shell_prompt
-
-        _clear_shell_prompt(window_id)
 
     # Infrastructure cleanup (formatted keys, file I/O — not registerable)
     log_throttle_reset(f"status-update:{user_id}:{thread_id}")

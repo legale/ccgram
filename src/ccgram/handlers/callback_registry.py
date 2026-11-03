@@ -128,6 +128,3 @@ def load_handlers() -> None:
 
     # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
     from .send import send_callbacks  # noqa: F401
-
-    # Lazy: handler subpackage modules import callback_registry for the @register_callback decorator; importing them here at module load would cycle
-    from .shell import shell_capture, shell_commands, shell_prompt_orchestrator  # noqa: F401

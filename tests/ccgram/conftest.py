@@ -39,17 +39,6 @@ def _clean_provider_env(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _default_replace_prompt_mode():
-    """Default to replace mode so existing tests using ccgram:N❯ markers pass."""
-    from ccgram.config import config
-
-    original = config.prompt_mode
-    config.prompt_mode = "replace"
-    yield
-    config.prompt_mode = original
-
-
-@pytest.fixture(autouse=True)
 def _default_show_tool_calls():
     """Show tool calls by default in unit tests.
 
@@ -63,17 +52,6 @@ def _default_show_tool_calls():
     config.hide_tool_calls = False
     yield
     config.hide_tool_calls = original
-
-
-@pytest.fixture
-def _wrap_mode():
-    """Switch to wrap prompt mode for the test."""
-    from ccgram.config import config
-
-    original = config.prompt_mode
-    config.prompt_mode = "wrap"
-    yield
-    config.prompt_mode = original
 
 
 @pytest.fixture(autouse=True)
