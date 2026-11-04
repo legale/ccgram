@@ -92,13 +92,6 @@ class TelegramClient(Protocol):
         **kwargs: Any,
     ) -> Message: ...
 
-    async def send_voice(
-        self,
-        chat_id: int | str,
-        voice: Any,
-        **kwargs: Any,
-    ) -> Message: ...
-
     async def send_chat_action(
         self,
         chat_id: int | str,
@@ -252,11 +245,6 @@ class PTBTelegramClient:
         return await self._bot.send_document(
             chat_id=chat_id, document=document, **kwargs
         )
-
-    async def send_voice(
-        self, chat_id: int | str, voice: Any, **kwargs: Any
-    ) -> Message:
-        return await self._bot.send_voice(chat_id=chat_id, voice=voice, **kwargs)
 
     async def send_chat_action(
         self, chat_id: int | str, action: str, **kwargs: Any
