@@ -182,6 +182,7 @@ async def _send_new(
     state: _DiffState,
     text: str,
 ) -> bool:
+    previous_message_id = state.message_id
     sent = await rate_limit_send_message(
         client,
         chat_id,
@@ -193,6 +194,21 @@ async def _send_new(
     message_id = getattr(sent, "message_id", None)
     if message_id is None:
         return False
+    if previous_message_id > 0 and previous_message_id != int(message_id):
+        try:
+            await client.edit_message_reply_markup(
+                chat_id=chat_id,
+                message_id=previous_message_id,
+                reply_markup=None,
+            )
+        except TelegramError as exc:
+            logger.warning(
+                "topic_screen_diff_clear_old_keyboard_failed",
+                chat_id=chat_id,
+                thread_id=thread_id,
+                message_id=previous_message_id,
+                error=str(exc),
+            )
     state.message_id = int(message_id)
     record_message(chat_id, thread_id, state.message_id)
     state.diff_ts = state.last_msg_ts
@@ -243,7 +259,6 @@ async def _edit_or_send(
     action = "edit"
     if state.message_id <= 0 or state.diff_ts < diff_ts:
         action = "send"
-        state.message_id = 0
     elif not is_last(chat_id, thread_id, state.message_id):
         action = "send"
     logger.info(

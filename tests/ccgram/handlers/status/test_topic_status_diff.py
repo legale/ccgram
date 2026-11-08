@@ -66,6 +66,22 @@ async def test_first_capture_strips_ansi(monkeypatch) -> None:
     )
 
 
+async def test_new_screen_diff_clears_previous_keyboard(monkeypatch) -> None:
+    client = AsyncMock()
+    send = AsyncMock(return_value=SimpleNamespace(message_id=11))
+    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
+    state = topic_status_diff._get_state(1, 2, "@7")
+    state.message_id = 10
+
+    assert await topic_status_diff._send_new(client, 1, 2, state, "new") is True
+
+    client.edit_message_reply_markup.assert_awaited_once_with(
+        chat_id=1,
+        message_id=10,
+        reply_markup=None,
+    )
+
+
 def test_screen_render_keeps_tail_on_complete_lines() -> None:
     text = "old\n" + ("new line\n" * 500)
 
