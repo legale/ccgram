@@ -51,6 +51,7 @@ class _DiffState:
     last_change_ts: float = 0.0
     last_typing_ts: float = 0.0
     last_idle_message_id: int = 0
+    arrows_enabled: bool = config.screen_diff_arrows
 
 
 _diff_states: dict[tuple[int, int, str], _DiffState] = {}
@@ -84,21 +85,31 @@ def _format_screen_diff_limit(limit: int) -> str:
     return str(limit)
 
 
-def build_screen_diff_keyboard() -> InlineKeyboardMarkup:
+def build_screen_diff_keyboard(arrows: bool | None = None) -> InlineKeyboardMarkup:
     """Build runtime controls for the current Screen delta buffer."""
-    return InlineKeyboardMarkup(
+    if arrows is None:
+        arrows = config.screen_diff_arrows
+    rows = [
         [
+            InlineKeyboardButton(
+                f"buf={_format_screen_diff_limit(config.screen_diff_limit)}",
+                callback_data=f"{CB_SCREEN_DIFF}buf",
+            ),
+            InlineKeyboardButton("Ent", callback_data=f"{CB_SCREEN_DIFF}ent"),
+            InlineKeyboardButton("Esc", callback_data=f"{CB_SCREEN_DIFF}esc"),
+            InlineKeyboardButton("→", callback_data=f"{CB_SCREEN_DIFF}right"),
+        ]
+    ]
+    if arrows:
+        rows.append(
             [
-                InlineKeyboardButton(
-                    f"buf={_format_screen_diff_limit(config.screen_diff_limit)}",
-                    callback_data=f"{CB_SCREEN_DIFF}buf",
-                ),
-                InlineKeyboardButton("Ent", callback_data=f"{CB_SCREEN_DIFF}ent"),
-                InlineKeyboardButton("Esc", callback_data=f"{CB_SCREEN_DIFF}esc"),
+                InlineKeyboardButton("↑", callback_data=f"{CB_SCREEN_DIFF}up"),
+                InlineKeyboardButton("←", callback_data=f"{CB_SCREEN_DIFF}left"),
+                InlineKeyboardButton("↓", callback_data=f"{CB_SCREEN_DIFF}down"),
                 InlineKeyboardButton("→", callback_data=f"{CB_SCREEN_DIFF}right"),
             ]
-        ]
-    )
+        )
+    return InlineKeyboardMarkup(rows)
 
 
 def _format_screen(
@@ -176,7 +187,7 @@ async def _send_new(
         chat_id,
         text,
         message_thread_id=thread_id,
-        reply_markup=build_screen_diff_keyboard(),
+        reply_markup=build_screen_diff_keyboard(state.arrows_enabled),
         split_max_length=TELEGRAM_MAX_MESSAGE_LENGTH,
     )
     message_id = getattr(sent, "message_id", None)
@@ -255,7 +266,7 @@ async def _edit_or_send(
                 chat_id,
                 state.message_id,
                 text,
-                reply_markup=build_screen_diff_keyboard(),
+                reply_markup=build_screen_diff_keyboard(state.arrows_enabled),
             )
         )
         ok = await state.edit_task
@@ -369,6 +380,23 @@ def reset_topic_status_diff_state() -> None:
     _diff_states.clear()
 
 
+async def toggle_screen_diff_arrows(
+    client: TelegramClient, chat_id: int, thread_id: int
+) -> bool | None:
+    """Toggle arrow controls on the current topic's screen-diff message."""
+    state = _diff_states.get((chat_id, thread_id, "main"))
+    if state is None or state.message_id <= 0:
+        return None
+
+    state.arrows_enabled = not state.arrows_enabled
+    await client.edit_message_reply_markup(
+        chat_id=chat_id,
+        message_id=state.message_id,
+        reply_markup=build_screen_diff_keyboard(state.arrows_enabled),
+    )
+    return state.arrows_enabled
+
+
 def prime_topic_status_diff(
     chat_id: int,
     thread_id: int,
@@ -399,6 +427,9 @@ async def _handle_screen_diff_resize(
         return
 
     key_by_action = {
+        f"{CB_SCREEN_DIFF}up": "Up",
+        f"{CB_SCREEN_DIFF}left": "Left",
+        f"{CB_SCREEN_DIFF}down": "Down",
         f"{CB_SCREEN_DIFF}ent": "Enter",
         f"{CB_SCREEN_DIFF}esc": "Escape",
         f"{CB_SCREEN_DIFF}right": "Right",

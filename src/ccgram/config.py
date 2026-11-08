@@ -221,6 +221,9 @@ class Config:
         self.screen_diff_limit: int = max(
             self.screen_diff_min_limit, _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
         )
+        self.screen_diff_arrows: bool = _parse_bool_env(
+            "CCGRAM_SCREEN_DIFF_ARROWS", False
+        )
         self.topic_idle_enabled: bool = _parse_bool_env(
             "CCGRAM_TOPIC_IDLE_ENABLED", True
         )

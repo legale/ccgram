@@ -236,6 +236,7 @@ class TestLoadHandlers:
         for expected in (
             "sess:",
             "lv:",
+            "kb:",
         ):
             assert any(p.startswith(expected) for p in prefixes), (
                 f"expected prefix starting with {expected!r} in registry"

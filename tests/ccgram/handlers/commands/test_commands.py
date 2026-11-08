@@ -6,6 +6,7 @@ import pytest
 from telegram import Message, Update, User
 
 from ccgram.handlers.commands import (
+    arrows_command,
     commands_command,
     ctrl_c_command,
     ctrl_cc_command,
@@ -48,6 +49,29 @@ class TestCommandsCommand:
         assert "//ctrl-c" in text
         assert "//ctrl-cc" in text
         assert "//unbind" in text
+
+
+class TestArrowsCommand:
+    async def test_toggles_screen_delta_arrows(self, update, context):
+        with (
+            patch("ccgram.config.config.is_user_allowed", return_value=True),
+            patch(
+                "ccgram.thread_router.thread_router.resolve_chat_id",
+                return_value=-100,
+            ),
+            patch(
+                "ccgram.handlers.status.topic_status_diff.toggle_screen_diff_arrows",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as toggle,
+            patch(
+                "ccgram.handlers.commands.safe_reply", new_callable=AsyncMock
+            ) as reply,
+        ):
+            await arrows_command(update, context)
+
+        toggle.assert_awaited_once()
+        assert "on" in reply.call_args.args[1]
 
 
 class TestCtrlCCommand:

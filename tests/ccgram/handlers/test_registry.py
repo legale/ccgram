@@ -156,6 +156,7 @@ def test_command_metadata_is_attached_to_handlers():
         "enter",
         "esc",
         "tab",
+        "arrows",
         "send",
     ]
     assert all(info.description.isascii() for info in infos)

@@ -222,6 +222,49 @@ async def _handle_live_stop(
     await query.answer("\u23f9 Stopped")
 
 
+async def _handle_keys(query: CallbackQuery, user_id: int, data: str) -> None:
+    """Send a control key from a screenshot or live-view keyboard."""
+    rest = data[len(CB_KEYS_PREFIX) :]
+    try:
+        key_id, target = rest.split(":", 1)
+    except ValueError:
+        await query.answer("Invalid key", show_alert=True)
+        return
+
+    key_spec = KEYS_SEND_MAP.get(key_id)
+    if key_spec is None:
+        await query.answer("Unknown key", show_alert=True)
+        return
+
+    window_id, pane_id = parse_target(target)
+    if not user_owns_window(user_id, window_id):
+        await query.answer("Not your session", show_alert=True)
+        return
+
+    key, enter, literal = key_spec
+    if pane_id:
+        sent = await tmux_manager.send_keys_to_pane(
+            pane_id,
+            key,
+            enter=enter,
+            literal=literal,
+            window_id=window_id,
+        )
+    else:
+        window = await tmux_manager.find_window_by_id(window_id)
+        sent = bool(window) and await tmux_manager.send_keys(
+            window.window_id,
+            key,
+            enter=enter,
+            literal=literal,
+        )
+
+    if sent:
+        await query.answer(KEY_LABELS[key_id])
+    else:
+        await query.answer("Failed to send key", show_alert=True)
+
+
 async def _send_screenshot_media(
     client: PTBTelegramClient,
     chat_id: int,
@@ -311,6 +354,7 @@ async def handle_screenshot_callback(
     separately by status_bar_actions.py.
     """
     with_update = {
+        CB_KEYS_PREFIX: _handle_keys,
         CB_LIVE_START: _handle_live_start,
         CB_LIVE_STOP: _handle_live_stop,
         CB_STATUS_SCREENSHOT: _handle_status_screenshot,
@@ -318,7 +362,9 @@ async def handle_screenshot_callback(
     }
     for prefix, handler in with_update.items():
         if data.startswith(prefix):
-            if prefix == CB_STATUS_SCREENSHOT:
+            if prefix == CB_KEYS_PREFIX:
+                await handler(query, user_id, data)
+            elif prefix == CB_STATUS_SCREENSHOT:
                 await handler(query, user_id, data, update, allow_unowned)
             else:
                 await handler(query, user_id, data, update)
@@ -633,6 +679,7 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 @register(
+    CB_KEYS_PREFIX,
     CB_LIVE_START,
     CB_LIVE_STOP,
     CB_SCREENSHOT_REFRESH,

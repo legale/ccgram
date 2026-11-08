@@ -71,6 +71,13 @@ class TelegramClient(Protocol):
         **kwargs: Any,
     ) -> Message | bool: ...
 
+    async def edit_message_reply_markup(
+        self,
+        chat_id: int | str | None = None,
+        message_id: int | None = None,
+        **kwargs: Any,
+    ) -> Message | bool: ...
+
     async def delete_message(
         self,
         chat_id: int | str,
@@ -224,6 +231,16 @@ class PTBTelegramClient:
         **kwargs: Any,
     ) -> Message | bool:
         return await self._bot.edit_message_caption(
+            chat_id=chat_id, message_id=message_id, **kwargs
+        )
+
+    async def edit_message_reply_markup(
+        self,
+        chat_id: int | str | None = None,
+        message_id: int | None = None,
+        **kwargs: Any,
+    ) -> Message | bool:
+        return await self._bot.edit_message_reply_markup(
             chat_id=chat_id, message_id=message_id, **kwargs
         )
 

@@ -100,6 +100,37 @@ def test_screen_diff_keyboard_has_buffer_button(monkeypatch, limit, label) -> No
     ]
 
 
+def test_screen_diff_keyboard_adds_arrow_row() -> None:
+    keyboard = topic_status_diff.build_screen_diff_keyboard(arrows=True)
+
+    assert [[button.text for button in row] for row in keyboard.inline_keyboard] == [
+        ["buf=3k", "Ent", "Esc", "→"],
+        ["↑", "←", "↓", "→"],
+    ]
+    assert [button.callback_data for button in keyboard.inline_keyboard[1]] == [
+        "sd:up",
+        "sd:left",
+        "sd:down",
+        "sd:right",
+    ]
+
+
+async def test_toggle_screen_diff_arrows_edits_current_message() -> None:
+    state = topic_status_diff._get_state(1, 2, "@7")
+    state.message_id = 10
+    client = AsyncMock()
+
+    assert await topic_status_diff.toggle_screen_diff_arrows(client, 1, 2) is True
+    client.edit_message_reply_markup.assert_awaited_once()
+    markup = client.edit_message_reply_markup.await_args.kwargs["reply_markup"]
+    assert len(markup.inline_keyboard) == 2
+
+    client.edit_message_reply_markup.reset_mock()
+    assert await topic_status_diff.toggle_screen_diff_arrows(client, 1, 2) is False
+    markup = client.edit_message_reply_markup.await_args.kwargs["reply_markup"]
+    assert len(markup.inline_keyboard) == 1
+
+
 async def test_screen_diff_key_sends_control_keys(monkeypatch) -> None:
     for data, key in (
         ("sd:ent", "Enter"),

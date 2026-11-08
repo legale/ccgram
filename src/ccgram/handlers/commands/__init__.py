@@ -153,6 +153,43 @@ async def tab_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _send_special_key(update, context, "Tab", "Tab")
 
 
+@command("arrows", "Toggle screen delta arrows")
+async def arrows_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//arrows`` — toggle the arrow row on the current screen-delta message."""
+    user = update.effective_user
+    if not user or not config.is_user_allowed(user.id) or not update.message:
+        return
+
+    from ...telegram_client import PTBTelegramClient
+    from ...thread_router import thread_router
+    from ..callback_helpers import get_thread_id
+    from ..status.topic_status_diff import toggle_screen_diff_arrows
+    from telegram.error import TelegramError
+
+    thread_id = get_thread_id(update)
+    if thread_id is None:
+        await safe_reply(update.message, "Use this command inside a topic.")
+        return
+
+    chat_id = thread_router.resolve_chat_id(user.id, thread_id)
+    if chat_id is None:
+        await safe_reply(update.message, "No screen delta message in this topic.")
+        return
+
+    try:
+        enabled = await toggle_screen_diff_arrows(
+            PTBTelegramClient(context.bot), chat_id, thread_id
+        )
+    except TelegramError:
+        await safe_reply(update.message, "Failed to update screen delta buttons.")
+        return
+
+    if enabled is None:
+        await safe_reply(update.message, "No screen delta message in this topic.")
+        return
+    await safe_reply(update.message, f"Screen delta arrows {'on' if enabled else 'off'}.")
+
+
 __all__ = [
     "commands_command",
     "ctrl_c_command",
@@ -160,6 +197,7 @@ __all__ = [
     "enter_command",
     "esc_command",
     "tab_command",
+    "arrows_command",
 ]
 
 HELP_COMMAND_HANDLERS = (commands_command,)
@@ -169,4 +207,5 @@ KEY_COMMAND_HANDLERS = (
     enter_command,
     esc_command,
     tab_command,
+    arrows_command,
 )

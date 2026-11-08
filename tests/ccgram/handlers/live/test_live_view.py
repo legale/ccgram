@@ -25,6 +25,7 @@ from ccgram.handlers.live.live_view import (
     tick_live_views,
 )
 from ccgram.handlers.live.screenshot_callbacks import (
+    _handle_keys,
     _handle_live_start,
     _handle_live_stop,
     build_screenshot_keyboard,
@@ -700,6 +701,43 @@ class TestHandleLiveStop:
 
 
 # ── _handle_keys live view guard ────────────────────────────────────────
+
+
+class TestHandleKeys:
+    async def test_sends_key_to_live_window(self):
+        query, _update = _make_query()
+        with (
+            patch(
+                "ccgram.handlers.live.screenshot_callbacks.user_owns_window",
+                return_value=True,
+            ),
+            patch("ccgram.handlers.live.screenshot_callbacks.tmux_manager") as tmux,
+        ):
+            tmux.find_window_by_id = AsyncMock(return_value=MagicMock(window_id="@0"))
+            tmux.send_keys = AsyncMock(return_value=True)
+            await _handle_keys(query, 1, f"{CB_KEYS_PREFIX}ent:@0")
+
+        tmux.send_keys.assert_awaited_once_with(
+            "@0", "Enter", enter=False, literal=False
+        )
+        query.answer.assert_awaited_once_with("\u23ce Enter")
+
+    async def test_sends_key_to_live_pane(self):
+        query, _update = _make_query()
+        with (
+            patch(
+                "ccgram.handlers.live.screenshot_callbacks.user_owns_window",
+                return_value=True,
+            ),
+            patch("ccgram.handlers.live.screenshot_callbacks.tmux_manager") as tmux,
+        ):
+            tmux.send_keys_to_pane = AsyncMock(return_value=True)
+            await _handle_keys(query, 1, f"{CB_KEYS_PREFIX}esc:@0:%3")
+
+        tmux.send_keys_to_pane.assert_awaited_once_with(
+            "%3", "Escape", enter=False, literal=False, window_id="@0"
+        )
+        query.answer.assert_awaited_once_with("\u238b Esc")
 
 
 # ── RetryAfter timedelta branch ─────────────────────────────────────────
