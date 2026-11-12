@@ -230,6 +230,12 @@ async def safe_reply(message: Message, text: str, **kwargs: Any) -> Message | No
     Returns None if the original message no longer exists (e.g. deleted topic).
     """
     kwargs.setdefault("link_preview_options", NO_LINK_PREVIEW)
+    logger.info(
+        "telegram_reply_started",
+        chat_id=message.chat_id,
+        message_id=message.message_id,
+        text=text,
+    )
 
     async def _reply(text: str, **kw: Any) -> Message:
         try:
@@ -241,7 +247,14 @@ async def safe_reply(message: Message, text: str, **kwargs: Any) -> Message | No
             raise
 
     try:
-        return await _send_text_parts(_reply, text, "reply", track=True, **kwargs)
+        result = await _send_text_parts(_reply, text, "reply", track=True, **kwargs)
+        logger.info(
+            "telegram_reply_finished",
+            chat_id=message.chat_id,
+            message_id=message.message_id,
+            sent_message_id=result.message_id if result else None,
+        )
+        return result
     except _MessageGoneError:
         return None
 

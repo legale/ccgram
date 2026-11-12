@@ -18,11 +18,13 @@ import os
 import signal
 
 import structlog
+from telegram import Update
 from telegram.error import BadRequest, Conflict, NetworkError
 from telegram.ext import (
     AIORateLimiter,
     Application,
     ContextTypes,
+    TypeHandler,
     filters,
 )
 
@@ -119,6 +121,19 @@ async def post_shutdown(_application: Application) -> None:
     await bootstrap.shutdown_runtime()
 
 
+async def _trace_update(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log every update before feature handlers process it."""
+    message = update.effective_message
+    logger.info(
+        "telegram_update_received",
+        update_id=update.update_id,
+        message_id=message.message_id if message else None,
+        chat_id=message.chat_id if message else None,
+        thread_id=message.message_thread_id if message else None,
+        text=message.text if message else None,
+    )
+
+
 async def _error_handler(_update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle bot-level errors from updater and handlers."""
     if isinstance(context.error, Conflict):
@@ -159,6 +174,7 @@ def create_bot() -> Application:
     )
 
     application.add_error_handler(_error_handler)
+    application.add_handler(TypeHandler(Update, _trace_update), group=-1)
     register_all(application, _group_filter)
 
     return application

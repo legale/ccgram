@@ -119,6 +119,15 @@ async def _dispatch_double_slash(update: Update, context) -> None:  # type: igno
     if not message or not message.text:
         return
 
+    logger.info(
+        "telegram_double_slash_dispatch",
+        update_id=update.update_id,
+        message_id=message.message_id,
+        chat_id=message.chat_id,
+        thread_id=message.message_thread_id,
+        text=message.text,
+    )
+
     # Lazy: record_telegram_message at dispatch
     from ..topic_tail import record_telegram_message
 
