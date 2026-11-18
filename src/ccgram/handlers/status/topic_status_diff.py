@@ -48,6 +48,7 @@ class _DiffState:
     edit_task: asyncio.Task[bool] | None = None
     title: str | None = None
     last_display_text: str = ""
+    send_suppressed: bool = False
     last_change_ts: float = 0.0
     last_typing_ts: float = 0.0
     last_idle_message_id: int = 0
@@ -148,6 +149,7 @@ def start_sidecar_diff(
     state.last_edit_ts = 0.0
     state.last_msg_ts = time.time_ns()
     state.diff_ts = 0
+    state.send_suppressed = False
     return state
 
 
@@ -164,6 +166,7 @@ def mark_topic_status_activity(
         if key[0] == chat_id and key[1] == thread_id:
             state.last_msg_ts = max(now, state.last_msg_ts + 1)
             state.last_change_ts = now_mono
+            state.send_suppressed = False
             if state.edit_task is not None and not state.edit_task.done():
                 state.edit_task.cancel()
     logger.info(
@@ -193,6 +196,7 @@ async def _send_new(
     )
     message_id = getattr(sent, "message_id", None)
     if message_id is None:
+        state.send_suppressed = True
         return False
     if previous_message_id > 0 and previous_message_id != int(message_id):
         try:
@@ -210,6 +214,7 @@ async def _send_new(
                 error=str(exc),
             )
     state.message_id = int(message_id)
+    state.send_suppressed = False
     record_message(chat_id, thread_id, state.message_id)
     state.diff_ts = state.last_msg_ts
     return True
@@ -255,6 +260,9 @@ async def _edit_or_send(
     state: _DiffState,
     text: str,
 ) -> bool:
+    if state.send_suppressed:
+        return False
+
     diff_ts = state.last_msg_ts
     action = "edit"
     if state.message_id <= 0 or state.diff_ts < diff_ts:
