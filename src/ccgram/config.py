@@ -228,7 +228,7 @@ class Config:
             "CCGRAM_TOPIC_IDLE_ENABLED", True
         )
         self.topic_idle_delay: int = max(
-            1, _parse_int_env("CCGRAM_TOPIC_IDLE_DELAY", 10)
+            1, _parse_int_env("CCGRAM_TOPIC_IDLE_DELAY", 30)
         )
         self.topic_idle_text: str = os.getenv("CCGRAM_TOPIC_IDLE_TEXT", "idle")
 
