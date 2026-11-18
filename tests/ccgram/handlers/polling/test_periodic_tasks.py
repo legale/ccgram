@@ -41,7 +41,7 @@ async def test_reconcile_restores_runtime_from_tmux_option() -> None:
     assert router.resolve_chat_id(1, 42) == -100
     prime.assert_called_once_with(-100, 42, "cc_foo:@1", "current screen")
     client.reopen_forum_topic.assert_awaited_once_with(-100, 42)
-    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="foo")
+    client.edit_forum_topic.assert_not_awaited()
     client.create_forum_topic.assert_not_called()
 
 
@@ -106,7 +106,7 @@ async def test_reconcile_session_rename_keeps_topic_and_updates_route() -> None:
 
     assert router.get_window_for_thread(1, 42) == "cc_bar:@1"
     client.delete_forum_topic.assert_not_called()
-    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
+    client.edit_forum_topic.assert_not_awaited()
 
 
 async def test_reconcile_proceeds_when_reopen_fails_for_non_supergroup() -> None:
@@ -128,7 +128,7 @@ async def test_reconcile_proceeds_when_reopen_fails_for_non_supergroup() -> None
         config.allowed_users = {1}
         await periodic_tasks.reconcile(client)
 
-    client.edit_forum_topic.assert_awaited_once_with(-100, 42, name="bar")
+    client.edit_forum_topic.assert_not_awaited()
 
 
 async def test_reconcile_preserves_session_when_telegram_topic_is_missing() -> None:

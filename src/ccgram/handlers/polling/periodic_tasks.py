@@ -159,7 +159,7 @@ async def _sync_topic(
     chat_id: int,
     thread_id: int,
 ) -> None:
-    """Force one Telegram topic to match its authoritative tmux session."""
+    """Reopen one Telegram topic and clear a binding when it no longer exists."""
     try:
         await client.reopen_forum_topic(chat_id, thread_id)
     except BadRequest as e:
@@ -185,32 +185,6 @@ async def _sync_topic(
             session.window_name,
             e,
         )
-
-    name = _topic_name(session)
-    try:
-        await client.edit_forum_topic(chat_id, thread_id, name=name)
-    except BadRequest as e:
-        if "topic_not_modified" in e.message.lower():
-            return
-        if is_thread_gone(e):
-            await _detach_missing_topic(client, session, chat_id, thread_id)
-            return
-        log_throttled(
-            logger,
-            f"topic-sync:{session.window_name}",
-            "Topic sync error for %s: %s",
-            session.window_name,
-            e,
-        )
-    except TelegramError as e:
-        log_throttled(
-            logger,
-            f"topic-sync:{session.window_name}",
-            "Topic sync error for %s: %s",
-            session.window_name,
-            e,
-        )
-
 
 def _runtime_refs() -> set[tuple[int, int]]:
     refs: set[tuple[int, int]] = set()

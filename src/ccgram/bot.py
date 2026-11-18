@@ -21,7 +21,6 @@ import structlog
 from telegram import Update
 from telegram.error import BadRequest, Conflict, NetworkError
 from telegram.ext import (
-    AIORateLimiter,
     Application,
     ContextTypes,
     TypeHandler,
@@ -164,7 +163,6 @@ def create_bot() -> Application:
     application = (
         Application.builder()
         .token(config.telegram_bot_token)
-        .rate_limiter(AIORateLimiter(max_retries=5))
         .request(ResilientPollingHTTPXRequest())
         .get_updates_request(ResilientPollingHTTPXRequest(connection_pool_size=1))
         .post_init(post_init)

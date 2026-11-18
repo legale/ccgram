@@ -42,6 +42,8 @@ __all__ = [
 
 logger = structlog.get_logger()
 
+_MAX_RETRY_AFTER_S = 10.0
+
 
 def is_thread_gone(exc: TelegramError) -> bool:
     """Check if error indicates the Telegram topic/thread no longer exists."""
@@ -139,7 +141,15 @@ async def _with_entity_fallback(
         try:
             return await send_fn(plain_text, **send_kwargs)
         except RetryAfter as e:
-            await asyncio.sleep(_retry_after_seconds(e) + 1)
+            retry_after_s = _retry_after_seconds(e)
+            logger.warning(
+                "telegram_send_rate_limited",
+                context=context_label,
+                retry_after_s=retry_after_s,
+            )
+            if retry_after_s > _MAX_RETRY_AFTER_S:
+                return None
+            await asyncio.sleep(retry_after_s + 1)
             try:
                 return await send_fn(plain_text, **send_kwargs)
             except TelegramError as e2:
