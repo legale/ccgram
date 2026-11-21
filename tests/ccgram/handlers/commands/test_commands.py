@@ -71,7 +71,7 @@ class TestArrowsCommand:
             await arrows_command(update, context)
 
         toggle.assert_awaited_once()
-        assert "on" in reply.call_args.args[1]
+        assert reply.call_args.args[1] == "arrows on"
 
 
 class TestCtrlCCommand:

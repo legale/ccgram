@@ -187,7 +187,7 @@ async def arrows_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if enabled is None:
         await safe_reply(update.message, "No screen delta message in this topic.")
         return
-    await safe_reply(update.message, f"Screen delta arrows {'on' if enabled else 'off'}.")
+    await safe_reply(update.message, f"arrows {'on' if enabled else 'off'}")
 
 
 __all__ = [
