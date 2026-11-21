@@ -155,7 +155,7 @@ class TestTopicStatusConfig:
         monkeypatch.delenv("CCGRAM_TOPIC_IDLE_TEXT", raising=False)
         cfg = Config()
         assert cfg.topic_idle_enabled is True
-        assert cfg.topic_idle_delay == 30
+        assert cfg.topic_idle_delay == 60
         assert cfg.topic_idle_text == "idle"
 
     @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
