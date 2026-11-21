@@ -95,7 +95,7 @@ def build_screen_diff_keyboard(arrows: bool | None = None) -> InlineKeyboardMark
     rows = [
         [
             InlineKeyboardButton(
-                f"buf={_format_screen_diff_limit(config.screen_diff_limit)}",
+                _format_screen_diff_limit(config.screen_diff_limit),
                 callback_data=f"{CB_SCREEN_DIFF}buf",
             ),
             InlineKeyboardButton("Ent", callback_data=f"{CB_SCREEN_DIFF}ent"),

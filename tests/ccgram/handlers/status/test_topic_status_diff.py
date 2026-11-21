@@ -100,7 +100,7 @@ def test_screen_render_limits_body_to_3000_chars() -> None:
 
 @pytest.mark.parametrize(
     ("limit", "label"),
-    [(1000, "buf=1k"), (3000, "buf=3k"), (3500, "buf=3500")],
+    [(1000, "1k"), (2000, "2k"), (3000, "3k")],
 )
 def test_screen_diff_keyboard_has_buffer_button(monkeypatch, limit, label) -> None:
     monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", limit)
@@ -121,7 +121,7 @@ def test_screen_diff_keyboard_adds_arrow_row() -> None:
     keyboard = topic_status_diff.build_screen_diff_keyboard(arrows=True)
 
     assert [[button.text for button in row] for row in keyboard.inline_keyboard] == [
-        ["buf=3k", "Ent", "Esc", "Tab", "Ar"],
+        ["3k", "Ent", "Esc", "Tab", "Ar"],
         ["↑", "←", "↓", "→"],
     ]
     assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
@@ -227,16 +227,22 @@ async def test_screen_diff_buffer_button_cycles_topic_limit(monkeypatch) -> None
 
     await topic_status_diff._handle_screen_diff_resize(update, context)
 
-    assert topic_status_diff.config.screen_diff_limit == 4000
+    assert topic_status_diff.config.screen_diff_limit == 1000
     assert state.last_display_text == ""
     assert state.last_edit_ts == 0.0
-    query.answer.assert_awaited_once_with("Screen buffer: 4000")
+    query.answer.assert_awaited_once_with("Screen buffer: 1000")
 
     query.answer.reset_mock()
     await topic_status_diff._handle_screen_diff_resize(update, context)
 
-    assert topic_status_diff.config.screen_diff_limit == 1000
-    query.answer.assert_awaited_once_with("Screen buffer: 1000")
+    assert topic_status_diff.config.screen_diff_limit == 2000
+    query.answer.assert_awaited_once_with("Screen buffer: 2000")
+
+    query.answer.reset_mock()
+    await topic_status_diff._handle_screen_diff_resize(update, context)
+
+    assert topic_status_diff.config.screen_diff_limit == 3000
+    query.answer.assert_awaited_once_with("Screen buffer: 3000")
 
 
 def test_screen_render_collapses_long_underscores() -> None:
