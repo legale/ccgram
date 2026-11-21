@@ -103,6 +103,7 @@ def build_screen_diff_keyboard(arrows: bool | None = None) -> InlineKeyboardMark
             InlineKeyboardButton(
                 top_right_label, callback_data=f"{CB_SCREEN_DIFF}{top_right_key}"
             ),
+            InlineKeyboardButton("Ar", callback_data=f"{CB_SCREEN_DIFF}arrows"),
         ]
     ]
     if arrows:
@@ -447,10 +448,34 @@ def prime_topic_status_diff(
 
 @register(CB_SCREEN_DIFF)
 async def _handle_screen_diff_resize(
-    update: Update, _context: "ContextTypes.DEFAULT_TYPE"
+    update: Update, context: "ContextTypes.DEFAULT_TYPE"
 ) -> None:
     query = update.callback_query
     if query is None or not query.data:
+        return
+
+    if query.data == f"{CB_SCREEN_DIFF}arrows":
+        from ..callback_helpers import get_thread_id
+
+        thread_id = get_thread_id(update)
+        chat = update.effective_chat
+        if thread_id is None or chat is None:
+            await query.answer("Use this button inside a topic", show_alert=True)
+            return
+
+        try:
+            from ...telegram_client import PTBTelegramClient
+
+            enabled = await toggle_screen_diff_arrows(
+                PTBTelegramClient(context.bot), chat.id, thread_id
+            )
+        except TelegramError:
+            await query.answer("Failed to update screen delta buttons", show_alert=True)
+            return
+        if enabled is None:
+            await query.answer("No screen delta message in this topic", show_alert=True)
+            return
+        await query.answer(f"arrows {'on' if enabled else 'off'}")
         return
 
     key_by_action = {

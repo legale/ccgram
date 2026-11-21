@@ -107,12 +107,13 @@ def test_screen_diff_keyboard_has_buffer_button(monkeypatch, limit, label) -> No
     keyboard = topic_status_diff.build_screen_diff_keyboard(arrows=False)
     buttons = [button for row in keyboard.inline_keyboard for button in row]
 
-    assert [button.text for button in buttons] == [label, "Ent", "Esc", "→"]
+    assert [button.text for button in buttons] == [label, "Ent", "Esc", "→", "Ar"]
     assert [button.callback_data for button in buttons] == [
         "sd:buf",
         "sd:ent",
         "sd:esc",
         "sd:right",
+        "sd:arrows",
     ]
 
 
@@ -120,7 +121,7 @@ def test_screen_diff_keyboard_adds_arrow_row() -> None:
     keyboard = topic_status_diff.build_screen_diff_keyboard(arrows=True)
 
     assert [[button.text for button in row] for row in keyboard.inline_keyboard] == [
-        ["buf=3k", "Ent", "Esc", "Tab"],
+        ["buf=3k", "Ent", "Esc", "Tab", "Ar"],
         ["↑", "←", "↓", "→"],
     ]
     assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
@@ -128,6 +129,7 @@ def test_screen_diff_keyboard_adds_arrow_row() -> None:
         "sd:ent",
         "sd:esc",
         "sd:tab",
+        "sd:arrows",
     ]
     assert [button.callback_data for button in keyboard.inline_keyboard[1]] == [
         "sd:up",
@@ -151,6 +153,30 @@ async def test_toggle_screen_diff_arrows_edits_current_message() -> None:
     assert await topic_status_diff.toggle_screen_diff_arrows(client, 1, 2) is False
     markup = client.edit_message_reply_markup.await_args.kwargs["reply_markup"]
     assert len(markup.inline_keyboard) == 1
+
+
+@pytest.mark.parametrize(("enabled", "notice"), [(True, "arrows on"), (False, "arrows off")])
+async def test_screen_diff_arrows_button_toggles_with_notice(
+    monkeypatch, enabled, notice
+) -> None:
+    query = MagicMock()
+    query.data = "sd:arrows"
+    query.message.message_thread_id = 2
+    query.message.chat.id = -100
+    query.answer = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    update.message = None
+    update.effective_chat = query.message.chat
+    context = MagicMock()
+
+    toggle = AsyncMock(return_value=enabled)
+    monkeypatch.setattr(topic_status_diff, "toggle_screen_diff_arrows", toggle)
+
+    await topic_status_diff._handle_screen_diff_resize(update, context)
+
+    toggle.assert_awaited_once_with(ANY, -100, 2)
+    query.answer.assert_awaited_once_with(notice)
 
 
 async def test_screen_diff_key_sends_control_keys(monkeypatch) -> None:
