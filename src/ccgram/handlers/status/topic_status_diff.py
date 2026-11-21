@@ -90,6 +90,8 @@ def build_screen_diff_keyboard(arrows: bool | None = None) -> InlineKeyboardMark
     """Build runtime controls for the current Screen delta buffer."""
     if arrows is None:
         arrows = config.screen_diff_arrows
+    top_right_label = "Tab" if arrows else "→"
+    top_right_key = "tab" if arrows else "right"
     rows = [
         [
             InlineKeyboardButton(
@@ -98,7 +100,9 @@ def build_screen_diff_keyboard(arrows: bool | None = None) -> InlineKeyboardMark
             ),
             InlineKeyboardButton("Ent", callback_data=f"{CB_SCREEN_DIFF}ent"),
             InlineKeyboardButton("Esc", callback_data=f"{CB_SCREEN_DIFF}esc"),
-            InlineKeyboardButton("→", callback_data=f"{CB_SCREEN_DIFF}right"),
+            InlineKeyboardButton(
+                top_right_label, callback_data=f"{CB_SCREEN_DIFF}{top_right_key}"
+            ),
         ]
     ]
     if arrows:
@@ -456,6 +460,7 @@ async def _handle_screen_diff_resize(
         f"{CB_SCREEN_DIFF}ent": "Enter",
         f"{CB_SCREEN_DIFF}esc": "Escape",
         f"{CB_SCREEN_DIFF}right": "Right",
+        f"{CB_SCREEN_DIFF}tab": "Tab",
     }
     if query.data in key_by_action:
         key = key_by_action[query.data]

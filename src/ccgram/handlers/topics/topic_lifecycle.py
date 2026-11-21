@@ -223,19 +223,6 @@ async def topic_created_handler(
     )
     await switch_proc.communicate()
 
-    try:
-        await client.send_message(
-            chat.id,
-            target,
-            message_thread_id=thread_id,
-        )
-    except TelegramError as exc:
-        logger.warning(
-            "topic_created_status_message_failed",
-            target=target,
-            thread_id=thread_id,
-            error=str(exc),
-        )
     logger.info(
         "Bound Telegram topic %r (chat=%d, thread=%d)",
         topic_name,

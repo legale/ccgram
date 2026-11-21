@@ -53,9 +53,7 @@ async def test_topic_created_claims_strict_name_match() -> None:
         await topic_lifecycle.topic_created_handler(update, context)
 
     ensure.assert_awaited_once_with(1, -100, 42, "foo", rebind=True)
-    client_cls.return_value.send_message.assert_awaited_once_with(
-        -100, "cc_foo", message_thread_id=42
-    )
+    client_cls.return_value.send_message.assert_not_awaited()
 
 
 async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:

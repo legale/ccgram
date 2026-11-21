@@ -104,7 +104,7 @@ def test_screen_render_limits_body_to_3000_chars() -> None:
 )
 def test_screen_diff_keyboard_has_buffer_button(monkeypatch, limit, label) -> None:
     monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", limit)
-    keyboard = topic_status_diff.build_screen_diff_keyboard()
+    keyboard = topic_status_diff.build_screen_diff_keyboard(arrows=False)
     buttons = [button for row in keyboard.inline_keyboard for button in row]
 
     assert [button.text for button in buttons] == [label, "Ent", "Esc", "→"]
@@ -120,8 +120,14 @@ def test_screen_diff_keyboard_adds_arrow_row() -> None:
     keyboard = topic_status_diff.build_screen_diff_keyboard(arrows=True)
 
     assert [[button.text for button in row] for row in keyboard.inline_keyboard] == [
-        ["buf=3k", "Ent", "Esc", "→"],
+        ["buf=3k", "Ent", "Esc", "Tab"],
         ["↑", "←", "↓", "→"],
+    ]
+    assert [button.callback_data for button in keyboard.inline_keyboard[0]] == [
+        "sd:buf",
+        "sd:ent",
+        "sd:esc",
+        "sd:tab",
     ]
     assert [button.callback_data for button in keyboard.inline_keyboard[1]] == [
         "sd:up",
@@ -152,6 +158,7 @@ async def test_screen_diff_key_sends_control_keys(monkeypatch) -> None:
         ("sd:ent", "Enter"),
         ("sd:esc", "Escape"),
         ("sd:right", "Right"),
+        ("sd:tab", "Tab"),
     ):
         query = MagicMock()
         query.data = data
