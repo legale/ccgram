@@ -192,7 +192,7 @@ async def kill_session_and_unbind(
     # which unbind_thread deletes
     for uid, tid, bound_wid in list(thread_router.iter_thread_bindings()):
         if bound_wid == window_id:
-            await clear_topic_state(uid, tid, client, window_id=window_id)
+            await clear_topic_state(uid, tid, window_id=window_id)
             thread_router.unbind_thread(uid, tid)
 
     return True, session_name

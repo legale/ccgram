@@ -61,13 +61,13 @@ async def test_check_duplicate_no_ccgram_running(tmux, monkeypatch):
 
 async def test_list_windows_skips_own_window(tmux, tmp_path, monkeypatch):
     """list_windows excludes our own window when own_window_id is set."""
-    ok, _msg, _name, window_id = await tmux.create_window(
-        str(tmp_path), window_name="agent-win", start_agent=False
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "agent-win", str(tmp_path), window_name="agent-win"
     )
     assert ok
 
-    ok2, _msg2, _name2, own_id = await tmux.create_window(
-        str(tmp_path), window_name="ccgram-self", start_agent=False
+    ok2, _msg2, _name2, own_id = await tmux.create_session(
+        "ccgram-self", str(tmp_path), window_name="ccgram-self"
     )
     assert ok2
 

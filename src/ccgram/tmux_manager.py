@@ -19,7 +19,6 @@ import subprocess
 from uuid import uuid4
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import libtmux
 from libtmux.exc import LibTmuxException
@@ -468,17 +467,17 @@ class TmuxManager:
         self, session_name: str, window_id: str
     ) -> None:
         target = f"{session_name}:{window_id}"
-        for command in (
-            ("set-window-option", "-t", target, "window-size", "largest"),
-            # ("resize-window", "-t", target, "-x", str(config.tmux_screen_x), "-y", str(config.tmux_screen_y)),
-        ):
-            proc = await asyncio.create_subprocess_exec(
-                "tmux",
-                *command,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
+        proc = await asyncio.create_subprocess_exec(
+            "tmux",
+            "set-window-option",
+            "-t",
+            target,
+            "window-size",
+            "largest",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
 
     async def capture_pane_raw(self, window_id: str) -> tuple[str, int, int] | None:
         """Capture pane text with ANSI escapes and pane dimensions.
@@ -632,11 +631,8 @@ class TmuxManager:
         text: str,
         enter: bool = True,
         literal: bool = True,
-        *,
-        raw: bool = False,
     ) -> bool:
         """Send keys directly to the active pane of a window."""
-        _ = raw
         return await asyncio.to_thread(
             self._pane_send, window_id, text, enter=enter, literal=literal
         )
@@ -1059,25 +1055,12 @@ class TmuxManager:
 
         return await asyncio.to_thread(_sync_create)
 
-    async def create_window(
-        self,
-        work_dir: str,
-        window_name: str | None = None,
-        session_name: str | None = None,
-        **_kwargs: Any,
-    ) -> tuple[bool, str, str, str]:
-        """Backwards-compatible wrapper creating a dedicated session."""
-        target = session_name or (window_name or self.session_name)
-        return await self.create_session(target, work_dir, window_name=window_name)
-
 
 # Global instance with default session name
 tmux_manager = TmuxManager()
 
 
-async def send_to_window(
-    window_id: str, text: str, *, raw: bool = False
-) -> tuple[bool, str]:
+async def send_to_window(window_id: str, text: str) -> tuple[bool, str]:
     """Send text to a tmux window by ID.
 
     Returns (success, message). Looks up the display name for logging, then
@@ -1094,7 +1077,7 @@ async def send_to_window(
     window = await tmux_manager.find_window_by_id(window_id)
     if not window:
         return False, "Window not found (may have been closed)"
-    success = await tmux_manager.send_keys(window.window_id, text, raw=raw)
+    success = await tmux_manager.send_keys(window.window_id, text)
     if success:
         return True, f"Sent to {display}"
     return False, "Failed to send keys"

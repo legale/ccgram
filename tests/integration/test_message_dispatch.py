@@ -61,7 +61,7 @@ async def app():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     application = Application.builder().token(token).build()
 
-    from ccgram.bot import text_handler
+    from ccgram.handlers.text.text_handler import text_handler
     from ccgram.handlers.callback_registry import (
         dispatch as callback_handler,
         load_handlers,

@@ -68,11 +68,10 @@ def _drop_runtime_ref(
 
 async def _create_session(name: str) -> tuple[TmuxWindow | None, str | None]:
     target = tmux_manager.topic_session_name(name)
-    ok, msg, _name, window_id = await tmux_manager.create_window(
+    ok, msg, _name, window_id = await tmux_manager.create_session(
+        target,
         config.session_working_directory,
-        session_name=target,
         window_name=name,
-        start_agent=False,
     )
     if not ok or not window_id:
         return None, f"Failed to create tmux session {target}: {msg}"

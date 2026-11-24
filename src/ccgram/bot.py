@@ -29,30 +29,15 @@ from telegram.ext import (
 
 from . import bootstrap
 from .config import config
-from .handlers.commands import commands_command
-from .handlers.messaging_pipeline.message_sender import safe_reply
 from .handlers.registry import register_all
-from .handlers.text.text_handler import handle_text_message, text_handler
-from .session import session_manager
 from .telegram_request import ResilientPollingHTTPXRequest
-from .thread_router import thread_router
 
-# Re-export the moved handler callables and supporting singletons so
-# existing tests and integration suites that import them from
-# ``ccgram.bot`` keep working without churn. Canonical homes are the
-# feature subpackages — these names are retained for ``patch`` targets.
 __all__ = [
-    "commands_command",
     "create_bot",
-    "handle_text_message",
     "is_user_allowed",
     "post_init",
     "post_shutdown",
     "post_stop",
-    "safe_reply",
-    "session_manager",
-    "text_handler",
-    "thread_router",
 ]
 
 logger = structlog.get_logger()

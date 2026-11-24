@@ -32,7 +32,6 @@ async def test_first_capture_renders_current_screen(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="hello\n",
-        active=True,
     )
 
     send.assert_awaited_once()
@@ -56,7 +55,6 @@ async def test_first_capture_strips_ansi(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="\x1b[31mhello\x1b[0m\n\x1b[1mfooter\x1b[0m\n",
-        active=True,
     )
 
     send.assert_awaited_once()
@@ -270,7 +268,6 @@ async def test_unchanged_capture_does_nothing(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="hello\n",
-        active=True,
     )
     send.reset_mock()
     edit.reset_mock()
@@ -281,7 +278,6 @@ async def test_unchanged_capture_does_nothing(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="hello\n",
-        active=True,
     )
 
     send.assert_not_called()
@@ -310,7 +306,6 @@ async def test_changed_before_interval_does_not_send_or_edit(monkeypatch) -> Non
         thread_id=2,
         window_id="@7",
         pane_text="a\n",
-        active=True,
     )
     send.reset_mock()
 
@@ -321,7 +316,6 @@ async def test_changed_before_interval_does_not_send_or_edit(monkeypatch) -> Non
         thread_id=2,
         window_id="@7",
         pane_text="b\n",
-        active=True,
     )
 
     send.assert_not_called()
@@ -350,7 +344,6 @@ async def test_changed_after_interval_edits_when_last(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="a\n",
-        active=True,
     )
     send.reset_mock()
 
@@ -361,7 +354,6 @@ async def test_changed_after_interval_edits_when_last(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="b\n",
-        active=True,
     )
 
     edit.assert_not_called()
@@ -386,12 +378,12 @@ async def test_new_message_timestamp_forces_new_diff_message(monkeypatch) -> Non
     )
 
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "a\n", active=True
+        client, 1, 2, "@7", "a\n"
     )
     topic_status_diff.mark_topic_status_activity(1, 2, "@7", 99)
     monotonic.v = 11.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "b\n", active=True
+        client, 1, 2, "@7", "b\n"
     )
 
     assert send.await_count == 1
@@ -411,11 +403,11 @@ async def test_changed_screen_edits_with_resize_keyboard(monkeypatch) -> None:
     monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
 
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "first\n", active=True
+        client, 1, 2, "@7", "first\n"
     )
     monotonic.v = 22.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "second\n", active=True
+        client, 1, 2, "@7", "second\n"
     )
 
     edit.assert_awaited_once()
@@ -448,7 +440,6 @@ async def test_changed_after_interval_sends_new_when_not_last(monkeypatch) -> No
         thread_id=2,
         window_id="@7",
         pane_text="a\n",
-        active=True,
     )
 
     monotonic.v = 11.0
@@ -458,7 +449,6 @@ async def test_changed_after_interval_sends_new_when_not_last(monkeypatch) -> No
         thread_id=2,
         window_id="@7",
         pane_text="b\n",
-        active=True,
     )
 
     assert send.await_count == 1
@@ -488,7 +478,6 @@ async def test_edit_failure_sends_new(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="a\n",
-        active=True,
     )
 
     monotonic.v = 11.0
@@ -498,7 +487,6 @@ async def test_edit_failure_sends_new(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="b\n",
-        active=True,
     )
 
     assert send.await_count == 1
@@ -528,7 +516,6 @@ async def test_render_uses_current_canonical_screen(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="line1\nclock 12:00\nfooter a\n",
-        active=True,
     )
 
     monotonic.v = 11.0
@@ -538,7 +525,6 @@ async def test_render_uses_current_canonical_screen(monkeypatch) -> None:
         thread_id=2,
         window_id="@7",
         pane_text="line1\nclock 12:01\nfooter b\n",
-        active=True,
     )
 
     assert send.await_args is not None
@@ -579,7 +565,6 @@ async def test_sidecar_diff_uses_custom_title_and_sends_new_message(
         window_id="@7",
         pane_text="initial prompt $\nfile1.txt\nfile2.txt\n",
         target="sidecar",
-        active=True,
     )
 
     send.assert_awaited_once()
@@ -605,7 +590,7 @@ async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None
 
     # 1. Main pane activity
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "main initial\n", target="main", active=True
+        client, 1, 2, "@7", "main initial\n", target="main"
     )
     # 2. Sidecar command started
     topic_status_diff.start_sidecar_diff(
@@ -618,7 +603,7 @@ async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None
     monotonic.v = 11.0
     # Update main
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "main initial\nagent step 1\n", target="main", active=True
+        client, 1, 2, "@7", "main initial\nagent step 1\n", target="main"
     )
     # Update sidecar
     await topic_status_diff.update_topic_status_diff(
@@ -628,7 +613,6 @@ async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None
         "@7",
         "shell prompt $\n/home/ruslan\n",
         target="sidecar",
-        active=True,
     )
 
     assert send.await_count == 2
@@ -665,7 +649,7 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
     )
     monotonic.v = 11.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "prompt $\noutput1\n", target="sidecar", active=True
+        client, 1, 2, "@7", "prompt $\noutput1\n", target="sidecar"
     )
 
     # Second sidecar command (Option B: must create a new message)
@@ -684,7 +668,6 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
         "@7",
         "prompt $\noutput1\nprompt $\noutput2\n",
         target="sidecar",
-        active=True,
     )
 
     assert send.await_count == 2
@@ -711,7 +694,7 @@ async def test_screen_change_triggers_send_typing(monkeypatch) -> None:
 
     # Initial capture (change from empty to text1) -> should send typing
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     client.send_chat_action.assert_awaited_once_with(
         chat_id=1,
@@ -723,14 +706,14 @@ async def test_screen_change_triggers_send_typing(monkeypatch) -> None:
     # No change in screen -> typing should not be sent
     monotonic.v = 11.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     client.send_chat_action.assert_not_called()
 
     # Change in screen after 5s from last typing -> should send typing again
     monotonic.v = 16.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n", active=True
+        client, 1, 2, "@7", "line1\nline2\n"
     )
     client.send_chat_action.assert_awaited_once_with(
         chat_id=1,
@@ -754,7 +737,7 @@ async def test_idle_notification_sent_after_10_seconds_of_no_screen_change(
 
     # Initial capture at t=100.0: diff message sent
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
     assert send.await_count == 1
     assert send.await_args_list[0].args[2].startswith("Screen delta")
@@ -762,14 +745,14 @@ async def test_idle_notification_sent_after_10_seconds_of_no_screen_change(
     # At t=105.0: screen unchanged, not enough time for idle
     monotonic.v = 105.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
     assert send.await_count == 1
 
     # At t=110.0: screen unchanged for 10s -> idle message sent
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
     assert send.await_count == 2
     assert send.await_args_list[1].args[2] == "idle"
@@ -788,24 +771,24 @@ async def test_idle_notification_sent_only_once_while_idle(monkeypatch) -> None:
 
     # Initial capture
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
 
     # At t=110.0: idle message sent
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
     assert send.await_count == 2
 
     # At t=115.0 and t=130.0: still idle, no new message should be sent
     monotonic.v = 115.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
     monotonic.v = 130.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n", active=True
+        client, 1, 2, "@7", "hello\n"
     )
     assert send.await_count == 2
 
@@ -825,14 +808,14 @@ async def test_idle_notification_sent_again_after_screen_change(monkeypatch) -> 
 
     # Initial screen at t=100
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 1
 
     # Idle at t=110
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 2
     assert send.await_args_list[1].args[2] == "idle"
@@ -840,7 +823,7 @@ async def test_idle_notification_sent_again_after_screen_change(monkeypatch) -> 
     # Screen changes at t=115 -> new diff message sent
     monotonic.v = 115.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n", active=True
+        client, 1, 2, "@7", "line1\nline2\n"
     )
     assert send.await_count == 3
     assert send.await_args_list[2].args[2].startswith("Screen delta")
@@ -848,14 +831,14 @@ async def test_idle_notification_sent_again_after_screen_change(monkeypatch) -> 
     # At t=120 (5s silence): not idle yet
     monotonic.v = 120.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n", active=True
+        client, 1, 2, "@7", "line1\nline2\n"
     )
     assert send.await_count == 3
 
     # At t=125 (10s silence): second idle message sent
     monotonic.v = 125.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n", active=True
+        client, 1, 2, "@7", "line1\nline2\n"
     )
     assert send.await_count == 4
     assert send.await_args_list[3].args[2] == "idle"
@@ -875,13 +858,13 @@ async def test_idle_notification_resets_when_user_sends_message(monkeypatch) -> 
 
     # Initial capture at t=100
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
 
     # Idle at t=110
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 2
 
@@ -892,14 +875,14 @@ async def test_idle_notification_resets_when_user_sends_message(monkeypatch) -> 
     # At t=118 (6s after user message): not idle yet
     monotonic.v = 118.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 2
 
     # At t=122 (10s after user message): new idle message sent
     monotonic.v = 122.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 3
     assert send.await_args_list[2].args[2] == "idle"
@@ -917,13 +900,13 @@ async def test_idle_notification_disabled_by_config(monkeypatch) -> None:
     monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
 
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 1
 
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     assert send.await_count == 1
 
@@ -939,13 +922,13 @@ async def test_idle_notification_not_sent_for_sidecar(monkeypatch) -> None:
     monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
 
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", target="sidecar", active=True
+        client, 1, 2, "@7", "line1\n", target="sidecar"
     )
     assert send.await_count == 1
 
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", target="sidecar", active=True
+        client, 1, 2, "@7", "line1\n", target="sidecar"
     )
     assert send.await_count == 1
 
@@ -963,6 +946,6 @@ async def test_idle_notification_not_sent_if_screen_never_changed(monkeypatch) -
 
     monotonic.v = 110.0
     await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", active=True
+        client, 1, 2, "@7", "line1\n"
     )
     send.assert_not_called()

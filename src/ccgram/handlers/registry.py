@@ -147,18 +147,17 @@ async def _dispatch_double_slash(update: Update, context) -> None:  # type: igno
 
     handler, args, candidates = match_command(tokens, COMMAND_HANDLERS)
     if handler is None:
-        prefix = COMMAND_PREFIX if text.startswith(COMMAND_PREFIX) else "/"
         if candidates:
-            opts = ", ".join(f"`{prefix}{c}`" for c in candidates)
+            opts = ", ".join(f"`{COMMAND_PREFIX}{c}`" for c in candidates)
             await safe_reply(
                 message,
-                f"Ambiguous command `{prefix}{tokens[0]}`. Possible matches: {opts}",
+                f"Ambiguous command `{COMMAND_PREFIX}{tokens[0]}`. Possible matches: {opts}",
             )
         else:
             await safe_reply(
                 message,
-                f"Unknown command `{prefix}{tokens[0]}`. "
-                f"Use `{prefix}commands` for the list of commands.",
+                f"Unknown command `{COMMAND_PREFIX}{tokens[0]}`. "
+                f"Use `{COMMAND_PREFIX}commands` for the list of commands.",
             )
         return
 

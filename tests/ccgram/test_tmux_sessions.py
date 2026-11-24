@@ -63,12 +63,8 @@ async def test_clear_session_topic_unsets_session_option() -> None:
     )
 
 
-async def test_ensure_managed_window_size_uses_config(monkeypatch) -> None:
+async def test_ensure_managed_window_size_sets_largest() -> None:
     manager = TmuxManager("ccgram")
-    from ccgram.config import config
-
-    monkeypatch.setattr(config, "tmux_screen_x", 120)
-    monkeypatch.setattr(config, "tmux_screen_y", 60)
 
     commands_called = []
 

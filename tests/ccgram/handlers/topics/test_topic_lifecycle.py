@@ -59,7 +59,7 @@ async def test_topic_created_claims_strict_name_match() -> None:
 async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:
     from ccgram.handlers.topics import topic_lifecycle
 
-    start_autoclose_timer(1, 42, "done", time.monotonic() - 9999)
+    start_autoclose_timer(1, 42, "dead", time.monotonic() - 9999)
     client = AsyncMock()
     session = TmuxWindow("cc_foo:@1", "cc_foo", "/tmp", topic_ref=(-100, 42))
     router = MagicMock()
@@ -75,7 +75,7 @@ async def test_expired_topic_deletes_topic_then_kills_managed_session() -> None:
         patch.object(topic_lifecycle, "tmux_manager") as tmux,
         patch.object(topic_lifecycle, "clear_topic_state", new_callable=AsyncMock),
     ):
-        config.autoclose_done_minutes = 1
+        config.autoclose_dead_minutes = 1
         tmux.kill_session = AsyncMock(return_value=True)
         await topic_lifecycle.check_autoclose_timers(client)
 

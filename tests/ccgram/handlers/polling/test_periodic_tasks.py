@@ -80,7 +80,7 @@ async def test_reconcile_drops_route_when_tmux_session_disappears() -> None:
         await periodic_tasks.reconcile(client)
 
     client.delete_forum_topic.assert_not_called()
-    tmux.create_window.assert_not_called()
+    tmux.create_session.assert_not_called()
     assert router.get_window_for_thread(1, 42) is None
 
 

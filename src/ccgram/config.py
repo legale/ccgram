@@ -10,7 +10,6 @@ Key class: Config (singleton instantiated as `config`).
 
 import structlog
 import os
-import socket
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -114,17 +113,11 @@ class Config:
                 "Expected comma-separated Telegram user IDs."
             ) from e
 
-        # Tmux session naming and screen size
+        # Tmux session naming
         self.tmux_session_prefix = os.getenv("TMUX_SESSION_PREFIX", "cc_")
         self.tmux_session_name = os.getenv("TMUX_SESSION_NAME") or "ccgram"
         self.session_working_directory = os.getenv(
             "CCGRAM_SESSION_WORKING_DIRECTORY", "~"
-        )
-        self.tmux_screen_x = _parse_int_env(
-            "TMUX_SCREEN_X", _parse_int_env("CCGRAM_TMUX_SCREEN_X", 80)
-        )
-        self.tmux_screen_y = _parse_int_env(
-            "TMUX_SCREEN_Y", _parse_int_env("CCGRAM_TMUX_SCREEN_Y", 120)
         )
         self.tmux_main_window_name = "__main__"
         # Own tmux window ID (set by run_bot() after auto-detect, used to skip self in list_windows)
@@ -144,11 +137,6 @@ class Config:
                 raise ValueError(f"CCGRAM_GROUP_ID must be a valid integer: {e}") from e
         else:
             self.group_id = None
-
-        self.instance_name: str = (
-            _env_with_fallback("CCGRAM_INSTANCE_NAME", "CCBOT_INSTANCE_NAME")
-            or socket.gethostname()
-        )
 
         # Ack reaction: react to forwarded messages with an emoji (empty = disabled)
         self.ack_reaction: str = _env_with_fallback(
@@ -187,9 +175,6 @@ class Config:
         )
 
     def _init_lifecycle(self) -> None:
-        self.autoclose_done_minutes: int = int(
-            os.getenv("AUTOCLOSE_DONE_MINUTES", "30")
-        )
         self.autoclose_dead_minutes: int = int(
             os.getenv("AUTOCLOSE_DEAD_MINUTES", "10")
         )

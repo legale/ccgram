@@ -47,25 +47,13 @@ def _topic_name(session: "TmuxWindow") -> str:
     return name[len(prefix) :] if name.startswith(prefix) else name
 
 
-async def _clear_runtime_topic(
-    client: TelegramClient,
-    chat_id: int,
-    thread_id: int,
-    *,
-    window_dead: bool,
-) -> None:
+async def _clear_runtime_topic(chat_id: int, thread_id: int) -> None:
     # Lazy: cleanup imports polling state and would create an import cycle here.
     from ..cleanup import clear_topic_state
 
     for user_id in list(_topic_users(chat_id, thread_id)):
         window_id = thread_router.get_window_for_thread(user_id, thread_id)
-        await clear_topic_state(
-            user_id,
-            thread_id,
-            client,
-            window_id=window_id,
-            window_dead=window_dead,
-        )
+        await clear_topic_state(user_id, thread_id, window_id=window_id)
         thread_router.unbind_thread(user_id, thread_id)
 
 
@@ -127,12 +115,11 @@ async def _delete_runtime_topic(
             )
             return False
 
-    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=True)
+    await _clear_runtime_topic(chat_id, thread_id)
     return True
 
 
 async def _detach_missing_topic(
-    client: TelegramClient,
     session: "TmuxWindow",
     chat_id: int,
     thread_id: int,
@@ -146,7 +133,7 @@ async def _detach_missing_topic(
         )
         return
     session.topic_ref = None
-    await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
+    await _clear_runtime_topic(chat_id, thread_id)
     logger.info(
         "Preserved tmux session %s after Telegram topic disappeared",
         session_name,
@@ -164,7 +151,7 @@ async def _sync_topic(
         await client.reopen_forum_topic(chat_id, thread_id)
     except BadRequest as e:
         if is_thread_gone(e):
-            await _detach_missing_topic(client, session, chat_id, thread_id)
+            await _detach_missing_topic(session, chat_id, thread_id)
             return
         if (
             "topic_not_modified" not in e.message.lower()
@@ -237,7 +224,6 @@ async def _sync_bindings(
 
 
 async def _clear_orphans(
-    client: TelegramClient,
     sessions: list["TmuxWindow"],
     dups: set[tuple[int, int]],
 ) -> None:
@@ -247,7 +233,7 @@ async def _clear_orphans(
         if s.topic_ref is not None and s.topic_ref not in dups
     }
     for chat_id, thread_id in _runtime_refs() - live - dups:
-        await _clear_runtime_topic(client, chat_id, thread_id, window_dead=False)
+        await _clear_runtime_topic(chat_id, thread_id)
 
 
 async def _clear_dead_topics(
@@ -264,7 +250,7 @@ async def _clear_dead_topics(
             await client.reopen_forum_topic(chat_id, thread_id)
         except BadRequest as exc:
             if is_thread_gone(exc):
-                await _detach_missing_topic(client, session, chat_id, thread_id)
+                await _detach_missing_topic(session, chat_id, thread_id)
         except TelegramError as exc:
             log_throttled(
                 logger,
@@ -286,7 +272,7 @@ async def reconcile(client: TelegramClient, *, verify: bool = False) -> None:
     # Проверяем живость thread_id, которые уже были синхронизированы ранее.
     await _clear_dead_topics(client, ss, checked)
     # Очищаем осиротевшие привязки.
-    await _clear_orphans(client, ss, dups)
+    await _clear_orphans(ss, dups)
 
 
 async def send_with_reconcile(
@@ -296,12 +282,11 @@ async def send_with_reconcile(
     window_id: str,
     text: str,
     *,
-    raw: bool = False,
     send_fn: Callable[..., Awaitable[tuple[bool, str]]] | None = None,
 ) -> tuple[bool, str]:
     """Send once; reconcile and retry once only if the route changes."""
     sender = send_fn or send_to_window
-    result = await sender(window_id, text, raw=raw)
+    result = await sender(window_id, text)
     if result[0] or not result[1].startswith("Window not found"):
         return result
 
@@ -309,10 +294,7 @@ async def send_with_reconcile(
     retry_window_id = thread_router.get_window_for_thread(user_id, thread_id)
     if not retry_window_id or retry_window_id == window_id:
         return result
-    return await sender(retry_window_id, text, raw=raw)
-
-
-# ── Broker integration ────────────────────────────────────────────────────
+    return await sender(retry_window_id, text)
 
 
 # ── Orchestration ──────────────────────────────────────────────────────────
@@ -320,7 +302,6 @@ async def send_with_reconcile(
 
 async def run_periodic_tasks(
     client: TelegramClient,
-    all_windows: list["TmuxWindow"],  # noqa: ARG001
     timers: dict[str, float],
 ) -> None:
     """Run time-gated periodic tasks (topic check, live view)."""
@@ -338,10 +319,7 @@ async def run_periodic_tasks(
         log_throttle_sweep()
 
 
-async def run_lifecycle_tasks(
-    client: TelegramClient,
-    all_windows: list["TmuxWindow"],  # noqa: ARG001 - lifecycle API
-) -> None:
+async def run_lifecycle_tasks(client: TelegramClient) -> None:
     """Run per-tick topic lifecycle tasks."""
     # Lazy: topic_lifecycle is needed for check_autoclose_timers
     from ..topics.topic_lifecycle import check_autoclose_timers

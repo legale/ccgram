@@ -196,12 +196,11 @@ async def status_poll_loop(bot: "Bot") -> None:
     poll_interval = _cfg.status_poll_interval
     client = PTBTelegramClient(bot)
     logger.info("Status polling started (interval: %ss)", poll_interval)
-    timers = {"topic_check": 0.0, "broker": 0.0, "sweep": 0.0, "live_view": 0.0}
+    timers = {"topic_check": 0.0, "live_view": 0.0}
     _error_streak = 0
     while True:
         try:
-            all_windows = await tmux_manager.list_windows()
-            await run_periodic_tasks(client, all_windows, timers)
+            await run_periodic_tasks(client, timers)
 
             all_windows = await tmux_manager.list_windows()
             window_lookup = {w.window_id: w for w in all_windows}
@@ -212,7 +211,7 @@ async def status_poll_loop(bot: "Bot") -> None:
                 window_lookup,
             )
 
-            await run_lifecycle_tasks(client, all_windows)
+            await run_lifecycle_tasks(client)
 
         except _LoopError:
             logger.exception("Status poll loop error")

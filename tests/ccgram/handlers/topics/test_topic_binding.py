@@ -24,7 +24,7 @@ async def test_existing_topic_ref_wins_over_name() -> None:
     assert error is None
     assert window_id == "cc_bar:@1"
     tmux.set_session_topic.assert_not_called()
-    tmux.create_window.assert_not_called()
+    tmux.create_session.assert_not_called()
     router.bind_thread.assert_called_once_with(1, 42, "cc_bar:@1", window_name="bar")
 
 
@@ -45,7 +45,7 @@ async def test_claims_exact_unbound_session() -> None:
     assert error is None
     assert window_id == "cc_foo:@1"
     tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 42)
-    tmux.create_window.assert_not_called()
+    tmux.create_session.assert_not_called()
 
 
 async def test_creates_missing_exact_session() -> None:
@@ -59,7 +59,7 @@ async def test_creates_missing_exact_session() -> None:
         tmux.list_sessions = AsyncMock(return_value=[])
         tmux.topic_session_name.return_value = "cc_foo"
         tmux.topic_name_from_session_name.return_value = "foo"
-        tmux.create_window = AsyncMock(return_value=(True, "", "foo", "cc_foo:@1"))
+        tmux.create_session = AsyncMock(return_value=(True, "", "foo", "cc_foo:@1"))
         tmux.set_session_topic = AsyncMock(return_value=True)
         config.session_working_directory = "/tmp"
         window_id, error = await topic_binding.ensure_topic_session(
@@ -68,8 +68,8 @@ async def test_creates_missing_exact_session() -> None:
 
     assert error is None
     assert window_id == "cc_foo:@1"
-    tmux.create_window.assert_awaited_once_with(
-        "/tmp", session_name="cc_foo", window_name="foo", start_agent=False
+    tmux.create_session.assert_awaited_once_with(
+        "cc_foo", "/tmp", window_name="foo"
     )
     tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 42)
 
@@ -89,7 +89,7 @@ async def test_rejects_duplicate_topic_name() -> None:
     assert window_id is None
     assert "already bound" in (error or "")
     tmux.set_session_topic.assert_not_called()
-    tmux.create_window.assert_not_called()
+    tmux.create_session.assert_not_called()
     router.bind_thread.assert_not_called()
 
 

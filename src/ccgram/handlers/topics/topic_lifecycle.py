@@ -73,19 +73,16 @@ def reset_lifecycle_state() -> None:
 
 
 async def check_autoclose_timers(client: TelegramClient) -> None:
-    """Close topics whose done/dead timers have expired."""
+    """Close topics whose dead timers have expired."""
     if not _autoclose_timers:
         return
 
     now = time.monotonic()
     expired: list[tuple[int, int]] = []
     for (user_id, thread_id), (state, entered_at) in list(_autoclose_timers.items()):
-        if state == "done":
-            timeout = config.autoclose_done_minutes * 60
-        elif state == "dead":
-            timeout = config.autoclose_dead_minutes * 60
-        else:
+        if state != "dead":
             continue
+        timeout = config.autoclose_dead_minutes * 60
         if timeout > 0 and now - entered_at >= timeout:
             expired.append((user_id, thread_id))
 
@@ -130,17 +127,8 @@ async def _close_expired_topic(
     logger.info(
         "auto_removed_topic", chat_id=chat_id, thread_id=thread_id, user_id=user_id
     )
-    await clear_topic_state(
-        user_id,
-        thread_id,
-        client=client,
-        window_id=window_id,
-        window_dead=True,
-    )
+    await clear_topic_state(user_id, thread_id, window_id=window_id)
     thread_router.unbind_thread(user_id, thread_id)
-
-
-# ── Display name sync / state pruning ─────────────────────────────────────
 
 
 # ------------------------------------------------------------------
@@ -149,7 +137,7 @@ async def _close_expired_topic(
 
 
 async def topic_closed_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
+    update: Update, _context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Close the tmux session bound to a manually closed Telegram topic."""
     user = update.effective_user
@@ -170,13 +158,7 @@ async def topic_closed_handler(
         logger.warning("Failed to close tmux session %s", session.window_name)
         return
     clear_autoclose_timer(user.id, thread_id)
-    await clear_topic_state(
-        user.id,
-        thread_id,
-        client=PTBTelegramClient(context.bot),
-        window_id=session.window_id,
-        window_dead=True,
-    )
+    await clear_topic_state(user.id, thread_id, window_id=session.window_id)
     thread_router.unbind_thread(user.id, thread_id)
 
 

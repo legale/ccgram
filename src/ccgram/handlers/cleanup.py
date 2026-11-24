@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from telegram.error import TelegramError
 
-from ..telegram_client import PTBTelegramClient, TelegramClient
+from ..telegram_client import PTBTelegramClient
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -58,10 +58,9 @@ def _clear_all_topic_state(
     thread_id: int,
     *,
     window_id: str | None = None,
-    qualified_id: str | None = None,  # noqa: ARG001
     chat_id: int | None = None,
 ) -> None:
-    """Explicitly clean up all per-topic, per-chat, per-window, and per-qualified state."""
+    """Explicitly clean up all per-topic, per-chat, and per-window state."""
     # Topic scope (user_id, thread_id)
     _safe_call(clear_live_view, user_id, thread_id)
     _safe_call(clear_topic_status_diff_state, user_id, thread_id)
@@ -82,39 +81,15 @@ def _clear_all_topic_state(
 async def clear_topic_state(
     user_id: int,
     thread_id: int,
-    client: TelegramClient | None = None,  # noqa: ARG001 - callback API
-    user_data: dict[str, Any] | None = None,  # noqa: ARG001 - callback API
     window_id: str | None = None,
-    *,
-    window_dead: bool = True,
 ) -> None:
-    """Clear all memory state associated with a topic.
-
-    Explicitly calls all state cleanup functions, then handles
-    bot-specific async cleanup and infrastructure I/O.
-
-    Args:
-        window_dead: When False, skip qualified-scope cleanup because
-            the tmux window is still alive (e.g. topic close, //unbind).
-            Window-scope callbacks (toolbar labels, monitor state, etc.) always
-            run.  Shell prompt orchestrator state is cleared separately, only
-            when the window is truly dead, to preserve skip/offer state for
-            live sessions.
-    """
+    """Clear all memory state associated with a topic."""
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
 
-    qualified_id: str | None = None
-    if window_id and window_dead:
-        qualified_id = f"{config.tmux_session_name}:{window_id}"
-
-    # Direct explicit dispatch — all module-specific per-topic/window/chat state.
-    # Always pass window_id so window-scope state (toolbar, monitor state, etc.) clears even when the window is still alive.
-    # Shell prompt orchestrator state is handled below so it only clears on true window death.
     _clear_all_topic_state(
         user_id,
         thread_id,
         window_id=window_id,
-        qualified_id=qualified_id,
         chat_id=chat_id,
     )
 
@@ -167,14 +142,7 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     session.topic_ref = None
-    await clear_topic_state(
-        user.id,
-        thread_id,
-        client,
-        context.user_data,
-        window_id=window_id,
-        window_dead=False,
-    )
+    await clear_topic_state(user.id, thread_id, window_id=window_id)
     thread_router.unbind_thread(user.id, thread_id)
     try:
         await client.close_forum_topic(chat_id=chat_id, message_thread_id=thread_id)

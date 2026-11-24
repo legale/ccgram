@@ -66,10 +66,7 @@ _FLAG_TO_ENV: list[tuple[str, str]] = [
     ("allowed_users", "ALLOWED_USERS"),
     ("tmux_session", "TMUX_SESSION_NAME"),
     ("group_id", "CCGRAM_GROUP_ID"),
-    ("instance_name", "CCGRAM_INSTANCE_NAME"),
-    ("autoclose_done", "AUTOCLOSE_DONE_MINUTES"),
     ("autoclose_dead", "AUTOCLOSE_DEAD_MINUTES"),
-    ("provider", "CCGRAM_PROVIDER"),
     ("ack_reaction", "CCGRAM_ACK_REACTION"),
 ]
 
@@ -133,32 +130,12 @@ def apply_args_to_env(**kwargs: object) -> None:
     help="Restrict to one Telegram group.",
 )
 @click.option(
-    "--instance-name",
-    default=None,
-    envvar="CCGRAM_INSTANCE_NAME",
-    help="Display label for multi-instance.",
-)
-@click.option(
-    "--autoclose-done",
-    type=int,
-    default=None,
-    callback=_validate_non_negative_int,
-    envvar="AUTOCLOSE_DONE_MINUTES",
-    help="Auto-close done topics after N minutes (default: 30, 0=disabled).",
-)
-@click.option(
     "--autoclose-dead",
     type=int,
     default=None,
     callback=_validate_non_negative_int,
     envvar="AUTOCLOSE_DEAD_MINUTES",
     help="Auto-close dead sessions after N minutes (default: 10, 0=disabled).",
-)
-@click.option(
-    "--provider",
-    default=None,
-    envvar="CCGRAM_PROVIDER",
-    help="Agent provider name (default: claude).",
 )
 @click.option(
     "--ack-reaction",

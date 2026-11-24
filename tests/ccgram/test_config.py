@@ -1,4 +1,3 @@
-import socket
 import pytest
 
 from ccgram.config import Config, _parse_required_float_env, _parse_required_int_env
@@ -9,13 +8,7 @@ def _base_env(monkeypatch, tmp_path):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test:token")
     monkeypatch.setenv("ALLOWED_USERS", "12345")
     monkeypatch.setenv("CCGRAM_DIR", str(tmp_path))
-    for name in (
-        "CCGRAM_INSTANCE_NAME",
-        "CCGRAM_PROVIDER",
-        "CCGRAM_HIDE_TOOL_CALLS",
-        "CCGRAM_STATUS_POLL_INTERVAL",
-    ):
-        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("CCGRAM_STATUS_POLL_INTERVAL", raising=False)
 
 
 @pytest.mark.usefixtures("_base_env")
@@ -38,20 +31,6 @@ class TestConfigValid:
         monkeypatch.setenv("CCGRAM_SESSION_WORKING_DIRECTORY", "/tmp/work")
         cfg = Config()
         assert cfg.session_working_directory == "/tmp/work"
-
-    def test_tmux_screen_size_defaults(self, monkeypatch):
-        monkeypatch.delenv("TMUX_SCREEN_X", raising=False)
-        monkeypatch.delenv("TMUX_SCREEN_Y", raising=False)
-        cfg = Config()
-        assert cfg.tmux_screen_x in (80, 200)
-        assert cfg.tmux_screen_y in (80, 120)
-
-    def test_custom_tmux_screen_size(self, monkeypatch):
-        monkeypatch.setenv("TMUX_SCREEN_X", "100")
-        monkeypatch.setenv("TMUX_SCREEN_Y", "50")
-        cfg = Config()
-        assert cfg.tmux_screen_x == 100
-        assert cfg.tmux_screen_y == 50
 
     def test_file_size_limit_defaults_to_1gb(self):
         assert Config().file_size_limit_mb == 1024
@@ -76,15 +55,6 @@ class TestConfigValid:
         monkeypatch.setenv("CCGRAM_GROUP_ID", "-1001234567890")
         cfg = Config()
         assert cfg.group_id == -1001234567890
-
-    def test_instance_name_defaults_to_hostname(self):
-        cfg = Config()
-        assert cfg.instance_name == socket.gethostname()
-
-    def test_instance_name_from_env(self, monkeypatch):
-        monkeypatch.setenv("CCGRAM_INSTANCE_NAME", "bot-1")
-        cfg = Config()
-        assert cfg.instance_name == "bot-1"
 
 
 @pytest.mark.usefixtures("_base_env")

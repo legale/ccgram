@@ -330,10 +330,9 @@ async def update_topic_status_diff(
     pane_text: str,
     *,
     target: str = "main",
-    active: bool = True,
     force: bool = False,
 ) -> None:
-    if not config.topic_status_diff_enabled or not pane_text or not active:
+    if not config.topic_status_diff_enabled or not pane_text:
         return
 
     state = _get_state(chat_id, thread_id, window_id, target=target)

@@ -84,7 +84,6 @@ async def _forward_message(
         thread_id,
         window_id,
         text,
-        raw=False,
         send_fn=send_to_window,
     )
     if not success:

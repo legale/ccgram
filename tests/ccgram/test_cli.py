@@ -52,11 +52,6 @@ class TestCliCommands:
 
 
 class TestRunValidation:
-    def test_negative_autoclose_done_rejected(self, runner):
-        result = runner.invoke(cli, ["run", "--autoclose-done", "-5"])
-        assert result.exit_code != 0
-        assert "must be non-negative" in result.output
-
     def test_negative_autoclose_dead_rejected(self, runner):
         result = runner.invoke(cli, ["run", "--autoclose-dead", "-1"])
         assert result.exit_code != 0
@@ -108,19 +103,14 @@ class TestApplyArgsToEnv:
             allowed_users="1,2",
             tmux_session="s",
             group_id=99,
-            instance_name="n",
-            autoclose_done=10,
             autoclose_dead=5,
         )
 
         assert os.environ["ALLOWED_USERS"] == "1,2"
         assert os.environ["TMUX_SESSION_NAME"] == "s"
         assert os.environ["CCGRAM_GROUP_ID"] == "99"
-        assert os.environ["CCGRAM_INSTANCE_NAME"] == "n"
-        assert os.environ["AUTOCLOSE_DONE_MINUTES"] == "10"
         assert os.environ["AUTOCLOSE_DEAD_MINUTES"] == "5"
 
     def test_autoclose_zero_accepted(self):
-        apply_args_to_env(autoclose_done=0, autoclose_dead=0)
-        assert os.environ["AUTOCLOSE_DONE_MINUTES"] == "0"
+        apply_args_to_env(autoclose_dead=0)
         assert os.environ["AUTOCLOSE_DEAD_MINUTES"] == "0"
