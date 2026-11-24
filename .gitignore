@@ -71,6 +71,7 @@ tmp/
 
 # C build artifacts
 *.o
+c/build/
 c/ccgram
 c/test_unit
 c/test_unit_san

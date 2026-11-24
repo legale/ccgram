@@ -152,11 +152,16 @@ int main(int argc, char **argv)
 	signal(SIGPIPE, SIG_IGN);
 
 	pthread_t poll_thr;
-	if (pthread_create(&poll_thr, NULL, polling_thread_main, NULL) != 0) {
+	pthread_attr_t poll_attr;
+	pthread_attr_init(&poll_attr);
+	pthread_attr_setstacksize(&poll_attr, 2 * 1024 * 1024);
+	if (pthread_create(&poll_thr, &poll_attr, polling_thread_main, NULL) != 0) {
+		pthread_attr_destroy(&poll_attr);
 		log_error("Failed to create polling thread");
 		tg_api_cleanup();
 		return 1;
 	}
+	pthread_attr_destroy(&poll_attr);
 
 	log_info("ccgram %s started", CCGRAM_VERSION);
 
