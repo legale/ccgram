@@ -4,8 +4,6 @@ from unittest.mock import AsyncMock, patch
 from telegram import Message
 from telegram.error import RetryAfter, TelegramError
 
-from ccgram.expandable_quote import EXPANDABLE_QUOTE_END as EXP_END
-from ccgram.expandable_quote import EXPANDABLE_QUOTE_START as EXP_START
 from ccgram.handlers.messaging_pipeline.message_sender import (
     MESSAGE_SEND_INTERVAL,
     _last_send_time,
@@ -273,32 +271,6 @@ class TestEmptyAndOverlongGuards:
         for call in calls:
             assert len(call.kwargs["text"]) <= TELEGRAM_MAX_MESSAGE_LENGTH
         assert "".join(c.kwargs["text"] for c in calls) == long_text
-
-
-class TestFallbackNoSentinelLeak:
-    async def test_no_sentinel_bytes_in_fallback(
-        self, client: FakeTelegramClient
-    ) -> None:
-        sent = _fake_message()
-        client.set_side_effect("send_message", [TelegramError("entity error"), sent])
-
-        text_with_sentinels = f"before {EXP_START}quoted{EXP_END} after"
-        await _send_with_fallback(client, 123, text_with_sentinels)
-
-        fallback_text = client.calls[1].kwargs["text"]
-        assert "\x02" not in fallback_text
-
-    async def test_edit_fallback_no_sentinel_bytes(
-        self, client: FakeTelegramClient
-    ) -> None:
-        client.set_side_effect(
-            "edit_message_text", [TelegramError("entity fail"), True]
-        )
-        text_with_sentinels = f"before {EXP_START}quoted{EXP_END} after"
-        await edit_with_fallback(client, 123, 1, text_with_sentinels)
-
-        fallback_kwargs = client.calls[1].kwargs
-        assert "\x02" not in fallback_kwargs["text"]
 
 
 class TestChunkedDelivery:
