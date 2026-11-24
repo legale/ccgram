@@ -142,6 +142,7 @@ int main(int argc, char **argv)
 	diff_init();
 	live_init();
 	tg_api_init();
+	poll_init();
 
 	struct sigaction sa;
 	memset(&sa, 0, sizeof(sa));
@@ -188,6 +189,7 @@ int main(int argc, char **argv)
 	}
 
 	log_info("Shutting down...");
+	poll_wake_shutdown();
 	pthread_join(poll_thr, NULL);
 	diff_reset();
 	router_reset();

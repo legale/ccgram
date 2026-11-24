@@ -194,6 +194,7 @@ bool tmux_kill_pane(const char *pane_id, const char *window_id);
 bool tmux_get_sidecar_pane_id(const char *window_id, char *out, size_t cap);
 bool tmux_get_sidecar_marker(const char *window_id, char *out, size_t cap);
 void tmux_forget_sidecar_pane(const char *window_id);
+bool tmux_has_active_sidecars(void);
 bool tmux_start_sidecar_command(const char *window_id, const char *command, char *out_pane_id, size_t pid_cap, char *out_marker, size_t m_cap);
 bool extract_sidecar_output(const char *text, const char *marker, char **out_text, bool *out_completed);
 
@@ -342,6 +343,9 @@ void cmd_live(const struct tg_update *u);
 
 void handlers_dispatch_update(const struct tg_update *u);
 void handlers_reconcile(bool verify);
+void poll_init(void);
+void poll_wake_sidecar(void);
+void poll_wake_shutdown(void);
 void *polling_thread_main(void *arg);
 void clear_topic_state(int64_t user_id, int64_t thread_id, const char *window_id);
 

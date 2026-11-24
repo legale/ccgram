@@ -1165,6 +1165,7 @@ static void handle_text_message(const struct tg_update *u)
 		strftime(ts, sizeof(ts), "%H:%M:%S", &tm);
 		snprintf(title, sizeof(title), "Sidecar: %s (%s)", cmd, ts);
 		diff_start_sidecar(u->chat_id, u->thread_id, wid, title);
+		poll_wake_sidecar();
 		return;
 	}
 
@@ -1447,70 +1448,168 @@ static void poll_sidecar(int64_t chat_id, int64_t thread_id, const char *wid)
 		tmux_forget_sidecar_pane(wid);
 }
 
+static pthread_mutex_t g_poll_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t g_poll_cond = PTHREAD_COND_INITIALIZER;
+static bool g_sidecar_wake = false;
+
+void poll_init(void)
+{
+	pthread_condattr_t attr;
+
+	pthread_condattr_init(&attr);
+	pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+	pthread_cond_init(&g_poll_cond, &attr);
+	pthread_condattr_destroy(&attr);
+}
+
+void poll_wake_sidecar(void)
+{
+	pthread_mutex_lock(&g_poll_mu);
+	g_sidecar_wake = true;
+	pthread_cond_signal(&g_poll_cond);
+	pthread_mutex_unlock(&g_poll_mu);
+}
+
+void poll_wake_shutdown(void)
+{
+	pthread_mutex_lock(&g_poll_mu);
+	pthread_cond_broadcast(&g_poll_cond);
+	pthread_mutex_unlock(&g_poll_mu);
+}
+
+static void add_mono_deadline(struct timespec *ts, double sec)
+{
+	long add_sec = (long)sec;
+	long add_nsec = (long)((sec - (double)add_sec) * 1e9);
+
+	clock_gettime(CLOCK_MONOTONIC, ts);
+	ts->tv_sec += add_sec;
+	ts->tv_nsec += add_nsec;
+	if (ts->tv_nsec >= 1000000000L) {
+		ts->tv_sec += 1;
+		ts->tv_nsec -= 1000000000L;
+	}
+}
+
+static void poll_all_active_sidecars(void)
+{
+	struct thread_binding bindings[256];
+	size_t nb = router_iter_bindings(bindings, 256);
+
+	for (size_t i = 0; i < nb && g_running; i++) {
+		bool dup_win = false;
+		for (size_t prev = 0; prev < i; prev++) {
+			if (strcmp(bindings[prev].window_id, bindings[i].window_id) == 0) {
+				dup_win = true;
+				break;
+			}
+		}
+		if (dup_win)
+			continue;
+		int64_t chat_id = router_resolve_chat_id(bindings[i].user_id, bindings[i].thread_id);
+		poll_sidecar(chat_id, bindings[i].thread_id, bindings[i].window_id);
+	}
+}
+
 void *polling_thread_main(void *arg)
 {
 	(void)arg;
 	double last_topic_check = 0.0;
 	double last_live_view = 0.0;
+	double last_full_poll = 0.0;
 
 	log_info("Status polling started (interval: %.1fs)", g_cfg.status_poll_interval);
 	while (g_running) {
+		bool woken_for_sidecar = false;
+
+		pthread_mutex_lock(&g_poll_mu);
+		if (g_sidecar_wake) {
+			g_sidecar_wake = false;
+			woken_for_sidecar = true;
+		}
+		pthread_mutex_unlock(&g_poll_mu);
+
+		if (woken_for_sidecar) {
+			/* Brief debounce so fast commands (e.g. !!ls) finish before first capture */
+			struct timespec debounce;
+			add_mono_deadline(&debounce, 0.15);
+			pthread_mutex_lock(&g_poll_mu);
+			while (g_running) {
+				if (pthread_cond_timedwait(&g_poll_cond, &g_poll_mu, &debounce) == ETIMEDOUT)
+					break;
+			}
+			pthread_mutex_unlock(&g_poll_mu);
+			if (!g_running)
+				break;
+			poll_all_active_sidecars();
+		}
+
 		double now = mono_now();
-		bool verify = (now - last_topic_check) >= CCGRAM_TOPIC_CHECK_INTERVAL;
+		if (last_full_poll == 0.0 || (now - last_full_poll) >= g_cfg.status_poll_interval) {
+			last_full_poll = now;
+			bool verify = (now - last_topic_check) >= CCGRAM_TOPIC_CHECK_INTERVAL;
 
-		handlers_reconcile(verify);
-		if (verify) {
-			last_topic_check = now;
-			log_throttle_sweep();
-		}
+			handlers_reconcile(verify);
+			if (verify) {
+				last_topic_check = now;
+				log_throttle_sweep();
+			}
 
-		if ((now - last_live_view) >= (double)g_cfg.live_view_interval) {
-			last_live_view = now;
-			live_tick_all();
-		}
+			if ((now - last_live_view) >= (double)g_cfg.live_view_interval) {
+				last_live_view = now;
+				live_tick_all();
+			}
 
-		struct tmux_window sessions[128];
-		size_t ns = tmux_list_sessions(sessions, 128);
-		struct thread_binding bindings[256];
-		size_t nb = router_iter_bindings(bindings, 256);
+			struct tmux_window sessions[128];
+			size_t ns = tmux_list_sessions(sessions, 128);
+			struct thread_binding bindings[256];
+			size_t nb = router_iter_bindings(bindings, 256);
 
-		for (size_t i = 0; i < nb && g_running; i++) {
-			bool dup_win = false;
-			for (size_t prev = 0; prev < i; prev++) {
-				if (strcmp(bindings[prev].window_id, bindings[i].window_id) == 0) {
-					dup_win = true;
-					break;
+			for (size_t i = 0; i < nb && g_running; i++) {
+				bool dup_win = false;
+				for (size_t prev = 0; prev < i; prev++) {
+					if (strcmp(bindings[prev].window_id, bindings[i].window_id) == 0) {
+						dup_win = true;
+						break;
+					}
 				}
-			}
-			if (dup_win)
-				continue;
+				if (dup_win)
+					continue;
 
-			const struct tmux_window *w = NULL;
-			for (size_t j = 0; j < ns; j++) {
-				if (strcmp(sessions[j].window_id, bindings[i].window_id) == 0) {
-					w = &sessions[j];
-					break;
+				const struct tmux_window *w = NULL;
+				for (size_t j = 0; j < ns; j++) {
+					if (strcmp(sessions[j].window_id, bindings[i].window_id) == 0) {
+						w = &sessions[j];
+						break;
+					}
 				}
-			}
-			if (!w)
-				continue;
+				if (!w)
+					continue;
 
-			int64_t chat_id = router_resolve_chat_id(bindings[i].user_id, bindings[i].thread_id);
-			char *pane = tmux_capture_pane(w->window_id, true, true);
-			if (pane) {
-				if (g_cfg.topic_status_diff_enabled)
-					diff_update(chat_id, bindings[i].thread_id, bindings[i].window_id,
-						    pane, "main", false);
-				free(pane);
+				int64_t chat_id = router_resolve_chat_id(bindings[i].user_id, bindings[i].thread_id);
+				char *pane = tmux_capture_pane(w->window_id, true, true);
+				if (pane) {
+					if (g_cfg.topic_status_diff_enabled)
+						diff_update(chat_id, bindings[i].thread_id, bindings[i].window_id,
+							    pane, "main", false);
+					free(pane);
+				}
+				poll_sidecar(chat_id, bindings[i].thread_id, bindings[i].window_id);
 			}
-			poll_sidecar(chat_id, bindings[i].thread_id, bindings[i].window_id);
+		} else if (!woken_for_sidecar && tmux_has_active_sidecars()) {
+			poll_all_active_sidecars();
 		}
 
-		struct timespec ts = {
-			.tv_sec = (time_t)g_cfg.status_poll_interval,
-			.tv_nsec = (long)((g_cfg.status_poll_interval - (double)(time_t)g_cfg.status_poll_interval) * 1e9)
-		};
-		nanosleep(&ts, NULL);
+		double wait_s = tmux_has_active_sidecars() ? 0.25 : g_cfg.status_poll_interval;
+		struct timespec deadline;
+		add_mono_deadline(&deadline, wait_s);
+
+		pthread_mutex_lock(&g_poll_mu);
+		while (g_running && !g_sidecar_wake) {
+			if (pthread_cond_timedwait(&g_poll_cond, &g_poll_mu, &deadline) == ETIMEDOUT)
+				break;
+		}
+		pthread_mutex_unlock(&g_poll_mu);
 	}
 	return NULL;
 }

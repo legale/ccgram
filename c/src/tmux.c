@@ -675,6 +675,16 @@ void tmux_forget_sidecar_pane(const char *window_id)
 	pthread_mutex_unlock(&g_tmux_mu);
 }
 
+bool tmux_has_active_sidecars(void)
+{
+	bool has;
+
+	pthread_mutex_lock(&g_tmux_mu);
+	has = g_sidecar_count > 0;
+	pthread_mutex_unlock(&g_tmux_mu);
+	return has;
+}
+
 static void shell_quote(const char *in, struct strbuf *sb)
 {
 	sb_append_str(sb, "'");
