@@ -138,6 +138,13 @@ def apply_args_to_env(**kwargs: object) -> None:
     help="Auto-close dead sessions after N minutes (default: 10, 0=disabled).",
 )
 @click.option(
+    "--provider",
+    default=None,
+    envvar="CCGRAM_PROVIDER",
+    hidden=True,
+    help="Deprecated no-op flag kept for CLI compatibility.",
+)
+@click.option(
     "--ack-reaction",
     default=None,
     envvar="CCGRAM_ACK_REACTION",
