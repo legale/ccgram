@@ -68,3 +68,9 @@ progress*.txt
 
 # Local temporary archives and extraction trees
 tmp/
+
+# C build artifacts
+*.o
+c/ccgram
+c/test_unit
+c/test_unit_san
