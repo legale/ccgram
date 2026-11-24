@@ -148,6 +148,7 @@ def test_command_metadata_is_attached_to_handlers():
         "sessions",
         "new",
         "bind",
+        "bindraw",
         "rename",
         "unbind",
         "killme",

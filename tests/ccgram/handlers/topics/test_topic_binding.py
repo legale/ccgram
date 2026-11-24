@@ -301,3 +301,122 @@ async def test_rename_command_usage_when_empty_args() -> None:
         await topic_binding.rename_command(update, context)
 
     reply.assert_awaited_once_with(update.message, "Usage: /rename <new_name>")
+
+
+async def test_bindraw_command_renames_and_binds() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//bindraw chat2"
+    update.effective_chat.id = -100
+    context = MagicMock()
+    context.args = ["chat2"]
+
+    client_mock = MagicMock(edit_forum_topic=AsyncMock())
+
+    def make_proc(name):
+        proc = MagicMock()
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        # chat2 exists, cc_chat2 does not yet exist
+        proc.returncode = 0 if name == "chat2" else 1
+        return proc
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=lambda *args, **kwargs: make_proc(args[3] if len(args) > 3 else ""),
+        ),
+        patch.object(
+            topic_binding.tmux_manager,
+            "rename_session",
+            new=AsyncMock(return_value=True),
+        ) as mock_rename,
+        patch.object(
+            topic_binding,
+            "ensure_topic_session",
+            new=AsyncMock(return_value=("cc_chat2:@1", None)),
+        ) as mock_ensure,
+        patch.object(topic_binding, "PTBTelegramClient", return_value=client_mock),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.bindraw_command(update, context)
+
+    mock_rename.assert_awaited_once_with("chat2", "cc_chat2")
+    mock_ensure.assert_awaited_once_with(1, -100, 42, "chat2", rebind=True)
+    client_mock.edit_forum_topic.assert_awaited_once_with(-100, 42, name="chat2")
+    reply.assert_awaited_once_with(update.message, "cc_chat2")
+
+
+async def test_bindraw_command_already_prefixed() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//bindraw cc_chat2"
+    update.effective_chat.id = -100
+    context = MagicMock()
+    context.args = ["cc_chat2"]
+
+    client_mock = MagicMock(edit_forum_topic=AsyncMock())
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    mock_proc.returncode = 0
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=mock_proc),
+        ),
+        patch.object(
+            topic_binding.tmux_manager,
+            "rename_session",
+            new=AsyncMock(return_value=True),
+        ) as mock_rename,
+        patch.object(
+            topic_binding,
+            "ensure_topic_session",
+            new=AsyncMock(return_value=("cc_chat2:@1", None)),
+        ),
+        patch.object(topic_binding, "PTBTelegramClient", return_value=client_mock),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.bindraw_command(update, context)
+
+    mock_rename.assert_not_called()
+    client_mock.edit_forum_topic.assert_awaited_once_with(-100, 42, name="chat2")
+    reply.assert_awaited_once_with(update.message, "cc_chat2")
+
+
+async def test_bindraw_command_session_not_found() -> None:
+    from ccgram.handlers.topics import topic_binding
+
+    update = MagicMock()
+    update.effective_user.id = 1
+    update.message.text = "//bindraw missing"
+    update.effective_chat.id = -100
+    context = MagicMock()
+    context.args = ["missing"]
+
+    mock_proc = MagicMock()
+    mock_proc.communicate = AsyncMock(
+        return_value=(b"", b"can't find session: missing\n")
+    )
+    mock_proc.returncode = 1
+
+    with (
+        patch.object(topic_binding.config, "is_user_allowed", return_value=True),
+        patch.object(topic_binding, "get_thread_id", return_value=42),
+        patch(
+            "asyncio.create_subprocess_exec",
+            new=AsyncMock(return_value=mock_proc),
+        ),
+        patch.object(topic_binding, "safe_reply", new_callable=AsyncMock) as reply,
+    ):
+        await topic_binding.bindraw_command(update, context)
+
+    reply.assert_awaited_once_with(update.message, "can't find session: missing")

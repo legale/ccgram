@@ -207,9 +207,24 @@ async def new_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await safe_reply(message, target)
 
 
-@command("bind", "Bind topic to session", params="<key>")
-async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """``//bind key`` — attach to prefix_key session and bind the topic."""
+async def _session_has(name: str) -> tuple[bool, str]:
+    proc = await asyncio.create_subprocess_exec(
+        "tmux",
+        "has-session",
+        "-t",
+        name,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+    return proc.returncode == 0, stderr.decode().strip()
+
+
+async def _do_bind_raw(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    raw_name: str,
+) -> None:
     user = update.effective_user
     message = update.message
     chat = update.effective_chat
@@ -221,60 +236,109 @@ async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(message, "Error: not inside a topic")
         return
 
-    args = list(context.args or [])
-    if len(args) != 1 or not _valid_name(args[0].strip()):  # noqa: PLR2004
-        await safe_reply(message, "Usage: //bind <key>")
-        return
-    name = args[0].strip()
-    target_session = tmux_manager.topic_session_name(name)
-
-    # Verify session exists (tmux attach target)
-    proc = await asyncio.create_subprocess_exec(
-        "tmux",
-        "has-session",
-        "-t",
-        target_session,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    _, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        err = stderr.decode().strip() or f"can't find session: {target_session}"
+    exists, stderr_text = await _session_has(raw_name)
+    if not exists:
+        err = stderr_text or f"can't find session: {raw_name}"
         await safe_reply(message, err)
         return
+
+    prefix = config.tmux_session_prefix
+    if raw_name.startswith(prefix):
+        topic_name = raw_name[len(prefix) :]
+        canonical_session = raw_name
+    else:
+        topic_name = raw_name
+        canonical_session = f"{prefix}{topic_name}"
+
+    if not _valid_name(topic_name):
+        await safe_reply(message, f"Invalid session name: {raw_name}")
+        return
+
+    # If raw session does not have cc_ prefix, rename it in tmux to cc_<name>
+    if raw_name != canonical_session:
+        target_exists, _ = await _session_has(canonical_session)
+        if target_exists:
+            await safe_reply(
+                message,
+                f"Error: target session '{canonical_session}' already exists",
+            )
+            return
+        renamed = await tmux_manager.rename_session(raw_name, canonical_session)
+        if not renamed:
+            await safe_reply(
+                message,
+                f"Failed to rename tmux session '{raw_name}' to '{canonical_session}'",
+            )
+            return
 
     # Switch attached tmux client if any
     switch_proc = await asyncio.create_subprocess_exec(
         "tmux",
         "switch-client",
         "-t",
-        target_session,
+        canonical_session,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
     await switch_proc.communicate()
 
+    # Rebind topic to canonical session (rebind=True unbinds any old session from this topic)
     window_id, error = await ensure_topic_session(
         user.id,
         chat.id,
         thread_id,
-        name,
+        topic_name,
         rebind=True,
     )
     if error or not window_id:
         await safe_reply(message, error or "Failed to bind session.")
         return
 
+    # Rename Telegram forum topic (вкладка) to topic_name
     client = PTBTelegramClient(context.bot)
     try:
-        await client.edit_forum_topic(chat.id, thread_id, name=name)
+        await client.edit_forum_topic(chat.id, thread_id, name=topic_name)
     except BadRequest as exc:
         if "topic_not_modified" not in exc.message.lower():
             logger.warning("Topic rename failed on bind: %s", exc)
     except TelegramError as exc:
         logger.warning("Topic rename failed on bind: %s", exc)
 
-    await safe_reply(message, target_session)
+    await safe_reply(message, canonical_session)
+
+
+@command("bindraw", "Bind topic to exact tmux session", params="<session>")
+async def bindraw_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//bindraw session`` — bind topic to exact tmux session name."""
+    message = update.message
+    if not message:
+        return
+    args = list(context.args or [])
+    if len(args) != 1 or not args[0].strip():
+        await safe_reply(message, "Usage: //bindraw <session>")
+        return
+    raw_name = args[0].strip()
+    await _do_bind_raw(update, context, raw_name)
+
+
+@command("bind", "Bind topic to session", params="<key>")
+async def bind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``//bind key`` — attach to prefix_key session and bind the topic."""
+    message = update.message
+    if not message:
+        return
+    args = list(context.args or [])
+    if len(args) != 1 or not _valid_name(args[0].strip()):  # noqa: PLR2004
+        await safe_reply(message, "Usage: //bind <key>")
+        return
+    name = args[0].strip()
+    target_session = tmux_manager.topic_session_name(name)
+    prefixed_exists, _ = await _session_has(target_session)
+    if not prefixed_exists:
+        raw_exists, _ = await _session_has(name)
+        if raw_exists:
+            target_session = name
+    await _do_bind_raw(update, context, target_session)
 
 
 @command("rename", "Rename topic and session", params="<name>")
@@ -373,4 +437,4 @@ async def rename_command(  # noqa: C901
     await safe_reply(message, f"{target} (топик: {name})")
 
 
-COMMAND_HANDLERS = (new_command, bind_command, rename_command)
+COMMAND_HANDLERS = (new_command, bind_command, bindraw_command, rename_command)
