@@ -43,7 +43,6 @@ class LiveViewState:
     thread_id: int
     user_id: int
     window_id: str
-    pane_id: str | None = None
     last_hash: str = ""
     next_edit_after: float = 0.0
     start_time: float = field(default_factory=time.monotonic)
@@ -77,16 +76,12 @@ def content_hash(text: str) -> str:
     return hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()
 
 
-def build_live_keyboard(
-    window_id: str, pane_id: str | None = None
-) -> InlineKeyboardMarkup:
+def build_live_keyboard(window_id: str) -> InlineKeyboardMarkup:
     """Build inline keyboard for live view: quick keys + stop button."""
-    target = f"{window_id}:{pane_id}" if pane_id else window_id
-
     def btn(label: str, key_id: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(
             label,
-            callback_data=f"{CB_KEYS_PREFIX}{key_id}:{target}"[:64],
+            callback_data=f"{CB_KEYS_PREFIX}{key_id}:{window_id}"[:64],
         )
 
     return InlineKeyboardMarkup(
@@ -97,7 +92,7 @@ def build_live_keyboard(
             [
                 InlineKeyboardButton(
                     "\u23f9 Stop Live",
-                    callback_data=f"{CB_LIVE_STOP}{target}"[:64],
+                    callback_data=f"{CB_LIVE_STOP}{window_id}"[:64],
                 )
             ],
         ]
@@ -172,7 +167,9 @@ async def _tick_one_view(
             await _edit_caption(client, view, "Live view ended (window closed)")
             return
 
-        raw_text = await _capture_pane(view, window.window_id)
+        raw_text = await tmux_manager.capture_pane(
+            window.window_id, with_ansi=True
+        )
         if not raw_text:
             return
 
@@ -186,7 +183,7 @@ async def _tick_one_view(
 
         await rate_limit_send(view.chat_id)
 
-        keyboard = build_live_keyboard(view.window_id, pane_id=view.pane_id)
+        keyboard = build_live_keyboard(view.window_id)
         await client.edit_message_media(
             chat_id=view.chat_id,
             message_id=view.message_id,
@@ -209,21 +206,12 @@ async def _tick_one_view(
         _active_views.pop(key, None)
 
 
-async def _capture_pane(view: LiveViewState, window_id: str) -> str | None:
-    """Capture pane text for a live view."""
-    if view.pane_id:
-        return await tmux_manager.capture_pane_by_id(
-            view.pane_id, with_ansi=True, window_id=view.window_id
-        )
-    return await tmux_manager.capture_pane(window_id, with_ansi=True)
-
-
 async def _edit_caption(client: TelegramClient, view: LiveViewState, text: str) -> None:
     """Best-effort edit of the live view message caption on stop."""
     # Lazy: live_view ↔ screenshot_callbacks bidirectional cycle.
     from .screenshot_callbacks import build_screenshot_keyboard
 
-    keyboard = build_screenshot_keyboard(view.window_id, pane_id=view.pane_id)
+    keyboard = build_screenshot_keyboard(view.window_id)
     with contextlib.suppress(TelegramError):
         await client.edit_message_caption(
             chat_id=view.chat_id,

@@ -5,7 +5,6 @@ Handles inline keyboard callbacks for screenshot UI:
   - CB_LIVE_START: Start auto-refreshing live terminal view
   - CB_LIVE_STOP: Stop live view and revert to screenshot keyboard
   - CB_STATUS_SCREENSHOT: Take a screenshot from status message
-  - CB_PANE_SCREENSHOT: Take a screenshot of a specific pane
 
 Status-bar button callbacks (notify, recall, esc, remote, keys) are in
 status_bar_actions.py. Toolbar callbacks (CB_TOOLBAR_*) are in
@@ -39,11 +38,10 @@ from ..callback_data import (
     CB_KEYS_PREFIX,
     CB_LIVE_START,
     CB_LIVE_STOP,
-    CB_PANE_SCREENSHOT,
     CB_SCREENSHOT_REFRESH,
     CB_STATUS_SCREENSHOT,
 )
-from ..callback_helpers import get_thread_id, parse_target, user_owns_window
+from ..callback_helpers import get_thread_id, user_owns_window
 from ..callback_registry import register
 from ..command_meta import command
 
@@ -82,20 +80,12 @@ KEY_LABELS: dict[str, str] = {
 }
 
 
-def build_screenshot_keyboard(
-    window_id: str, pane_id: str | None = None
-) -> InlineKeyboardMarkup:
-    """Build inline keyboard for screenshot: control keys + refresh.
-
-    When *pane_id* is given, keys and refresh target that specific pane
-    instead of the window's active pane.
-    """
-    target = f"{window_id}:{pane_id}" if pane_id else window_id
-
+def build_screenshot_keyboard(window_id: str) -> InlineKeyboardMarkup:
+    """Build inline keyboard for screenshot: control keys + refresh."""
     def btn(label: str, key_id: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(
             label,
-            callback_data=f"{CB_KEYS_PREFIX}{key_id}:{target}"[:64],
+            callback_data=f"{CB_KEYS_PREFIX}{key_id}:{window_id}"[:64],
         )
 
     return InlineKeyboardMarkup(
@@ -106,11 +96,11 @@ def build_screenshot_keyboard(
             [
                 InlineKeyboardButton(
                     "\U0001f4fa Live",
-                    callback_data=f"{CB_LIVE_START}{target}"[:64],
+                    callback_data=f"{CB_LIVE_START}{window_id}"[:64],
                 ),
                 InlineKeyboardButton(
                     "\U0001f504 Refresh",
-                    callback_data=f"{CB_SCREENSHOT_REFRESH}{target}"[:64],
+                    callback_data=f"{CB_SCREENSHOT_REFRESH}{window_id}"[:64],
                 ),
             ],
         ]
@@ -121,8 +111,7 @@ async def _handle_live_start(
     query: CallbackQuery, user_id: int, data: str, update: Update
 ) -> None:
     """Handle CB_LIVE_START: start auto-refreshing live view."""
-    target = data[len(CB_LIVE_START) :]
-    window_id, pane_id = parse_target(target)
+    window_id = data[len(CB_LIVE_START) :]
     if not user_owns_window(user_id, window_id):
         await query.answer("Not your session", show_alert=True)
         return
@@ -153,12 +142,7 @@ async def _handle_live_start(
         await query.answer("Window not found", show_alert=True)
         return
 
-    if pane_id:
-        text = await tmux_manager.capture_pane_by_id(
-            pane_id, with_ansi=True, window_id=window_id
-        )
-    else:
-        text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
+    text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
     if not text:
         await query.answer("Failed to capture pane", show_alert=True)
         return
@@ -166,7 +150,7 @@ async def _handle_live_start(
     text = tail_lines_ansi(text, config.live_view_limit)
     chat_id = thread_router.resolve_chat_id(user_id, thread_id)
     png_bytes = await text_to_image(text, with_ansi=True, live_mode=True)
-    keyboard = build_live_keyboard(window_id, pane_id=pane_id)
+    keyboard = build_live_keyboard(window_id)
 
     try:
         await query.edit_message_media(
@@ -191,7 +175,6 @@ async def _handle_live_start(
             thread_id=thread_id,
             user_id=user_id,
             window_id=window_id,
-            pane_id=pane_id,
             last_hash=content_hash(text),
         )
     )
@@ -202,8 +185,7 @@ async def _handle_live_stop(
     query: CallbackQuery, user_id: int, data: str, update: Update
 ) -> None:
     """Handle CB_LIVE_STOP: stop live view and revert to screenshot keyboard."""
-    target = data[len(CB_LIVE_STOP) :]
-    window_id, pane_id = parse_target(target)
+    window_id = data[len(CB_LIVE_STOP) :]
     if not user_owns_window(user_id, window_id):
         await query.answer("Not your session", show_alert=True)
         return
@@ -216,7 +198,7 @@ async def _handle_live_stop(
     from .live_view import stop_live_view
 
     stop_live_view(user_id, thread_id)
-    keyboard = build_screenshot_keyboard(window_id, pane_id=pane_id)
+    keyboard = build_screenshot_keyboard(window_id)
     with contextlib.suppress(TelegramError):
         await query.edit_message_caption(caption="Screenshot", reply_markup=keyboard)
     await query.answer("\u23f9 Stopped")
@@ -226,7 +208,7 @@ async def _handle_keys(query: CallbackQuery, user_id: int, data: str) -> None:
     """Send a control key from a screenshot or live-view keyboard."""
     rest = data[len(CB_KEYS_PREFIX) :]
     try:
-        key_id, target = rest.split(":", 1)
+        key_id, window_id = rest.split(":", 1)
     except ValueError:
         await query.answer("Invalid key", show_alert=True)
         return
@@ -236,28 +218,18 @@ async def _handle_keys(query: CallbackQuery, user_id: int, data: str) -> None:
         await query.answer("Unknown key", show_alert=True)
         return
 
-    window_id, pane_id = parse_target(target)
     if not user_owns_window(user_id, window_id):
         await query.answer("Not your session", show_alert=True)
         return
 
     key, enter, literal = key_spec
-    if pane_id:
-        sent = await tmux_manager.send_keys_to_pane(
-            pane_id,
-            key,
-            enter=enter,
-            literal=literal,
-            window_id=window_id,
-        )
-    else:
-        window = await tmux_manager.find_window_by_id(window_id)
-        sent = bool(window) and await tmux_manager.send_keys(
-            window.window_id,
-            key,
-            enter=enter,
-            literal=literal,
-        )
+    window = await tmux_manager.find_window_by_id(window_id)
+    sent = bool(window) and await tmux_manager.send_keys(
+        window.window_id,
+        key,
+        enter=enter,
+        literal=literal,
+    )
 
     if sent:
         await query.answer(KEY_LABELS[key_id])
@@ -293,53 +265,6 @@ async def _send_screenshot_media(
         )
 
 
-async def _handle_pane_screenshot(
-    query: CallbackQuery, user_id: int, data: str, update: Update
-) -> None:
-    """Handle CB_PANE_SCREENSHOT: screenshot a specific pane."""
-    rest = data[len(CB_PANE_SCREENSHOT) :]
-    # Format: <window_id>:<pane_id> e.g. "@0:%3"
-    colon_idx = rest.find(":")
-    if colon_idx < 0:
-        await query.answer("Invalid data")
-        return
-    window_id = rest[:colon_idx]
-    pane_id = rest[colon_idx + 1 :]
-
-    if not user_owns_window(user_id, window_id):
-        await query.answer("Not your session", show_alert=True)
-        return
-
-    text = await tmux_manager.capture_pane_by_id(
-        pane_id, with_ansi=True, window_id=window_id
-    )
-    if not text:
-        await query.answer("Failed to capture pane", show_alert=True)
-        return
-
-    png_bytes = await text_to_image(text, with_ansi=True)
-    keyboard = build_screenshot_keyboard(window_id, pane_id=pane_id)
-    thread_id = get_thread_id(update)
-    if thread_id is None:
-        await query.answer("Use in a topic", show_alert=True)
-        return
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-    client = PTBTelegramClient(query.get_bot())
-    try:
-        await _send_screenshot_media(
-            client=client,
-            chat_id=chat_id,
-            png_bytes=png_bytes,
-            keyboard=keyboard,
-            thread_id=thread_id,
-            filename=f"pane_{pane_id}.png",
-        )
-        await query.answer(f"\U0001f4f8 Pane {pane_id}")
-    except TelegramError as e:
-        logger.error("Failed to send pane screenshot: %s", e)
-        await query.answer("Failed to send screenshot", show_alert=True)
-
-
 async def handle_screenshot_callback(
     query: CallbackQuery,
     user_id: int,
@@ -358,7 +283,6 @@ async def handle_screenshot_callback(
         CB_LIVE_START: _handle_live_start,
         CB_LIVE_STOP: _handle_live_stop,
         CB_STATUS_SCREENSHOT: _handle_status_screenshot,
-        CB_PANE_SCREENSHOT: _handle_pane_screenshot,
     }
     for prefix, handler in with_update.items():
         if data.startswith(prefix):
@@ -381,8 +305,7 @@ async def handle_screenshot_callback(
 
 async def _handle_refresh(query: CallbackQuery, user_id: int, data: str) -> None:
     """Handle CB_SCREENSHOT_REFRESH: refresh an existing screenshot."""
-    target = data[len(CB_SCREENSHOT_REFRESH) :]
-    window_id, pane_id = parse_target(target)
+    window_id = data[len(CB_SCREENSHOT_REFRESH) :]
     if not user_owns_window(user_id, window_id):
         await query.answer("Not your session", show_alert=True)
         return
@@ -391,18 +314,13 @@ async def _handle_refresh(query: CallbackQuery, user_id: int, data: str) -> None
         await query.answer("Window no longer exists", show_alert=True)
         return
 
-    if pane_id:
-        text = await tmux_manager.capture_pane_by_id(
-            pane_id, with_ansi=True, window_id=window_id
-        )
-    else:
-        text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
+    text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
     if not text:
         await query.answer("Failed to capture pane", show_alert=True)
         return
 
     png_bytes = await text_to_image(text, with_ansi=True)
-    keyboard = build_screenshot_keyboard(window_id, pane_id=pane_id)
+    keyboard = build_screenshot_keyboard(window_id)
     # Lazy: config resolved at call time for testability
     from ...config import config
 
@@ -669,7 +587,6 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
             thread_id=thread_id,
             user_id=user.id,
             window_id=window_id,
-            pane_id=None,
             last_hash=content_hash(text),
         )
     )
@@ -684,7 +601,6 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
     CB_LIVE_STOP,
     CB_SCREENSHOT_REFRESH,
     CB_STATUS_SCREENSHOT,
-    CB_PANE_SCREENSHOT,
 )
 async def _dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query

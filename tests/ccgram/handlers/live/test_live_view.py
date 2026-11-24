@@ -45,7 +45,6 @@ def _make_view(
     thread_id: int = 42,
     user_id: int = 1,
     window_id: str = "@0",
-    pane_id: str | None = None,
     last_hash: str = "",
 ) -> LiveViewState:
     return LiveViewState(
@@ -54,7 +53,6 @@ def _make_view(
         thread_id=thread_id,
         user_id=user_id,
         window_id=window_id,
-        pane_id=pane_id,
         last_hash=last_hash,
     )
 
@@ -170,13 +168,6 @@ class TestBuildLiveKeyboard:
         assert isinstance(stop_btn.callback_data, str)
         assert stop_btn.callback_data.startswith(CB_LIVE_STOP)
 
-    def test_pane_id_in_callback_data(self):
-        kb = build_live_keyboard("@0", pane_id="%3")
-        flat = [btn for row in kb.inline_keyboard for btn in row]
-        stop_btn = [btn for btn in flat if "Stop" in btn.text][0]
-        assert isinstance(stop_btn.callback_data, str)
-        assert "@0:%3" in stop_btn.callback_data
-
     def test_key_callbacks_use_keys_prefix(self):
         kb = build_live_keyboard("@0")
         flat = [btn for row in kb.inline_keyboard for btn in row]
@@ -212,13 +203,6 @@ class TestBuildScreenshotKeyboard:
         refresh_btn = [btn for btn in flat if "Refresh" in btn.text][0]
         assert isinstance(refresh_btn.callback_data, str)
         assert refresh_btn.callback_data.startswith(CB_SCREENSHOT_REFRESH)
-
-    def test_pane_id_propagated(self):
-        kb = build_screenshot_keyboard("@0", pane_id="%5")
-        flat = [btn for row in kb.inline_keyboard for btn in row]
-        live_btn = [btn for btn in flat if "Live" in btn.text][0]
-        assert isinstance(live_btn.callback_data, str)
-        assert "@0:%5" in live_btn.callback_data
 
 
 # ── Tick function ────────────────────────────────────────────────────────
@@ -325,28 +309,6 @@ class TestTickLiveViews:
             await tick_live_views(bot)
         mock_img.assert_not_awaited()
         assert is_live(1, 42)
-
-    async def test_pane_id_uses_capture_pane_by_id(self):
-        view = _make_view(pane_id="%3", last_hash="old")
-        start_live_view(view)
-        bot = AsyncMock(spec=Bot)
-        with (
-            patch("ccgram.handlers.live.live_view.tmux_manager") as mock_tmux,
-            patch(
-                "ccgram.handlers.live.live_view.text_to_image",
-                new_callable=AsyncMock,
-                return_value=b"PNG",
-            ),
-        ):
-            mock_tmux.find_window_by_id = AsyncMock(
-                return_value=MagicMock(window_id="@0")
-            )
-            mock_tmux.capture_pane_by_id = AsyncMock(return_value="pane text")
-            await tick_live_views(bot)
-        mock_tmux.capture_pane_by_id.assert_awaited_once_with(
-            "%3", with_ansi=True, window_id="@0"
-        )
-        bot.edit_message_media.assert_awaited_once()
 
     async def test_multiple_views_ticked(self):
         v1 = _make_view(user_id=1, thread_id=10, last_hash="old1")
@@ -593,44 +555,6 @@ class TestHandleLiveStart:
         assert view.window_id == "@0"
         assert view.last_hash == content_hash("terminal text")
 
-    async def test_success_with_pane_id(self):
-        query, update = _make_query()
-        with (
-            patch(
-                "ccgram.handlers.live.screenshot_callbacks.user_owns_window",
-                return_value=True,
-            ),
-            patch(
-                "ccgram.handlers.live.screenshot_callbacks.get_thread_id",
-                return_value=42,
-            ),
-            patch(
-                "ccgram.handlers.live.screenshot_callbacks.tmux_manager"
-            ) as mock_tmux,
-            patch(
-                "ccgram.handlers.live.screenshot_callbacks.text_to_image",
-                new_callable=AsyncMock,
-                return_value=b"PNG",
-            ),
-            patch(
-                "ccgram.handlers.live.screenshot_callbacks.thread_router"
-            ) as mock_router,
-        ):
-            mock_tmux.find_window_by_id = AsyncMock(
-                return_value=MagicMock(window_id="@0")
-            )
-            mock_tmux.capture_pane_by_id = AsyncMock(return_value="pane text")
-            mock_router.resolve_chat_id.return_value = 100
-            await _handle_live_start(query, 1, f"{CB_LIVE_START}@0:%3", update)
-        mock_tmux.capture_pane_by_id.assert_awaited_once_with(
-            "%3", with_ansi=True, window_id="@0"
-        )
-        query.edit_message_media.assert_awaited_once()
-        assert is_live(1, 42)
-        view = get_live_view(1, 42)
-        assert view is not None
-        assert view.pane_id == "%3"
-
 
 class TestHandleLiveStop:
     async def test_rejects_non_owner(self):
@@ -721,23 +645,6 @@ class TestHandleKeys:
             "@0", "Enter", enter=False, literal=False
         )
         query.answer.assert_awaited_once_with("\u23ce Enter")
-
-    async def test_sends_key_to_live_pane(self):
-        query, _update = _make_query()
-        with (
-            patch(
-                "ccgram.handlers.live.screenshot_callbacks.user_owns_window",
-                return_value=True,
-            ),
-            patch("ccgram.handlers.live.screenshot_callbacks.tmux_manager") as tmux,
-        ):
-            tmux.send_keys_to_pane = AsyncMock(return_value=True)
-            await _handle_keys(query, 1, f"{CB_KEYS_PREFIX}esc:@0:%3")
-
-        tmux.send_keys_to_pane.assert_awaited_once_with(
-            "%3", "Escape", enter=False, literal=False, window_id="@0"
-        )
-        query.answer.assert_awaited_once_with("\u238b Esc")
 
 
 # ── RetryAfter timedelta branch ─────────────────────────────────────────

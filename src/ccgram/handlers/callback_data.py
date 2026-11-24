@@ -20,9 +20,6 @@ CB_SESSIONS_SCREENSHOT = "sess:scr:"  # sess:scr:<window_id>
 # Status message action buttons
 CB_STATUS_SCREENSHOT = "st:ss:"  # st:ss:<window_id>
 
-# Pane screenshot
-CB_PANE_SCREENSHOT = "pn:ss:"  # pn:ss:<window_id>:<pane_id>
-
 # Screenshot control keys
 CB_KEYS_PREFIX = "kb:"  # kb:<key_id>:<window>
 
