@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 
 import pytest
 
@@ -13,6 +13,8 @@ from ccgram.topic_tail import reset_topic_tail_state
 def _reset_state(monkeypatch):
     monkeypatch.setattr(topic_status_diff.config, "topic_status_diff_enabled", True)
     monkeypatch.setattr(topic_status_diff.config, "topic_status_diff_interval", 10)
+    monkeypatch.setattr(topic_status_diff.config, "topic_idle_enabled", True)
+    monkeypatch.setattr(topic_status_diff.config, "topic_idle_delay", 10.0)
     topic_status_diff.reset_topic_status_diff_state()
     reset_topic_tail_state()
     yield
@@ -211,7 +213,7 @@ async def test_screen_diff_key_sends_control_keys(monkeypatch) -> None:
 
 
 async def test_screen_diff_buffer_button_cycles_topic_limit(monkeypatch) -> None:
-    monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", 3000)
+    monkeypatch.setattr(topic_status_diff.config, "screen_diff_limit", 4000)
     state = topic_status_diff._get_state(1, 2, "@7")
     state.last_display_text = "old"
     state.last_edit_ts = 10.0
@@ -241,6 +243,12 @@ async def test_screen_diff_buffer_button_cycles_topic_limit(monkeypatch) -> None
 
     assert topic_status_diff.config.screen_diff_limit == 3000
     query.answer.assert_awaited_once_with("Screen buffer: 3000")
+
+    query.answer.reset_mock()
+    await topic_status_diff._handle_screen_diff_resize(update, context)
+
+    assert topic_status_diff.config.screen_diff_limit == 4000
+    query.answer.assert_awaited_once_with("Screen buffer: 4000")
 
 
 def test_screen_render_collapses_long_underscores() -> None:

@@ -97,6 +97,25 @@ class FakeTelegramClient:
             {"text": text, "chat_id": chat_id, "message_id": message_id, **kwargs},
         )
 
+    async def edit_message_reply_markup(
+        self,
+        chat_id: int | str | None = None,
+        message_id: int | None = None,
+        inline_message_id: str | None = None,
+        reply_markup: Any = None,
+        **kwargs: Any,
+    ) -> Message | bool:
+        return self._record(
+            "edit_message_reply_markup",
+            {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "inline_message_id": inline_message_id,
+                "reply_markup": reply_markup,
+                **kwargs,
+            },
+        )
+
     async def edit_message_media(
         self,
         media: InputMedia,

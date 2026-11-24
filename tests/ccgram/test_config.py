@@ -112,7 +112,7 @@ class TestTopicStatusConfig:
         assert Config().topic_status_diff_interval == expected
 
     def test_status_diff_interval_default(self):
-        assert Config().topic_status_diff_interval == 3
+        assert Config().topic_status_diff_interval == 5
 
     def test_status_diff_interval_invalid(self, monkeypatch):
         monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", "bad")
@@ -191,7 +191,7 @@ class TestPollingConfig:
             (
                 "status_poll_interval",
                 "CCGRAM_STATUS_POLL_INTERVAL",
-                1.0,
+                3.0,
                 "2.0",
                 2.0,
                 "0.2",

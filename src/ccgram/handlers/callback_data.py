@@ -2,14 +2,6 @@
 
 Defines all CB_* prefixes used for routing callback queries in the bot.
 Each prefix identifies a specific action or navigation target.
-
-Constants:
-  - CB_SCREENSHOT_*: Screenshot refresh
-  - CB_ASK_*: Interactive UI navigation (arrows, enter, esc)
-  - CB_SESSIONS_*: Sessions dashboard (refresh, rename, screenshot, kill)
-  - CB_STATUS_*: Status message action buttons (esc, screenshot, recall)
-  - CB_RECOVERY_*: Dead window recovery UI (fresh, continue, resume)
-  - CB_KEYS_PREFIX: Screenshot control keys (kb:<key_id>:<window>)
 """
 
 # Screenshot
@@ -17,17 +9,6 @@ CB_SCREENSHOT_REFRESH = "ss:ref:"
 
 # Screen diff buffer controls
 CB_SCREEN_DIFF = "sd:"  # sd:buf / sd:ent / sd:esc / sd:right
-
-# Interactive UI (aq: prefix kept for backward compatibility)
-CB_ASK_UP = "aq:up:"  # aq:up:<window>
-CB_ASK_DOWN = "aq:down:"  # aq:down:<window>
-CB_ASK_LEFT = "aq:left:"  # aq:left:<window>
-CB_ASK_RIGHT = "aq:right:"  # aq:right:<window>
-CB_ASK_ESC = "aq:esc:"  # aq:esc:<window>
-CB_ASK_ENTER = "aq:enter:"  # aq:enter:<window>
-CB_ASK_SPACE = "aq:spc:"  # aq:spc:<window>
-CB_ASK_TAB = "aq:tab:"  # aq:tab:<window>
-CB_ASK_REFRESH = "aq:ref:"  # aq:ref:<window>
 
 # Sessions dashboard
 CB_SESSIONS_REFRESH = "sess:ref"
@@ -37,60 +18,13 @@ CB_SESSIONS_RENAME = "sess:rn:"  # sess:rn:<window_id>
 CB_SESSIONS_SCREENSHOT = "sess:scr:"  # sess:scr:<window_id>
 
 # Status message action buttons
-CB_STATUS_ESC = "st:esc:"  # st:esc:<window_id>
 CB_STATUS_SCREENSHOT = "st:ss:"  # st:ss:<window_id>
-CB_STATUS_NOTIFY = "st:nfy:"  # st:nfy:<window_id>
-CB_STATUS_RECALL = "st:rc:"  # st:rc:<window_id>:<history_index>
 
-# Recovery UI (dead window)
-CB_RECOVERY_FRESH = "rec:f:"  # rec:f:<window_id>
-CB_RECOVERY_CONTINUE = "rec:c:"  # rec:c:<window_id>
-CB_RECOVERY_RESUME = "rec:r:"  # rec:r:<window_id>
-CB_RECOVERY_PICK = "rec:p:"  # rec:p:<index> (resume picker selection)
-CB_RECOVERY_BACK = "rec:b:"  # rec:b:<window_id> (back to recovery menu)
-CB_RECOVERY_CANCEL = "rec:x"  # cancel recovery
-
-# Resume command (browse all sessions)
-CB_RESUME_PICK = "res:p:"  # res:p:<index> (session selection)
-CB_RESUME_PAGE = "res:pg:"  # res:pg:<page> (pagination)
-CB_RESUME_CANCEL = "res:x"  # cancel resume browser
-
-# Notification mode UI metadata (canonical mode list lives in session.py)
-NOTIFY_MODE_ICONS: dict[str, str] = {
-    "all": "",
-    "errors_only": "",
-    "muted": "",
-}
-NOTIFY_MODE_LABELS: dict[str, str] = {
-    k: k.replace("_", " ").title() for k in NOTIFY_MODE_ICONS
-}
-# Reactions on the status bubble after a notify-mode toggle. Picked from
-# Telegram's allowed reaction set (the bell/warning/no-bell glyphs aren't
-# available as reactions for bots).
-NOTIFY_MODE_REACT: dict[str, str] = {
-    "all": "\U0001f440",  # \ud83d\udc40 REACT_SEEN \u2014 watching everything
-    "errors_only": "\U0001f914",  # \ud83e\udd14 REACT_THINKING \u2014 selective
-    "muted": "\U0001f494",  # \ud83d\udc94 REACT_FAIL \u2014 disabled
-}
-
-# Pane screenshot (from /panes command)
+# Pane screenshot
 CB_PANE_SCREENSHOT = "pn:ss:"  # pn:ss:<window_id>:<pane_id>
-
-# Pane subscription / rename / lifecycle (Theme 5)
-CB_PANE_SUBSCRIBE = "pn:sub:"  # pn:sub:<window_id>:<pane_id>
-CB_PANE_UNSUBSCRIBE = "pn:uns:"  # pn:uns:<window_id>:<pane_id>
-CB_PANE_RENAME = "pn:rn:"  # pn:rn:<window_id>:<pane_id>
-CB_PANE_LIFECYCLE_TOGGLE = "pn:lc:"  # pn:lc:<window_id> — per-window toggle
 
 # Screenshot control keys
 CB_KEYS_PREFIX = "kb:"  # kb:<key_id>:<window>
-
-# Sync command
-CB_SYNC_FIX = "sync:fix"
-CB_SYNC_DISMISS = "sync:x"
-
-# Voice transcription confirm/discard
-CB_VOICE = "vc:"  # vc:send:<msg_id> / vc:drop:<msg_id>
 
 # Live view (auto-refreshing screenshot)
 CB_LIVE_START = "lv:go:"  # lv:go:<target> (window_id or window_id:pane_id)
