@@ -1,4 +1,4 @@
-# ccgram Architecture (`refactor/tmux-only`)
+# ccgram Architecture
 
 ## System Overview
 
