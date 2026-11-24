@@ -10,12 +10,8 @@ async def test_start_sidecar_command_uses_active_pane_cwd() -> None:
     panes = [
         PaneInfo(
             pane_id="%1",
-            index=0,
             active=True,
-            command="claude",
             path="/tmp",
-            width=80,
-            height=24,
         )
     ]
     mock_proc = AsyncMock()
@@ -49,8 +45,8 @@ async def test_start_sidecar_command_rejects_concurrent_command() -> None:
     tm = TmuxManager("test-session")
     tm._sidecar_panes["test-session:@1"] = "%2"
     panes = [
-        PaneInfo("%1", 0, True, "bash", "/tmp", 80, 24),
-        PaneInfo("%2", 1, False, "sh", "/tmp", 80, 24),
+        PaneInfo("%1", True, "/tmp"),
+        PaneInfo("%2", False, "/tmp"),
     ]
 
     with (

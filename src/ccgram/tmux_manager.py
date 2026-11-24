@@ -74,12 +74,8 @@ class PaneInfo:
     """Information about a single tmux pane within a window."""
 
     pane_id: str  # Stable global ID, e.g. "%3"
-    index: int  # 0-based position in window
     active: bool
-    command: str  # Foreground process, e.g. "claude", "bash"
-    path: str  # Working directory
-    width: int
-    height: int
+    path: str = ""  # Working directory
     dead: bool = False
 
 
@@ -90,15 +86,7 @@ class TmuxWindow:
     window_id: str
     window_name: str
     cwd: str  # Current working directory
-    pane_current_command: str = ""  # Process running in active pane
-    pane_tty: str = ""  # TTY device for the active pane (e.g. /dev/ttys003)
-    pane_width: int = 0  # Active pane width (columns)
-    pane_height: int = 0  # Active pane height (rows)
     topic_ref: tuple[int, int] | None = None  # (chat_id, thread_id), session-scoped
-
-
-# Alias: entity is a tmux session/window (ses)
-TmuxSes = TmuxWindow
 
 
 class TmuxManager:
@@ -147,23 +135,6 @@ class TmuxManager:
             self._reset_server()
             return None
 
-    def get_or_create_session(self, session_name: str | None = None) -> libtmux.Session:
-        """Get existing session or create a new one."""
-        name = session_name or self.session_name
-        session = self.get_session(name)
-        if session:
-            return session
-
-        # Create new session with main window named specifically
-        session = self.server.new_session(
-            session_name=name,
-            start_directory=str(Path.home()),
-        )
-        # Rename the default window to the main window name
-        if session.windows:
-            session.windows[0].rename_window(config.tmux_main_window_name)
-        return session
-
     async def list_windows(self) -> list[TmuxWindow]:  # noqa: C901
         """List all windows in the session with their working directories.
 
@@ -201,27 +172,12 @@ class TmuxManager:
                         continue
                     try:
                         pane = window.active_pane
-                        if pane:
-                            cwd = pane.pane_current_path or ""
-                            pane_cmd = pane.pane_current_command or ""
-                            pane_tty = getattr(pane, "pane_tty", "") or ""
-                            pw = int(pane.pane_width or 0)
-                            ph = int(pane.pane_height or 0)
-                        else:
-                            cwd = ""
-                            pane_cmd = ""
-                            pane_tty = ""
-                            pw = 0
-                            ph = 0
+                        cwd = pane.pane_current_path or "" if pane else ""
                         windows.append(
                             TmuxWindow(
                                 window_id=window_id,
                                 window_name=name,
                                 cwd=cwd,
-                                pane_current_command=pane_cmd,
-                                pane_tty=pane_tty,
-                                pane_width=pw,
-                                pane_height=ph,
                             )
                         )
                     except _TmuxError as e:
@@ -354,21 +310,6 @@ class TmuxManager:
 
         return await asyncio.to_thread(_sync_clear)
 
-    async def find_window_by_name(self, window_name: str) -> TmuxWindow | None:
-        """Find a window by its name.
-
-        Args:
-            window_name: The window name to match
-
-        Returns:
-            TmuxWindow if found, None otherwise
-        """
-        windows = await self.list_windows()
-        for window in windows:
-            if window.window_name == window_name:
-                return window
-        return None
-
     async def find_window_by_id(self, window_id: str) -> TmuxWindow | None:
         """Find a window by its tmux window ID (e.g. '@0', '@12').
 
@@ -427,8 +368,6 @@ class TmuxManager:
                     if len(parts) > idx_window_name
                     else session_name,
                     cwd=parts[idx_cwd] if len(parts) > idx_cwd else "",
-                    pane_current_command=parts[idx_cmd] if len(parts) > idx_cmd else "",
-                    pane_tty=parts[idx_tty] if len(parts) > idx_tty else "",
                 )
         return None
 
@@ -478,54 +417,6 @@ class TmuxManager:
             stderr=asyncio.subprocess.DEVNULL,
         )
         await proc.wait()
-
-    async def capture_pane_raw(self, window_id: str) -> tuple[str, int, int] | None:
-        """Capture pane text with ANSI escapes and pane dimensions.
-
-        Returns (raw_text, columns, rows) or None on failure. The raw text
-        includes ANSI escape sequences suitable for feeding into pyte.
-        """
-        proc: asyncio.subprocess.Process | None = None
-        try:
-            # Get dimensions and capture in one shell command
-            proc = await asyncio.create_subprocess_exec(
-                "tmux",
-                "display-message",
-                "-p",
-                "-t",
-                window_id,
-                "#{pane_width}:#{pane_height}",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            async with asyncio.timeout(5.0):
-                stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                logger.warning(
-                    "Failed to get pane dimensions %s: %s",
-                    window_id,
-                    stderr.decode("utf-8", errors="replace"),
-                )
-                return None
-            dims = stdout.decode("utf-8", errors="replace").strip()
-            try:
-                cols_str, rows_str = dims.split(":")
-                columns, rows = int(cols_str), int(rows_str)
-            except ValueError:
-                return None
-
-            # Capture with ANSI escapes
-            text = await self._capture_pane_ansi(window_id)
-            if text is None:
-                return None
-            return (text, columns, rows)
-        except TimeoutError:
-            logger.warning("Capture pane raw %s timed out", window_id)
-            await _kill_timed_out_proc(proc)
-            return None
-        except OSError:
-            logger.exception("Unexpected error capturing pane raw %s", window_id)
-            return None
 
     async def _capture_pane_ansi(
         self, window_id: str, *, include_history: bool = False
@@ -637,31 +528,6 @@ class TmuxManager:
             self._pane_send, window_id, text, enter=enter, literal=literal
         )
 
-    async def kill_window(self, window_id: str) -> bool:
-        """Kill a tmux window by its ID.
-
-        Foreign windows (emdash) are never killed — they are owned externally.
-        """
-
-        def _sync_kill() -> bool:
-            session_name, wid = self._split_qualified(window_id)
-            session = self.get_session(session_name)
-            if not session:
-                return False
-            try:
-                window = session.windows.get(window_id=wid, default=None)
-                if not window:
-                    return False
-                window.kill()
-                logger.info("Killed window %s", window_id)
-                return True
-            except _TmuxError:
-                logger.exception("Failed to kill window %s", window_id)
-                return False
-
-        self.forget_sidecar_pane(window_id)
-        return await asyncio.to_thread(_sync_kill)
-
     async def kill_session(self, session_name: str) -> bool:
         """Kill a tmux session and all of its windows."""
         if session_name == self.session_name:
@@ -685,27 +551,6 @@ class TmuxManager:
                 return False
 
         return await asyncio.to_thread(_sync_kill)
-
-    async def rename_window(self, window_id: str, new_name: str) -> bool:
-        """Rename a tmux window by its ID. Returns True on success."""
-
-        def _sync_rename() -> bool:
-            session_name, wid = self._split_qualified(window_id)
-            session = self.get_session(session_name)
-            if not session:
-                return False
-            try:
-                window = session.windows.get(window_id=wid, default=None)
-                if not window:
-                    return False
-                window.rename_window(new_name)
-                logger.info("Renamed window %s to %r", window_id, new_name)
-                return True
-            except _TmuxError:
-                logger.exception("Failed to rename window %s", window_id)
-                return False
-
-        return await asyncio.to_thread(_sync_rename)
 
     async def rename_session(self, session_name: str, new_name: str) -> bool:
         def _sync_rename() -> bool:
@@ -887,12 +732,8 @@ class TmuxManager:
                     result.append(
                         PaneInfo(
                             pane_id=pane.pane_id or "",
-                            index=int(pane.pane_index or 0),
                             active=pane.pane_active == "1",
-                            command=pane.pane_current_command or "",
                             path=pane.pane_current_path or "",
-                            width=int(pane.pane_width or 0),
-                            height=int(pane.pane_height or 0),
                             dead=getattr(pane, "pane_dead", "0") == "1",
                         )
                     )

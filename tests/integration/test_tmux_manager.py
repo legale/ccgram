@@ -21,7 +21,8 @@ TEST_SESSION = "cc_test_integration"
 async def tmux(tmp_path):
     mgr = TmuxManager(session_name=TEST_SESSION)
     created: list[str] = [TEST_SESSION]
-    mgr.get_or_create_session()
+    if mgr.get_session(TEST_SESSION) is None:
+        mgr.server.new_session(session_name=TEST_SESSION, start_directory=str(tmp_path))
     orig = mgr.create_session
 
     async def track(
@@ -95,18 +96,6 @@ async def test_no_agent_disables_automatic_rename(tmux, tmp_path) -> None:
     assert found.window_name == "shell-norename"
 
 
-async def test_kill_window(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("kill-me", str(tmp_path), window_name="kill-me")
-    assert ok
-
-    killed = await tmux.kill_window(window_id)
-    assert killed is True
-
-    windows = await tmux.list_windows()
-    ids = [w.window_id for w in windows]
-    assert window_id not in ids
-
-
 async def test_kill_session_removes_the_tmux_session(tmux, tmp_path) -> None:
     session_name = "cc_kill-session"
     ok, _msg, _name, _window_id = await tmux.create_session(
@@ -134,22 +123,6 @@ async def test_reset_server_reconnects(tmux, tmp_path) -> None:
     assert window_id in ids
 
 
-async def test_capture_pane_raw_returns_tuple(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("raw-test", str(tmp_path), window_name="raw-test")
-    assert ok
-
-    await tmux.send_keys(window_id, "echo raw-test-output")
-    await asyncio.sleep(0.5)
-
-    result = await tmux.capture_pane_raw(window_id)
-    assert result is not None
-    content, cols, rows = result
-    assert isinstance(content, str)
-    assert "raw-test-output" in content
-    assert cols > 0
-    assert rows > 0
-
-
 # ── Pane-level operations ────────────────────────────────────────────
 
 
@@ -161,8 +134,6 @@ async def test_list_panes_single(tmux, tmp_path) -> None:
     assert len(panes) == 1
     assert panes[0].active is True
     assert panes[0].pane_id.startswith("%")
-    assert panes[0].width > 0
-    assert panes[0].height > 0
 
 
 async def test_list_panes_multiple(tmux, tmp_path) -> None:

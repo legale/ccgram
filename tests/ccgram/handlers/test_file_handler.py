@@ -134,8 +134,6 @@ class TestResolveUploadDir:
             window_id="@1",
             window_name="proj",
             cwd=str(live_dir),
-            pane_current_command="bash",
-            pane_tty="/dev/pts/1",
         )
         monkeypatch.setattr(
             "ccgram.handlers.file_handler.thread_router.resolve_window_for_thread",

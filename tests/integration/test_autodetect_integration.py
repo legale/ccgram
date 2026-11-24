@@ -23,7 +23,8 @@ TEST_SESSION = "cc_autodetect_test"
 def tmux():
     mgr = TmuxManager(session_name=TEST_SESSION)
     created: list[str] = [TEST_SESSION]
-    mgr.get_or_create_session()
+    if mgr.get_session(TEST_SESSION) is None:
+        mgr.server.new_session(session_name=TEST_SESSION)
     orig = mgr.create_session
 
     async def track(
