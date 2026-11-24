@@ -19,27 +19,17 @@ Public API:
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
-from telegram import Bot, BotCommand, ChatFullInfo, File, ForumTopic, Message
-from telegram._botcommandscope import BotCommandScope
+from telegram import Bot, Message
 from telegram._files.inputmedia import InputMedia
-from telegram._reaction import ReactionType
 
 from .topic_tail import record_telegram_message
 
 
 @runtime_checkable
 class TelegramClient(Protocol):
-    """Narrow seam over the PTB ``Bot`` methods used in this codebase.
-
-    Each method mirrors the corresponding ``Bot`` method's name and primary
-    arguments. ``**kwargs`` is accepted on every method so callers can pass
-    additional PTB-supported parameters (entities, parse_mode, link_preview,
-    request timeouts, etc.) without forcing this Protocol to enumerate them
-    all.
-    """
+    """Narrow seam over the PTB ``Bot`` methods used in this codebase."""
 
     async def send_message(
         self,
@@ -78,13 +68,6 @@ class TelegramClient(Protocol):
         **kwargs: Any,
     ) -> Message | bool: ...
 
-    async def delete_message(
-        self,
-        chat_id: int | str,
-        message_id: int,
-        **kwargs: Any,
-    ) -> bool: ...
-
     async def send_photo(
         self,
         chat_id: int | str,
@@ -105,25 +88,6 @@ class TelegramClient(Protocol):
         action: str,
         **kwargs: Any,
     ) -> bool: ...
-
-    async def set_message_reaction(
-        self,
-        chat_id: int | str,
-        message_id: int,
-        reaction: Sequence[ReactionType | str] | ReactionType | str | None = None,
-        **kwargs: Any,
-    ) -> bool: ...
-
-    async def get_chat(self, chat_id: int | str, **kwargs: Any) -> ChatFullInfo: ...
-
-    async def get_file(self, file_id: str, **kwargs: Any) -> File: ...
-
-    async def create_forum_topic(
-        self,
-        chat_id: int | str,
-        name: str,
-        **kwargs: Any,
-    ) -> ForumTopic: ...
 
     async def edit_forum_topic(
         self,
@@ -153,47 +117,12 @@ class TelegramClient(Protocol):
         **kwargs: Any,
     ) -> bool: ...
 
-    async def unpin_all_forum_topic_messages(
-        self,
-        chat_id: int | str,
-        message_thread_id: int,
-        **kwargs: Any,
-    ) -> bool: ...
-
-    async def delete_my_commands(
-        self,
-        scope: BotCommandScope | None = None,
-        language_code: str | None = None,
-        **kwargs: Any,
-    ) -> bool: ...
-
-    async def set_my_commands(
-        self,
-        commands: Sequence[BotCommand | tuple[str, str]],
-        scope: BotCommandScope | None = None,
-        language_code: str | None = None,
-        **kwargs: Any,
-    ) -> bool: ...
-
 
 class PTBTelegramClient:
-    """Adapter that delegates ``TelegramClient`` calls to a PTB ``Bot``.
-
-    Constructed once per process from ``application.bot`` in ``bootstrap``
-    and threaded into handlers as a ``TelegramClient``.
-    """
+    """Adapter that delegates ``TelegramClient`` calls to a PTB ``Bot``."""
 
     def __init__(self, bot: Bot) -> None:
         self._bot = bot
-
-    @property
-    def bot(self) -> Bot:
-        """Underlying PTB Bot — escape hatch for PTB-only helpers.
-
-        Kept for callers that need PTB-specific inspection. Handlers should
-        depend on the ``TelegramClient`` Protocol instead.
-        """
-        return self._bot
 
     async def send_message(
         self, chat_id: int | str, text: str, **kwargs: Any
@@ -244,13 +173,6 @@ class PTBTelegramClient:
             chat_id=chat_id, message_id=message_id, **kwargs
         )
 
-    async def delete_message(
-        self, chat_id: int | str, message_id: int, **kwargs: Any
-    ) -> bool:
-        return await self._bot.delete_message(
-            chat_id=chat_id, message_id=message_id, **kwargs
-        )
-
     async def send_photo(
         self, chat_id: int | str, photo: Any, **kwargs: Any
     ) -> Message:
@@ -269,28 +191,6 @@ class PTBTelegramClient:
         return await self._bot.send_chat_action(
             chat_id=chat_id, action=action, **kwargs
         )
-
-    async def set_message_reaction(
-        self,
-        chat_id: int | str,
-        message_id: int,
-        reaction: Sequence[ReactionType | str] | ReactionType | str | None = None,
-        **kwargs: Any,
-    ) -> bool:
-        return await self._bot.set_message_reaction(
-            chat_id=chat_id, message_id=message_id, reaction=reaction, **kwargs
-        )
-
-    async def get_chat(self, chat_id: int | str, **kwargs: Any) -> ChatFullInfo:
-        return await self._bot.get_chat(chat_id=chat_id, **kwargs)
-
-    async def get_file(self, file_id: str, **kwargs: Any) -> File:
-        return await self._bot.get_file(file_id=file_id, **kwargs)
-
-    async def create_forum_topic(
-        self, chat_id: int | str, name: str, **kwargs: Any
-    ) -> ForumTopic:
-        return await self._bot.create_forum_topic(chat_id=chat_id, name=name, **kwargs)
 
     async def edit_forum_topic(
         self, chat_id: int | str, message_thread_id: int, **kwargs: Any
@@ -318,34 +218,6 @@ class PTBTelegramClient:
     ) -> bool:
         return await self._bot.delete_forum_topic(
             chat_id=chat_id, message_thread_id=message_thread_id, **kwargs
-        )
-
-    async def unpin_all_forum_topic_messages(
-        self, chat_id: int | str, message_thread_id: int, **kwargs: Any
-    ) -> bool:
-        return await self._bot.unpin_all_forum_topic_messages(
-            chat_id=chat_id, message_thread_id=message_thread_id, **kwargs
-        )
-
-    async def delete_my_commands(
-        self,
-        scope: BotCommandScope | None = None,
-        language_code: str | None = None,
-        **kwargs: Any,
-    ) -> bool:
-        return await self._bot.delete_my_commands(
-            scope=scope, language_code=language_code, **kwargs
-        )
-
-    async def set_my_commands(
-        self,
-        commands: Sequence[BotCommand | tuple[str, str]],
-        scope: BotCommandScope | None = None,
-        language_code: str | None = None,
-        **kwargs: Any,
-    ) -> bool:
-        return await self._bot.set_my_commands(
-            commands=commands, scope=scope, language_code=language_code, **kwargs
         )
 
 

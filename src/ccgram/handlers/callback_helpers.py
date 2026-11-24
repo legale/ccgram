@@ -21,11 +21,6 @@ def get_bound_window(user_id: int, thread_id: int) -> str | None:
     return thread_router.get_window_for_thread(user_id, thread_id)
 
 
-def get_window_display_name(window_id: str) -> str:
-    """Return the display name for a bound window."""
-    return thread_router.get_display_name(window_id)
-
-
 def get_thread_id(update: Update) -> int | None:
     """Extract thread_id from an update, returning None if not in a named topic."""
     msg = update.message or (

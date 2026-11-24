@@ -1,12 +1,9 @@
 """Unified cleanup API for topic state.
 
-Orchestrates topic teardown: dispatches registered cleanups via
-TopicStateRegistry, then handles infrastructure and bot-specific async
-cleanup that cannot be registered (log throttle, mailbox I/O, status
-messages and user_data).
-
 Functions:
   - clear_topic_state: Clean up all memory state for a specific topic
+  - unbind_command: //unbind handler
+  - killme_command: //killme handler
 """
 
 from __future__ import annotations
@@ -27,7 +24,7 @@ from ..config import config
 from ..thread_router import thread_router
 from ..tmux_manager import tmux_manager
 from ..topic_tail import clear_topic_tail_state
-from ..utils import handle_general_topic_message, is_general_topic, log_throttle_reset
+from ..utils import log_throttle_reset
 from .callback_helpers import get_thread_id
 from .command_meta import command
 from .live.live_view import clear_live_view
@@ -61,19 +58,12 @@ def _clear_all_topic_state(
     chat_id: int | None = None,
 ) -> None:
     """Explicitly clean up all per-topic, per-chat, and per-window state."""
-    # Topic scope (user_id, thread_id)
     _safe_call(clear_live_view, user_id, thread_id)
     _safe_call(clear_topic_status_diff_state, user_id, thread_id)
-    # Lazy: avoid circular import with topic_lifecycle
-    from .topics.topic_lifecycle import clear_topic_lifecycle_state
 
-    _safe_call(clear_topic_lifecycle_state, user_id, thread_id)
-
-    # Chat scope (chat_id, thread_id)
     if chat_id is not None:
         _safe_call(clear_topic_tail_state, chat_id, thread_id)
 
-    # Window scope (window_id)
     if window_id:
         _safe_call(tmux_manager.forget_sidecar_pane, window_id)
 
@@ -93,7 +83,6 @@ async def clear_topic_state(
         chat_id=chat_id,
     )
 
-    # Infrastructure cleanup (formatted keys, file I/O — not registerable)
     log_throttle_reset(f"status-update:{user_id}:{thread_id}")
     if window_id:
         log_throttle_reset(f"topic-probe:{window_id}")
@@ -110,16 +99,7 @@ async def unbind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     thread_id = get_thread_id(update)
     if thread_id is None:
-        if (
-            update.message
-            and update.effective_chat
-            and is_general_topic(update.message)
-        ):
-            await handle_general_topic_message(
-                update.get_bot(), update.message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(update.message, "Use this command inside a topic.")
+        await safe_reply(update.message, "Use this command inside a topic.")
         return
 
     client = PTBTelegramClient(context.bot)
@@ -171,16 +151,7 @@ async def killme_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     thread_id = get_thread_id(update)
     if thread_id is None:
-        if (
-            update.message
-            and update.effective_chat
-            and is_general_topic(update.message)
-        ):
-            await handle_general_topic_message(
-                update.get_bot(), update.message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(update.message, "Use this command inside a topic.")
+        await safe_reply(update.message, "Use this command inside a topic.")
         return
 
     window_id = thread_router.get_window_for_thread(user.id, thread_id)

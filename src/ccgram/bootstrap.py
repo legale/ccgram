@@ -1,7 +1,7 @@
 """Application bootstrap — wires post_init and post_shutdown lifecycle.
 
 `bot.py` defines the PTB ``Application`` factory + lifecycle delegates;
-the actual lifecycle (status polling and mini-app) lives here as named functions so
+the actual lifecycle (status polling) lives here as named functions so
 each step is independently testable.
 
 Module-level state (``_status_poll_task``) is
@@ -17,10 +17,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from telegram.error import TelegramError
-
 from .handlers.polling.polling_coordinator import status_poll_loop
-from .session import session_manager
 from .utils import task_done_callback
 
 if TYPE_CHECKING:
@@ -62,53 +59,10 @@ def start_status_polling(application: Application) -> asyncio.Task[None]:
     return _status_poll_task
 
 
-async def sync_bot_commands(application: Application) -> None:
-    """Sync the single-source-of-truth command list with Telegram menu across all scopes."""
-    # Lazy: avoid circular import between bootstrap and telegram scopes
-    from telegram import (
-        BotCommandScopeAllGroupChats,
-        BotCommandScopeAllPrivateChats,
-        BotCommandScopeChat,
-        BotCommandScopeDefault,
-    )
-
-    # Lazy: avoid circular import with config
-    from .config import config
-
-    # Lazy: avoid circular import between bootstrap and registry
-    from .handlers.registry import get_telegram_menu_commands
-
-    commands = get_telegram_menu_commands()
-    bot = application.bot
-
-    scopes = [
-        BotCommandScopeDefault(),
-        BotCommandScopeAllPrivateChats(),
-        BotCommandScopeAllGroupChats(),
-    ]
-    for uid in config.allowed_users:
-        scopes.append(BotCommandScopeChat(uid))
-    if config.group_id:
-        scopes.append(BotCommandScopeChat(config.group_id))
-
-    for scope in scopes:
-        try:
-            await bot.set_my_commands(commands, scope=scope)
-        except TelegramError as exc:
-            logger.debug("Failed to set commands for scope %s: %s", scope, exc)
-
-    logger.info(
-        "Synced %d commands with Telegram menu across %d scopes",
-        len(commands),
-        len(scopes),
-    )
-
-
 async def bootstrap_application(application: Application) -> None:
     """Run the full post_init sequence in the prescribed order."""
     install_global_exception_handler()
     start_status_polling(application)
-    await sync_bot_commands(application)
 
 
 async def shutdown_runtime() -> None:
@@ -122,17 +76,9 @@ async def shutdown_runtime() -> None:
         _status_poll_task = None
         logger.info("Status polling stopped")
 
-    session_manager.flush_state()
-
 
 def reset_for_testing() -> None:
-    """Clear bootstrap module state and inner callback registrations.
-
-    Each e2e/integration test that drives ``bootstrap_application`` must
-    reset state between runs — F2.6 made the register_*_callbacks fail
-    loud on double registration, and bootstrap caches its own
-    ``_callbacks_wired`` flag too.
-    """
+    """Clear bootstrap module state between test runs."""
     global _status_poll_task
 
     _status_poll_task = None

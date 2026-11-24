@@ -51,19 +51,15 @@ async def test_forward_uses_reconcile_retry_path() -> None:
     message.chat.id = -100
     message.chat.send_action = AsyncMock()
     client = MagicMock()
-    with (
-        patch(
-            "ccgram.handlers.polling.periodic_tasks.send_with_reconcile",
-            new=AsyncMock(return_value=(True, "Sent")),
-        ) as send,
-        patch.object(module, "ack_reaction", new_callable=AsyncMock) as ack,
-    ):
+    with patch(
+        "ccgram.handlers.polling.periodic_tasks.send_with_reconcile",
+        new=AsyncMock(return_value=(True, "Sent")),
+    ) as send:
         await module._forward_message("cc_foo:@1", 1, 42, "hello", client, message)
 
     send.assert_awaited_once_with(
         client, 1, 42, "cc_foo:@1", "hello", send_fn=module.send_to_window
     )
-    ack.assert_awaited_once()
 
 
 async def test_existing_binding_goes_directly_to_forward() -> None:
@@ -171,7 +167,6 @@ async def test_handle_sidecar_command_execution() -> None:
         patch(
             "ccgram.handlers.status.topic_status_diff.start_sidecar_diff"
         ) as start_diff,
-        patch.object(module, "ack_reaction", new_callable=AsyncMock) as ack,
     ):
         await module._handle_sidecar_command(
             window_id="cc_foo:@1",
@@ -184,5 +179,4 @@ async def test_handle_sidecar_command_execution() -> None:
 
     start_command.assert_awaited_once_with("cc_foo:@1", "git status")
     start_diff.assert_called_once()
-    assert "⚡ Sidecar: git status" in start_diff.call_args.kwargs["title"]
-    ack.assert_awaited_once_with(client, -100, 999)
+    assert "Sidecar: git status" in start_diff.call_args.kwargs["title"]

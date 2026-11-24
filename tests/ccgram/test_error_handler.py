@@ -1,14 +1,14 @@
-"""Tests for bot-level error handler, shutdown notification, and signal diagnostics."""
+"""Tests for bot-level error handler and signal diagnostics."""
 
 import contextlib
 import io
 import signal
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from telegram.error import BadRequest, Conflict, NetworkError, TelegramError
 
-from ccgram.bot import _error_handler, _send_shutdown_notification
+from ccgram.bot import _error_handler
 
 
 def _make_context(error: BaseException) -> MagicMock:
@@ -76,60 +76,6 @@ class TestErrorHandlerStaleCallback:
             await _error_handler(None, ctx)
 
         mock_kill.assert_called_once()
-
-
-class TestShutdownNotification:
-    async def test_sends_to_general_topic(self) -> None:
-        app = MagicMock()
-        app.bot.send_message = AsyncMock()
-
-        with (
-            patch("ccgram.bot.config") as mock_config,
-            patch("ccgram.main._shutdown_signal", signal.SIGINT),
-        ):
-            mock_config.group_id = -100123
-            await _send_shutdown_notification(app)
-
-        app.bot.send_message.assert_called_once()
-        call_kwargs = app.bot.send_message.call_args.kwargs
-        assert call_kwargs["chat_id"] == -100123
-        assert call_kwargs["message_thread_id"] == 1
-        assert "SIGINT" in call_kwargs["text"]
-
-    async def test_skipped_without_group_id(self) -> None:
-        app = MagicMock()
-        app.bot.send_message = AsyncMock()
-
-        with patch("ccgram.bot.config") as mock_config:
-            mock_config.group_id = None
-            await _send_shutdown_notification(app)
-
-        app.bot.send_message.assert_not_called()
-
-    async def test_clean_exit_reason(self) -> None:
-        app = MagicMock()
-        app.bot.send_message = AsyncMock()
-
-        with (
-            patch("ccgram.bot.config") as mock_config,
-            patch("ccgram.main._shutdown_signal", 0),
-        ):
-            mock_config.group_id = -100123
-            await _send_shutdown_notification(app)
-
-        text = app.bot.send_message.call_args.kwargs["text"]
-        assert "Clean exit" in text
-
-    async def test_send_failure_does_not_crash(self) -> None:
-        app = MagicMock()
-        app.bot.send_message = AsyncMock(side_effect=TelegramError("forbidden"))
-
-        with (
-            patch("ccgram.bot.config") as mock_config,
-            patch("ccgram.main._shutdown_signal", 0),
-        ):
-            mock_config.group_id = -100123
-            await _send_shutdown_notification(app)
 
 
 def _get_signal_handler() -> Any:

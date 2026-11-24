@@ -47,7 +47,6 @@ class TestPollSessions:
                 "ccgram.handlers.status.topic_status_diff.update_topic_status_diff",
                 new_callable=AsyncMock,
             ) as mock_diff,
-            patch("ccgram.session.session_manager.set_window_cwd") as mock_set_cwd,
             patch("ccgram.config.config.topic_status_diff_enabled", True),
         ):
             mock_tm.capture_pane = AsyncMock(return_value="bash$ echo hi\n")
@@ -56,7 +55,6 @@ class TestPollSessions:
 
             await poll_sessions(client, bindings, window_lookup)
 
-            mock_set_cwd.assert_called_once()
             mock_tm.capture_pane.assert_awaited_once_with(
                 "s1:@1", with_ansi=True, include_history=True
             )
@@ -64,42 +62,16 @@ class TestPollSessions:
                 client, -100, 100, "s1:@1", "bash$ echo hi\n"
             )
 
-    async def test_dead_window_sends_notification(self):
-        client = AsyncMock()
+    async def test_missing_window_is_ignored(self):
+        client = FakeTelegramClient()
         bindings = [(1, 100, "dead:@1")]
         window_lookup: dict[str, TmuxWindow] = {}
 
-        with (
-            patch(
-                "ccgram.handlers.polling.polling_coordinator.tmux_manager"
-            ) as mock_tm,
-            patch(
-                "ccgram.handlers.polling.polling_coordinator.thread_router"
-            ) as mock_tr,
-            patch(
-                "ccgram.handlers.topics.topic_lifecycle.is_dead_notified",
-                return_value=False,
-            ),
-            patch(
-                "ccgram.handlers.topics.topic_lifecycle.mark_dead_notified"
-            ) as mock_mark,
-            patch(
-                "ccgram.handlers.topics.topic_lifecycle.start_autoclose_timer"
-            ) as mock_timer,
-            patch(
-                "ccgram.handlers.messaging_pipeline.message_sender.rate_limit_send_message",
-                new_callable=AsyncMock,
-            ) as mock_send,
-        ):
-            mock_tm.session_exists = AsyncMock(return_value=False)
-            mock_tr.resolve_chat_id.return_value = -100
-            mock_tr.get_display_name.return_value = "dead"
-
+        with patch(
+            "ccgram.handlers.polling.polling_coordinator.tmux_manager"
+        ) as mock_tm:
             await poll_sessions(client, bindings, window_lookup)
-
-            mock_timer.assert_called_once()
-            mock_send.assert_awaited_once()
-            mock_mark.assert_called_once_with(1, 100, "dead:@1")
+            mock_tm.capture_pane.assert_not_called()
 
     async def test_completed_sidecar_is_shown_then_closed(self):
         client = FakeTelegramClient()
@@ -119,7 +91,6 @@ class TestPollSessions:
                 "ccgram.handlers.status.topic_status_diff.update_topic_status_diff",
                 new_callable=AsyncMock,
             ) as mock_diff,
-            patch("ccgram.session.session_manager.set_window_cwd"),
             patch("ccgram.config.config.topic_status_diff_enabled", True),
         ):
             mock_tm.capture_pane = AsyncMock(return_value="bash$ echo hi\n")
@@ -158,7 +129,7 @@ class TestStatusPollLoop:
 
         with (
             patch(
-                "ccgram.handlers.polling.polling_coordinator.tmux_manager.list_windows",
+                "ccgram.handlers.polling.polling_coordinator.tmux_manager.list_sessions",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
@@ -166,10 +137,6 @@ class TestStatusPollLoop:
                 "ccgram.handlers.polling.periodic_tasks.run_periodic_tasks",
                 new_callable=AsyncMock,
             ) as mock_periodic,
-            patch(
-                "ccgram.handlers.polling.periodic_tasks.run_lifecycle_tasks",
-                new_callable=AsyncMock,
-            ) as mock_lifecycle,
             patch(
                 "ccgram.handlers.polling.polling_coordinator.poll_sessions",
                 new_callable=AsyncMock,
@@ -184,7 +151,6 @@ class TestStatusPollLoop:
 
         assert sleep_called
         mock_periodic.assert_awaited_once()
-        mock_lifecycle.assert_awaited_once()
         mock_poll.assert_awaited_once()
 
     async def test_backoff_on_error(self):
@@ -198,7 +164,7 @@ class TestStatusPollLoop:
 
         with (
             patch(
-                "ccgram.handlers.polling.polling_coordinator.tmux_manager.list_windows",
+                "ccgram.handlers.polling.polling_coordinator.tmux_manager.list_sessions",
                 side_effect=[TelegramError("boom"), TelegramError("boom2")],
             ),
             patch(

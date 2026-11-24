@@ -38,7 +38,6 @@ from .callback_data import (
     CB_SESSIONS_SCREENSHOT,
     CB_STATUS_SCREENSHOT,
 )
-from .callback_helpers import user_owns_window  # noqa: F401 - legacy test patch seam
 from .callback_registry import register
 from .command_meta import command
 from .cleanup import clear_topic_state
@@ -316,10 +315,7 @@ async def apply_session_rename(
 
         # Lazy: bind helpers needed only when updating topic after dashboard rename
         from .topics.topic_binding import bind_runtime, find_topic_session
-        # Lazy: lifecycle helpers needed only when updating topic after dashboard rename
-        from .topics.topic_lifecycle import clear_topic_lifecycle_state
 
-        clear_topic_lifecycle_state(user.id, pending_thread)
         target_session = (
             tmux_manager.topic_session_name(name)
             if not name.startswith(config.tmux_session_prefix)

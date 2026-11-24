@@ -1,12 +1,7 @@
-"""Tests for resilience and crash-prevention fixes.
-
-Covers: background loop catch-all, dead worker respawn, pyte feed/resize guards,
-rate_limit_send locking, JSONL malformed entry handling, probe failure clearing,
-poll state cleanup, shutdown notification lifecycle.
-"""
+"""Tests for resilience and crash-prevention fixes."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 
 class TestRateLimitSendLocking:
@@ -62,36 +57,3 @@ class TestGlobalExceptionHandler:
 
         mock_logger.error.assert_called_once()
         assert "test context" in str(mock_logger.error.call_args)
-
-
-class TestShutdownNotificationLifecycle:
-    async def test_post_stop_sends_notification(self):
-        from ccgram.bot import post_stop
-
-        application = MagicMock()
-        application.bot = AsyncMock()
-
-        with (
-            patch(
-                "ccgram.bot._send_shutdown_notification", new_callable=AsyncMock
-            ) as mock_send,
-        ):
-            await post_stop(application)
-
-        mock_send.assert_awaited_once_with(application)
-
-    async def test_post_shutdown_does_not_send_notification(self):
-        from ccgram.bot import post_shutdown
-
-        application = MagicMock()
-
-        with (
-            patch(
-                "ccgram.bot._send_shutdown_notification", new_callable=AsyncMock
-            ) as mock_send,
-            patch("ccgram.bootstrap._status_poll_task", None),
-            patch("ccgram.bootstrap.session_manager"),
-        ):
-            await post_shutdown(application)
-
-        mock_send.assert_not_awaited()

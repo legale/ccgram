@@ -3,137 +3,28 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import TYPE_CHECKING
 
 import structlog
 from telegram import Update
 from telegram.error import BadRequest, TelegramError
+
 from ...config import config
-from ...telegram_client import PTBTelegramClient, TelegramClient
+from ...telegram_client import PTBTelegramClient
 from ...thread_router import thread_router
 from ...tmux_manager import tmux_manager
 from ..cleanup import clear_topic_state
-from ..messaging_pipeline.message_sender import is_thread_gone
 from .topic_binding import (
     _valid_name,
     bind_runtime,
     ensure_topic_session,
     find_topic_session,
 )
-from ...utils import strip_emoji_prefix
 
 if TYPE_CHECKING:
     from telegram.ext import ContextTypes
 
 logger = structlog.get_logger()
-
-# ── Lifecycle tracking state ──────────────────────────────────────────────
-
-_autoclose_timers: dict[tuple[int, int], tuple[str, float]] = {}
-_dead_notified: set[tuple[int, int, str]] = set()
-
-
-def is_dead_notified(user_id: int, thread_id: int, window_id: str) -> bool:
-    return (user_id, thread_id, window_id) in _dead_notified
-
-
-def mark_dead_notified(user_id: int, thread_id: int, window_id: str) -> None:
-    _dead_notified.add((user_id, thread_id, window_id))
-
-
-def clear_dead_notification(user_id: int, thread_id: int) -> None:
-    _dead_notified.difference_update(
-        {k for k in _dead_notified if k[0] == user_id and k[1] == thread_id}
-    )
-
-
-def start_autoclose_timer(user_id: int, thread_id: int, state: str, now: float) -> None:
-    existing = _autoclose_timers.get((user_id, thread_id))
-    if existing is None or existing[0] != state:
-        _autoclose_timers[(user_id, thread_id)] = (state, now)
-
-
-def clear_autoclose_timer(user_id: int, thread_id: int) -> None:
-    _autoclose_timers.pop((user_id, thread_id), None)
-
-
-def clear_topic_lifecycle_state(user_id: int, thread_id: int) -> None:
-    clear_autoclose_timer(user_id, thread_id)
-    clear_dead_notification(user_id, thread_id)
-
-
-def reset_lifecycle_state() -> None:
-    """Reset all lifecycle tracking (for tests)."""
-    _autoclose_timers.clear()
-    _dead_notified.clear()
-
-
-# ── Autoclose timer management ────────────────────────────────────────────
-
-
-async def check_autoclose_timers(client: TelegramClient) -> None:
-    """Close topics whose dead timers have expired."""
-    if not _autoclose_timers:
-        return
-
-    now = time.monotonic()
-    expired: list[tuple[int, int]] = []
-    for (user_id, thread_id), (state, entered_at) in list(_autoclose_timers.items()):
-        if state != "dead":
-            continue
-        timeout = config.autoclose_dead_minutes * 60
-        if timeout > 0 and now - entered_at >= timeout:
-            expired.append((user_id, thread_id))
-
-    for user_id, thread_id in expired:
-        await _close_expired_topic(client, user_id, thread_id)
-
-
-async def _close_expired_topic(
-    client: TelegramClient, user_id: int, thread_id: int
-) -> None:
-    """Attempt to close/delete an expired topic and clean up state."""
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-    window_id = thread_router.get_window_for_thread(user_id, thread_id)
-    session = await find_topic_session(chat_id, thread_id)
-    removed = False
-    try:
-        await client.delete_forum_topic(chat_id=chat_id, message_thread_id=thread_id)
-        removed = True
-    except TelegramError as e:
-        if is_thread_gone(e):
-            removed = True
-        else:
-            try:
-                await client.close_forum_topic(
-                    chat_id=chat_id, message_thread_id=thread_id
-                )
-                removed = True
-            except TelegramError as close_err:
-                if is_thread_gone(close_err):
-                    removed = True
-                else:
-                    logger.debug(
-                        "autoclose_failed", thread_id=thread_id, error=str(close_err)
-                    )
-    if not removed:
-        return
-    if session is not None and not await tmux_manager.kill_session(session.window_name):
-        logger.warning("Autoclose: failed to kill %s", session.window_name)
-        return
-
-    clear_autoclose_timer(user_id, thread_id)
-    logger.info(
-        "auto_removed_topic", chat_id=chat_id, thread_id=thread_id, user_id=user_id
-    )
-    await clear_topic_state(user_id, thread_id, window_id=window_id)
-    thread_router.unbind_thread(user_id, thread_id)
-
-
-# ------------------------------------------------------------------
-# Telegram topic event handlers (moved from bot.py)
-# ------------------------------------------------------------------
 
 
 async def topic_closed_handler(
@@ -157,7 +48,6 @@ async def topic_closed_handler(
     if not await tmux_manager.kill_session(session.window_name):
         logger.warning("Failed to close tmux session %s", session.window_name)
         return
-    clear_autoclose_timer(user.id, thread_id)
     await clear_topic_state(user.id, thread_id, window_id=session.window_id)
     thread_router.unbind_thread(user.id, thread_id)
 
@@ -183,9 +73,8 @@ async def topic_created_handler(
         return
 
     client = PTBTelegramClient(context.bot)
-    topic_name = strip_emoji_prefix(created.name)
+    topic_name = created.name.strip()
 
-    # First try binding to existing tmux session with rebind=True (analogous to //bind)
     target = tmux_manager.topic_session_name(topic_name)
     _window_id, error = await ensure_topic_session(
         user.id, chat.id, thread_id, topic_name, rebind=True
@@ -194,7 +83,6 @@ async def topic_created_handler(
         await client.send_message(chat.id, error, message_thread_id=thread_id)
         return
 
-    # Switch attached tmux client if any
     switch_proc = await asyncio.create_subprocess_exec(
         "tmux",
         "switch-client",
@@ -283,7 +171,7 @@ async def topic_edited_handler(  # noqa: C901, PLR0912
         )
         return
 
-    raw_name = strip_emoji_prefix(message.forum_topic_edited.name).strip()
+    raw_name = message.forum_topic_edited.name.strip()
     name = raw_name.removeprefix(config.tmux_session_prefix).strip()
     if not _valid_name(name):
         logger.warning("Ignoring invalid renamed topic %d name=%r", thread_id, name)

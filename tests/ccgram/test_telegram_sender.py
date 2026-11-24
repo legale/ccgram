@@ -75,7 +75,7 @@ class TestSplitMessage:
             assert len(chunk) <= 200
 
     def test_splits_astral_unicode_by_utf16_length(self):
-        chunks = split_message("😀" * 3000)
+        chunks = split_message("\U0001d400" * 3000)
         assert len(chunks) == 2
-        assert "".join(chunks) == "😀" * 3000
+        assert "".join(chunks) == "\U0001d400" * 3000
         assert all(len(c.encode("utf-16-le")) // 2 <= 4096 for c in chunks)

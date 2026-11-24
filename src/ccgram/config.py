@@ -1,34 +1,22 @@
 """Application configuration — reads env vars and exposes a singleton.
 
-Loads TELEGRAM_BOT_TOKEN, ALLOWED_USERS, tmux/Claude paths, and
-monitoring intervals from environment variables (with .env support).
+Loads TELEGRAM_BOT_TOKEN, ALLOWED_USERS, tmux paths, and monitoring
+intervals from environment variables (with .env support).
 .env loading priority: local .env (cwd) > $CCGRAM_DIR/.env (default ~/.ccgram).
 The module-level `config` instance is imported by nearly every other module.
 
 Key class: Config (singleton instantiated as `config`).
 """
 
-import structlog
 import os
 from pathlib import Path
 
+import structlog
 from dotenv import load_dotenv
 
 from .utils import ccgram_dir
 
 logger = structlog.get_logger()
-
-
-def _env_with_fallback(new_name: str, old_name: str, default: str = "") -> str:
-    """Read env var with fallback to legacy CCBOT_* name."""
-    val = os.getenv(new_name)
-    if val is not None:
-        return val
-    val = os.getenv(old_name)
-    if val is not None:
-        logger.warning("%s is deprecated, use %s instead", old_name, new_name)
-        return val
-    return default
 
 
 def _parse_int_env(name: str, default: int) -> int:
@@ -119,17 +107,13 @@ class Config:
         self.session_working_directory = os.getenv(
             "CCGRAM_SESSION_WORKING_DIRECTORY", "~"
         )
-        self.tmux_main_window_name = "__main__"
-        # Own tmux window ID (set by run_bot() after auto-detect, used to skip self in list_windows)
-        self.own_window_id: str | None = None
 
-        # All state files live under config_dir
         self.status_poll_interval = max(
             0.5, float(os.getenv("CCGRAM_STATUS_POLL_INTERVAL", "1.0"))
         )
 
         # Multi-instance support
-        group_id_str = _env_with_fallback("CCGRAM_GROUP_ID", "CCBOT_GROUP_ID")
+        group_id_str = os.getenv("CCGRAM_GROUP_ID", "")
         if group_id_str:
             try:
                 self.group_id: int | None = int(group_id_str)
@@ -138,14 +122,8 @@ class Config:
         else:
             self.group_id = None
 
-        # Ack reaction: react to forwarded messages with an emoji (empty = disabled)
-        self.ack_reaction: str = _env_with_fallback(
-            "CCGRAM_ACK_REACTION", "CCBOT_ACK_REACTION"
-        )
-
         self._init_live_view()
         self._init_send()
-        self._init_lifecycle()
         self._init_topic_status()
         self._init_screenshots()
 
@@ -174,11 +152,6 @@ class Config:
             1, _parse_int_env("CCGRAM_FILE_SIZE_LIMIT_MB", 1024)
         )
 
-    def _init_lifecycle(self) -> None:
-        self.autoclose_dead_minutes: int = int(
-            os.getenv("AUTOCLOSE_DEAD_MINUTES", "10")
-        )
-
     def _init_topic_status(self) -> None:
         self.topic_status_diff_enabled: bool = _parse_bool_env(
             "CCGRAM_TOPIC_STATUS_DIFF_ENABLED", True
@@ -204,18 +177,12 @@ class Config:
         if self.screen_diff_step_percent <= 0:
             raise ValueError("CCGRAM_SCREEN_DIFF_STEP_PERCENT must be positive")
         self.screen_diff_limit: int = max(
-            self.screen_diff_min_limit, _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
+            self.screen_diff_min_limit,
+            _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT"),
         )
         self.screen_diff_arrows: bool = _parse_bool_env(
             "CCGRAM_SCREEN_DIFF_ARROWS", False
         )
-        self.topic_idle_enabled: bool = _parse_bool_env(
-            "CCGRAM_TOPIC_IDLE_ENABLED", True
-        )
-        self.topic_idle_delay: int = max(
-            1, _parse_int_env("CCGRAM_TOPIC_IDLE_DELAY", 30)
-        )
-        self.topic_idle_text: str = os.getenv("CCGRAM_TOPIC_IDLE_TEXT", "idle")
 
     def _init_screenshots(self) -> None:
         self.screenshot_font_size: int = max(

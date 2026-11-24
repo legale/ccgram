@@ -1,16 +1,10 @@
 """Single-task polling coordinator for terminal status monitoring.
 
 The runtime owns one background task. Each tick discovers the current tmux
-windows, then polls all Telegram-bound windows sequentially in ``poll_sessions``.
-The per-window function is a synchronous step in this task, not a worker.
-
-Key components:
-  - status_poll_loop: Background polling task (entry point for bot.py)
+sessions, then polls all Telegram-bound windows sequentially in ``poll_sessions``.
 """
 
 import asyncio
-import time
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -47,36 +41,6 @@ def _as_client(bot_or_client: Any) -> "TelegramClient":
 # ── Main loop ─────────────────────────────────────────────────────────────
 
 
-async def _handle_dead_session(
-    client: "TelegramClient", user_id: int, thread_id: int, wid: str
-) -> None:
-    # Lazy: topic lifecycle state resolved at tick time
-    from ..topics.topic_lifecycle import (
-        is_dead_notified,
-        mark_dead_notified,
-        start_autoclose_timer,
-    )
-
-    # Lazy: message_sender helpers resolved at tick time
-    from ..messaging_pipeline.message_sender import rate_limit_send_message
-
-    session_name = wid.split(":", 1)[0]
-    if await tmux_manager.session_exists(session_name):
-        return
-    if is_dead_notified(user_id, thread_id, wid):
-        return
-    chat_id = thread_router.resolve_chat_id(user_id, thread_id)
-    display = thread_router.get_display_name(wid)
-    start_autoclose_timer(user_id, thread_id, "dead", time.monotonic())
-    await rate_limit_send_message(
-        client,
-        chat_id,
-        f"Session `{display}` ended.",
-        message_thread_id=thread_id,
-    )
-    mark_dead_notified(user_id, thread_id, wid)
-
-
 async def _poll_sidecar(
     client: "TelegramClient", chat_id: int, thread_id: int, wid: str
 ) -> None:
@@ -103,8 +67,10 @@ async def _poll_sidecar(
     if sidecar_text is None:
         return
 
-    # Lazy: config and diff updater are resolved at tick time.
+    # Lazy: config resolved at tick time.
     from ...config import config
+
+    # Lazy: diff updater resolved at tick time.
     from ..status.topic_status_diff import update_topic_status_diff
 
     if config.topic_status_diff_enabled:
@@ -131,16 +97,7 @@ async def _poll_window(
     window: "TmuxWindow | None",
 ) -> None:
     if window is None:
-        await _handle_dead_session(client, user_id, thread_id, wid)
         return
-
-    if window.cwd:
-        # Lazy: session_manager resolved at tick time
-        from ...session import session_manager
-
-        session_manager.set_window_cwd(
-            wid, str(Path(window.cwd).expanduser().resolve())
-        )
 
     pane_text = await tmux_manager.capture_pane(
         window.window_id, with_ansi=True, include_history=True
@@ -191,7 +148,7 @@ async def status_poll_loop(bot: "Bot") -> None:
     from ...telegram_client import PTBTelegramClient
 
     # Lazy: periodic_tasks cycle avoidance
-    from .periodic_tasks import run_lifecycle_tasks, run_periodic_tasks
+    from .periodic_tasks import run_periodic_tasks
 
     poll_interval = _cfg.status_poll_interval
     client = PTBTelegramClient(bot)
@@ -202,7 +159,7 @@ async def status_poll_loop(bot: "Bot") -> None:
         try:
             await run_periodic_tasks(client, timers)
 
-            all_windows = await tmux_manager.list_windows()
+            all_windows = await tmux_manager.list_sessions()
             window_lookup = {w.window_id: w for w in all_windows}
 
             await poll_sessions(
@@ -210,8 +167,6 @@ async def status_poll_loop(bot: "Bot") -> None:
                 list(thread_router.iter_thread_bindings()),
                 window_lookup,
             )
-
-            await run_lifecycle_tasks(client)
 
         except _LoopError:
             logger.exception("Status poll loop error")

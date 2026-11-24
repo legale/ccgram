@@ -112,7 +112,9 @@ async def test_reconcile_session_rename_keeps_topic_and_updates_route() -> None:
 async def test_reconcile_proceeds_when_reopen_fails_for_non_supergroup() -> None:
     session = _session("cc_bar")
     client = AsyncMock()
-    client.reopen_forum_topic.side_effect = BadRequest("The chat is not a supergroup forum")
+    client.reopen_forum_topic.side_effect = BadRequest(
+        "The chat is not a supergroup forum"
+    )
     router = _router()
 
     with (

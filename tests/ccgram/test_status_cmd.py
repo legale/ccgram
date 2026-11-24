@@ -50,14 +50,3 @@ class TestStatusMain:
         assert "Managed tmux sessions: 2" in out
         assert "cc_foo -> -100:42 /tmp/foo" in out
         assert "cc_bar -> unbound /tmp/bar" in out
-
-    def test_shows_provider_info(self, monkeypatch, capsys) -> None:
-        monkeypatch.setenv("CCGRAM_PROVIDER", "shell")
-        monkeypatch.setattr("ccgram.status_cmd._list_managed_sessions", lambda _: [])
-
-        with contextlib.suppress(SystemExit):
-            status_main()
-
-        out = capsys.readouterr().out
-        assert "Provider: shell" in out
-        assert "hook" not in out.split("Provider:")[1].split("\n")[0]

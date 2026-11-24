@@ -18,7 +18,6 @@ class CommandInfo:
     description: str
     aliases: tuple[str, ...] = ()
     params: str = ""
-    menu_name: str | None = None
 
 
 def command(
@@ -27,7 +26,6 @@ def command(
     *,
     aliases: tuple[str, ...] = (),
     params: str = "",
-    menu_name: str | None = None,
 ) -> Callable[[HandlerT], HandlerT]:
     """Attach Telegram command metadata to a handler."""
     info = CommandInfo(
@@ -35,7 +33,6 @@ def command(
         description=description,
         aliases=aliases,
         params=params,
-        menu_name=menu_name,
     )
 
     def decorate(handler: HandlerT) -> HandlerT:

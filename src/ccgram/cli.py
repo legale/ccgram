@@ -1,14 +1,13 @@
 """Click-based CLI for ccgram.
 
-Defines the top-level command group and the ``run`` subcommand with all
-bot-configuration flags.  Precedence: CLI flag > env var > .env > default.
+Defines the top-level command group and the ``run`` subcommand with
+bot-configuration flags. Precedence: CLI flag > env var > .env > default.
 ``apply_args_to_env()`` sets os.environ for explicitly provided flags so
 Config reads the overridden values.
 
-Every subcommand body lazy-loads its workers (``run_bot``, ``hook_main``,
-``status_main`` and ``msg_group``).  ``ccgram --help`` and
-``ccgram --version`` stay snappy and avoid pulling PTB / aiohttp /
-provider chains; only the invoked subcommand pays its import cost.
+Every subcommand body lazy-loads its workers (``run_bot``, ``status_main``).
+``ccgram --help`` and ``ccgram --version`` stay snappy and avoid pulling PTB;
+only the invoked subcommand pays its import cost.
 """
 
 import os
@@ -17,22 +16,6 @@ from pathlib import Path
 import click
 
 _LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
-
-
-def _validate_positive_float(
-    _ctx: click.Context, _param: click.Parameter, value: float | None
-) -> float | None:
-    if value is not None and value <= 0:
-        raise click.BadParameter("must be positive")
-    return value
-
-
-def _validate_non_negative_int(
-    _ctx: click.Context, _param: click.Parameter, value: int | None
-) -> int | None:
-    if value is not None and value < 0:
-        raise click.BadParameter("must be non-negative")
-    return value
 
 
 class _DefaultToRun(click.Group):
@@ -49,7 +32,7 @@ class _DefaultToRun(click.Group):
 @click.group(
     cls=_DefaultToRun,
     invoke_without_command=True,
-    help="Command & Control Bot — manage AI coding agents from Telegram via tmux.",
+    help="Manage tmux sessions from Telegram.",
 )
 @click.version_option(package_name="ccgram", prog_name="ccgram")
 @click.pass_context
@@ -60,14 +43,12 @@ def cli(ctx: click.Context) -> None:
 
 # --- run command -----------------------------------------------------------
 
-# Mapping: click option name → environment variable name
+# Mapping: click option name -> environment variable name
 _FLAG_TO_ENV: list[tuple[str, str]] = [
     ("config_dir", "CCGRAM_DIR"),
     ("allowed_users", "ALLOWED_USERS"),
     ("tmux_session", "TMUX_SESSION_NAME"),
     ("group_id", "CCGRAM_GROUP_ID"),
-    ("autoclose_dead", "AUTOCLOSE_DEAD_MINUTES"),
-    ("ack_reaction", "CCGRAM_ACK_REACTION"),
 ]
 
 
@@ -130,25 +111,10 @@ def apply_args_to_env(**kwargs: object) -> None:
     help="Restrict to one Telegram group.",
 )
 @click.option(
-    "--autoclose-dead",
-    type=int,
-    default=None,
-    callback=_validate_non_negative_int,
-    envvar="AUTOCLOSE_DEAD_MINUTES",
-    help="Auto-close dead sessions after N minutes (default: 10, 0=disabled).",
-)
-@click.option(
     "--provider",
     default=None,
-    envvar="CCGRAM_PROVIDER",
     hidden=True,
     help="Deprecated no-op flag kept for CLI compatibility.",
-)
-@click.option(
-    "--ack-reaction",
-    default=None,
-    envvar="CCGRAM_ACK_REACTION",
-    help='React to forwarded messages with emoji (e.g., "👀"). Empty=disabled.',
 )
 def run_cmd(**kwargs: object) -> None:
     """Start the bot with optional overrides."""

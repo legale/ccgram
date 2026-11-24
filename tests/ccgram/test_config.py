@@ -58,18 +58,6 @@ class TestConfigValid:
 
 
 @pytest.mark.usefixtures("_base_env")
-class TestOwnWindowId:
-    def test_own_window_id_default_none(self):
-        cfg = Config()
-        assert cfg.own_window_id is None
-
-    def test_own_window_id_set_directly(self):
-        cfg = Config()
-        cfg.own_window_id = "@3"
-        assert cfg.own_window_id == "@3"
-
-
-@pytest.mark.usefixtures("_base_env")
 class TestConfigMissingEnv:
     def test_missing_telegram_bot_token(self, monkeypatch):
         monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
@@ -118,32 +106,6 @@ class TestTopicStatusConfig:
         monkeypatch.setenv("CCGRAM_TOPIC_STATUS_DIFF_INTERVAL", "bad")
         with pytest.raises(ValueError, match="CCGRAM_TOPIC_STATUS_DIFF_INTERVAL"):
             Config()
-
-    def test_topic_idle_defaults(self, monkeypatch):
-        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_ENABLED", raising=False)
-        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_DELAY", raising=False)
-        monkeypatch.delenv("CCGRAM_TOPIC_IDLE_TEXT", raising=False)
-        cfg = Config()
-        assert cfg.topic_idle_enabled is True
-        assert cfg.topic_idle_delay == 60
-        assert cfg.topic_idle_text == "idle"
-
-    @pytest.mark.parametrize("value", ["", "0", "false", "no", "off"])
-    def test_topic_idle_disabled(self, monkeypatch, value):
-        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_ENABLED", value)
-        assert Config().topic_idle_enabled is False
-
-    @pytest.mark.parametrize(
-        ("env_str", "expected"),
-        [("15", 15), ("1", 1), ("0", 1)],
-    )
-    def test_topic_idle_delay(self, monkeypatch, env_str, expected):
-        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_DELAY", env_str)
-        assert Config().topic_idle_delay == expected
-
-    def test_topic_idle_text_custom(self, monkeypatch):
-        monkeypatch.setenv("CCGRAM_TOPIC_IDLE_TEXT", "zzz")
-        assert Config().topic_idle_text == "zzz"
 
 
 @pytest.mark.usefixtures("_base_env")
@@ -235,7 +197,8 @@ class TestLimitsConfig:
     def test_screen_diff_limit_has_no_code_fallback(self, monkeypatch):
         monkeypatch.delenv("CCGRAM_SCREEN_DIFF_LIMIT", raising=False)
         with pytest.raises(
-            ValueError, match="CCGRAM_SCREEN_DIFF_LIMIT environment variable is required"
+            ValueError,
+            match="CCGRAM_SCREEN_DIFF_LIMIT environment variable is required",
         ):
             _parse_required_int_env("CCGRAM_SCREEN_DIFF_LIMIT")
 

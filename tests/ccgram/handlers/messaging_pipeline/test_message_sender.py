@@ -274,21 +274,6 @@ class TestEmptyAndOverlongGuards:
 
 
 class TestChunkedDelivery:
-    async def test_safe_send_delivers_all_parts(self, client, monkeypatch):
-        from ccgram.handlers.messaging_pipeline.message_sender import safe_send
-
-        monkeypatch.setattr(
-            "ccgram.handlers.messaging_pipeline.message_sender.rate_limit_send",
-            AsyncMock(),
-        )
-        client.returns["send_message"] = _fake_message()
-        text = "x" * 9000
-        assert await safe_send(client, 123, text, message_thread_id=42)
-        parts = [c.kwargs for c in client.calls if c.method == "send_message"]
-        assert len(parts) == 3
-        assert "".join(p["text"] for p in parts) == text
-        assert all(p["message_thread_id"] == 42 for p in parts)
-
     async def test_safe_reply_delivers_all_parts(self):
         from typing import Any
         from ccgram.handlers.messaging_pipeline.message_sender import safe_reply
@@ -307,11 +292,3 @@ class TestChunkedDelivery:
         ]
         assert "".join(parts) == text
         assert len(parts) == 3
-
-    async def test_long_send_keeps_ack_reaction(self, client, monkeypatch):
-        from ccgram.config import config
-        from ccgram.handlers.messaging_pipeline.message_sender import ack_reaction
-
-        monkeypatch.setattr(config, "ack_reaction", "👀")
-        await ack_reaction(client, 123, 456)
-        assert client.call_count("set_message_reaction") == 1

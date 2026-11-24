@@ -1,4 +1,4 @@
-"""Commands subpackage — bot commands and toolbar entry points."""
+"""Commands subpackage — help and special-key bot commands."""
 
 from __future__ import annotations
 
@@ -33,9 +33,25 @@ async def commands_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) 
     await safe_reply(update.message, format_commands_help())
 
 
-async def _send_special_key(  # noqa: C901
+async def _resolve_target_window(
+    user_id: int, chat_id: int, thread_id: int
+) -> str | None:
+    # Lazy: avoid circular imports at module load
+    from ...thread_router import thread_router
+
+    window_id = thread_router.get_window_for_thread(user_id, thread_id)
+    if window_id:
+        return window_id
+
+    # Lazy: avoid circular import with topic_binding
+    from ..topics.topic_binding import resolve_topic_window
+
+    return await resolve_topic_window(user_id, chat_id, thread_id)
+
+
+async def _send_special_key(
     update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
+    _context: ContextTypes.DEFAULT_TYPE,
     key: str,
     key_name: str,
     *,
@@ -43,13 +59,8 @@ async def _send_special_key(  # noqa: C901
 ) -> None:
     """Helper to send a special key to the bound tmux session."""
     user = update.effective_user
-    if not user or not config.is_user_allowed(user.id):
+    if not user or not config.is_user_allowed(user.id) or not update.message:
         return
-    if not update.message:
-        return
-
-    # Lazy: avoid circular imports at module load
-    from ...telegram_client import PTBTelegramClient
 
     # Lazy: avoid circular imports at module load
     from ...thread_router import thread_router
@@ -58,44 +69,21 @@ async def _send_special_key(  # noqa: C901
     from ...tmux_manager import tmux_manager
 
     # Lazy: avoid circular imports at module load
-    from ...utils import handle_general_topic_message, is_general_topic
-
-    # Lazy: avoid circular imports at module load
     from ..callback_helpers import get_thread_id
-
-    # Lazy: avoid circular imports at module load
-    from ..messaging_pipeline.message_sender import ack_reaction
 
     thread_id = get_thread_id(update)
     if thread_id is None:
-        if (
-            update.message
-            and update.effective_chat
-            and is_general_topic(update.message)
-        ):
-            await handle_general_topic_message(
-                update.get_bot(), update.message, update.effective_chat.id
-            )
-        else:
-            await safe_reply(update.message, "Use this command inside a topic.")
+        await safe_reply(update.message, "Use this command inside a topic.")
         return
 
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
-    window_id = thread_router.get_window_for_thread(user.id, thread_id)
+    window_id = await _resolve_target_window(user.id, chat_id, thread_id)
     if not window_id:
-        # Lazy: avoid circular import with topic_binding
-        from ..topics.topic_binding import find_topic_session
+        await safe_reply(
+            update.message, "This topic is not bound to a managed session."
+        )
+        return
 
-        session = await find_topic_session(chat_id, thread_id)
-        if session:
-            window_id = session.window_id
-        else:
-            await safe_reply(
-                update.message, "This topic is not bound to a managed session."
-            )
-            return
-
-    client = PTBTelegramClient(context.bot)
     sidecar_pane_id = tmux_manager.get_sidecar_pane_id(window_id)
     if sidecar_pane_id:
         for _ in range(repeat):
@@ -110,15 +98,13 @@ async def _send_special_key(  # noqa: C901
             break
 
     if not sent:
-        await safe_reply(update.message, f"❌ Failed to send `{key_name}` to tmux.")
+        await safe_reply(update.message, f"Failed to send `{key_name}` to tmux.")
         return
 
-    await ack_reaction(client, chat_id, update.message.message_id)
-    if not config.ack_reaction:
-        await safe_reply(update.message, f"Sent `{key_name}`")
+    await safe_reply(update.message, f"Sent `{key_name}`")
 
 
-@command("ctrl-c", "Send Ctrl+C", aliases=("ctrlc", "ctrl_c"), menu_name="ctrl_c")
+@command("ctrl-c", "Send Ctrl+C", aliases=("ctrlc", "ctrl_c"))
 async def ctrl_c_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """``//ctrl-c`` — send Ctrl+C (SIGINT) to the bound tmux session."""
     await _send_special_key(update, context, "C-c", "Ctrl+C")
@@ -128,7 +114,6 @@ async def ctrl_c_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     "ctrl-cc",
     "Send Ctrl+C twice",
     aliases=("ctrlcc", "ctrl_cc"),
-    menu_name="ctrl_cc",
 )
 async def ctrl_cc_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """``//ctrl-cc`` — send double Ctrl+C (SIGINT x2) to the bound tmux session."""
@@ -160,11 +145,20 @@ async def arrows_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not user or not config.is_user_allowed(user.id) or not update.message:
         return
 
-    from ...telegram_client import PTBTelegramClient
-    from ...thread_router import thread_router
-    from ..callback_helpers import get_thread_id
-    from ..status.topic_status_diff import toggle_screen_diff_arrows
+    # Lazy: avoid circular imports at module load
     from telegram.error import TelegramError
+
+    # Lazy: avoid circular imports at module load
+    from ...telegram_client import PTBTelegramClient
+
+    # Lazy: avoid circular imports at module load
+    from ...thread_router import thread_router
+
+    # Lazy: avoid circular imports at module load
+    from ..callback_helpers import get_thread_id
+
+    # Lazy: avoid circular imports at module load
+    from ..status.topic_status_diff import toggle_screen_diff_arrows
 
     thread_id = get_thread_id(update)
     if thread_id is None:
@@ -172,9 +166,6 @@ async def arrows_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     chat_id = thread_router.resolve_chat_id(user.id, thread_id)
-    if chat_id is None:
-        await safe_reply(update.message, "No screen delta message in this topic.")
-        return
 
     try:
         enabled = await toggle_screen_diff_arrows(

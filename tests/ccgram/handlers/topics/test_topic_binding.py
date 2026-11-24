@@ -68,9 +68,7 @@ async def test_creates_missing_exact_session() -> None:
 
     assert error is None
     assert window_id == "cc_foo:@1"
-    tmux.create_session.assert_awaited_once_with(
-        "cc_foo", "/tmp", window_name="foo"
-    )
+    tmux.create_session.assert_awaited_once_with("cc_foo", "/tmp", window_name="foo")
     tmux.set_session_topic.assert_awaited_once_with("cc_foo", -100, 42)
 
 
@@ -300,7 +298,7 @@ async def test_rename_command_usage_when_empty_args() -> None:
     ):
         await topic_binding.rename_command(update, context)
 
-    reply.assert_awaited_once_with(update.message, "Usage: /rename <new_name>")
+    reply.assert_awaited_once_with(update.message, "Usage: //rename <new_name>")
 
 
 async def test_bindraw_command_renames_and_binds() -> None:
@@ -327,7 +325,9 @@ async def test_bindraw_command_renames_and_binds() -> None:
         patch.object(topic_binding, "get_thread_id", return_value=42),
         patch(
             "asyncio.create_subprocess_exec",
-            side_effect=lambda *args, **kwargs: make_proc(args[3] if len(args) > 3 else ""),
+            side_effect=lambda *args, **kwargs: make_proc(
+                args[3] if len(args) > 3 else ""
+            ),
         ),
         patch.object(
             topic_binding.tmux_manager,

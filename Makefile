@@ -1,4 +1,4 @@
-.PHONY: fmt lint lint-lazy test test-integration test-e2e test-all typecheck deptry check install dev build clean mile
+.PHONY: fmt lint lint-lazy test test-integration test-all typecheck deptry check install dev build clean mile
 
 MILESTONE := $(word 2,$(MAKECMDGOALS))
 
@@ -27,19 +27,16 @@ deptry:
 	uv run deptry src
 
 test:
-	uv run pytest tests/ -m "not integration and not e2e" -n auto --dist=loadscope
+	uv run pytest tests/ -m "not integration" -n auto --dist=loadscope
 
 test-serial:
-	uv run pytest tests/ -m "not integration and not e2e"
+	uv run pytest tests/ -m "not integration"
 
 test-integration:
 	uv run pytest tests/integration/ -n auto --dist=loadscope -v
 
-test-e2e:
-	uv run pytest tests/e2e/ -v --timeout=300
-
 test-all:
-	uv run pytest tests/ -n auto --dist=loadscope -v -m "not e2e"
+	uv run pytest tests/ -n auto --dist=loadscope -v
 
 check: fmt lint typecheck deptry test test-integration
 

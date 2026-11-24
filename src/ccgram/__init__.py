@@ -1,4 +1,4 @@
-"""CCGram — Command & Control Bot for AI coding agents via tmux.
+"""CCGram — Telegram Forum topic to tmux bridge.
 
 Package entry point. Exports the version string only; all functional
 modules are imported lazily by main.py to keep startup fast.

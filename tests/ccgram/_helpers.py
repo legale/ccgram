@@ -8,14 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from telegram import (
-    BotCommand,
-    BotCommandScope,
-    ChatFullInfo,
-    File,
-    ForumTopic,
     InputMedia,
     Message,
-    ReactionType,
 )
 
 from ccgram.topic_tail import record_telegram_message
@@ -30,15 +24,11 @@ class _FakeCall:
 
 
 _DEFAULT_RETURNS: dict[str, Any] = {
-    "delete_message": True,
     "send_chat_action": True,
-    "set_message_reaction": True,
     "edit_forum_topic": True,
     "close_forum_topic": True,
+    "reopen_forum_topic": True,
     "delete_forum_topic": True,
-    "unpin_all_forum_topic_messages": True,
-    "delete_my_commands": True,
-    "set_my_commands": True,
 }
 
 
@@ -139,14 +129,6 @@ class FakeTelegramClient:
             {"chat_id": chat_id, "message_id": message_id, **kwargs},
         )
 
-    async def delete_message(
-        self, chat_id: int | str, message_id: int, **kwargs: Any
-    ) -> bool:
-        return self._record(
-            "delete_message",
-            {"chat_id": chat_id, "message_id": message_id, **kwargs},
-        )
-
     async def send_photo(
         self, chat_id: int | str, photo: Any, **kwargs: Any
     ) -> Message:
@@ -166,36 +148,6 @@ class FakeTelegramClient:
     ) -> bool:
         return self._record(
             "send_chat_action", {"chat_id": chat_id, "action": action, **kwargs}
-        )
-
-    async def set_message_reaction(
-        self,
-        chat_id: int | str,
-        message_id: int,
-        reaction: Sequence[ReactionType | str] | ReactionType | str | None = None,
-        **kwargs: Any,
-    ) -> bool:
-        return self._record(
-            "set_message_reaction",
-            {
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "reaction": reaction,
-                **kwargs,
-            },
-        )
-
-    async def get_chat(self, chat_id: int | str, **kwargs: Any) -> ChatFullInfo:
-        return self._record("get_chat", {"chat_id": chat_id, **kwargs})
-
-    async def get_file(self, file_id: str, **kwargs: Any) -> File:
-        return self._record("get_file", {"file_id": file_id, **kwargs})
-
-    async def create_forum_topic(
-        self, chat_id: int | str, name: str, **kwargs: Any
-    ) -> ForumTopic:
-        return self._record(
-            "create_forum_topic", {"chat_id": chat_id, "name": name, **kwargs}
         )
 
     async def edit_forum_topic(
@@ -228,42 +180,6 @@ class FakeTelegramClient:
         return self._record(
             "delete_forum_topic",
             {"chat_id": chat_id, "message_thread_id": message_thread_id, **kwargs},
-        )
-
-    async def unpin_all_forum_topic_messages(
-        self, chat_id: int | str, message_thread_id: int, **kwargs: Any
-    ) -> bool:
-        return self._record(
-            "unpin_all_forum_topic_messages",
-            {"chat_id": chat_id, "message_thread_id": message_thread_id, **kwargs},
-        )
-
-    async def delete_my_commands(
-        self,
-        scope: BotCommandScope | None = None,
-        language_code: str | None = None,
-        **kwargs: Any,
-    ) -> bool:
-        return self._record(
-            "delete_my_commands",
-            {"scope": scope, "language_code": language_code, **kwargs},
-        )
-
-    async def set_my_commands(
-        self,
-        commands: Sequence[BotCommand | tuple[str, str]],
-        scope: BotCommandScope | None = None,
-        language_code: str | None = None,
-        **kwargs: Any,
-    ) -> bool:
-        return self._record(
-            "set_my_commands",
-            {
-                "commands": commands,
-                "scope": scope,
-                "language_code": language_code,
-                **kwargs,
-            },
         )
 
 

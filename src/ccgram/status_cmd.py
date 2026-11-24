@@ -36,22 +36,15 @@ def _list_managed_sessions(prefix: str) -> list[dict[str, str]]:
     return sessions
 
 
-def _capability_summary() -> tuple[str, str]:
-    """Return (provider_name, comma-separated capability flags)."""
-    return "shell", "none"
-
-
 def status_main() -> None:
     """Entry point for `ccgram status`."""
     # Lazy: version metadata is needed only for the CLI status command.
     from . import __version__
 
-    provider_name, cap_flags = "shell", ""
     prefix = os.getenv("TMUX_SESSION_PREFIX", "cc_")
     sessions = _list_managed_sessions(prefix)
 
     print(f"ccgram {__version__}")
-    print(f"Provider: {provider_name} ({cap_flags})")
     print(f"Managed tmux sessions: {len(sessions)}")
     if sessions:
         print()

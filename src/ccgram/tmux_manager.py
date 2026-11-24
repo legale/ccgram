@@ -4,7 +4,7 @@ Wraps libtmux to provide async-friendly operations on tmux sessions:
   - list_sessions / find_window_by_id: discover and route sessions.
   - capture_pane: read terminal content (plain or with ANSI colors).
   - send_keys: forward user input directly to the active pane.
-  - create_session / kill_session: lifecycle management.
+  - create_session / kill_session / rename_session: lifecycle management.
   - list_panes / capture_pane_by_id / send_keys_to_pane: pane-level ops.
 
 All blocking libtmux calls are wrapped in asyncio.to_thread().
@@ -90,7 +90,7 @@ class TmuxWindow:
 
 
 class TmuxManager:
-    """Manages tmux windows for agent sessions."""
+    """Manages tmux sessions and windows."""
 
     def __init__(self, session_name: str | None = None):
         """Initialize tmux manager.
@@ -135,57 +135,6 @@ class TmuxManager:
             self._reset_server()
             return None
 
-    async def list_windows(self) -> list[TmuxWindow]:  # noqa: C901
-        """List all windows in the session with their working directories.
-
-        Returns:
-            List of TmuxWindow with window info and cwd
-        """
-
-        def _sync_list_windows() -> list[TmuxWindow]:  # noqa: C901
-            windows: list[TmuxWindow] = []
-            try:
-                result = subprocess.run(
-                    ["tmux", "list-sessions", "-F", "#{session_name}"],
-                    capture_output=True,
-                    text=True,
-                    timeout=5,
-                )
-            except (FileNotFoundError, subprocess.TimeoutExpired):
-                return windows
-            if result.returncode != 0:
-                return windows
-
-            session_names = [s.strip() for s in result.stdout.splitlines() if s.strip()]
-            for session_name in session_names:
-                session = self.get_session(session_name)
-                if not session:
-                    continue
-                for window in session.windows:
-                    name = window.window_name or ""
-                    window_id = f"{session_name}:{window.window_id or ''}"
-                    if name == config.tmux_main_window_name:
-                        continue
-                    if config.own_window_id and window_id == config.own_window_id:
-                        continue
-                    if name.startswith("_"):
-                        continue
-                    try:
-                        pane = window.active_pane
-                        cwd = pane.pane_current_path or "" if pane else ""
-                        windows.append(
-                            TmuxWindow(
-                                window_id=window_id,
-                                window_name=name,
-                                cwd=cwd,
-                            )
-                        )
-                    except _TmuxError as e:
-                        logger.debug("Error getting window info: %s", e)
-            return windows
-
-        return await asyncio.to_thread(_sync_list_windows)
-
     async def list_sessions(self) -> list[TmuxWindow]:
         """List every tmux session as one dashboard record.
 
@@ -225,15 +174,7 @@ class TmuxManager:
                 session = self.get_session(session_name)
                 if not session or not session.windows:
                     continue
-                window = next(
-                    (
-                        w
-                        for w in session.windows
-                        if (getattr(w, "window_name", "") or "")
-                        != config.tmux_main_window_name
-                    ),
-                    session.windows[0],
-                )
+                window = session.windows[0]
                 window_id = f"{session_name}:{window.window_id or ''}"
                 sessions.append(
                     TmuxWindow(
@@ -311,33 +252,11 @@ class TmuxManager:
         return await asyncio.to_thread(_sync_clear)
 
     async def find_window_by_id(self, window_id: str) -> TmuxWindow | None:
-        """Find a window by its tmux window ID (e.g. '@0', '@12').
-
-        Supports foreign windows (e.g. 'emdash-claude-main-xxx:@0') by
-        querying the foreign tmux session directly.
-
-        Args:
-            window_id: The tmux window ID to match
-
-        Returns:
-            TmuxWindow if found, None otherwise
-        """
-        session_name, win_id = self._split_qualified(window_id)
-        if session_name != self.session_name:
-            return await self._find_qualified_window(window_id)
-        windows = await self.list_windows()
-        for window in windows:
-            if window.window_id == window_id or window.window_id.endswith(f":{win_id}"):
-                return window
-        return None
-
-    async def _find_qualified_window(self, window_id: str) -> TmuxWindow | None:
+        """Find a window by its tmux window ID (e.g. 'cc_proj:@0' or '@0')."""
         session_name, win_id = self._split_qualified(window_id)
         idx_window_id = 0
         idx_window_name = 1
         idx_cwd = 2
-        idx_cmd = 3
-        idx_tty = 4
         proc: asyncio.subprocess.Process | None = None
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -346,7 +265,7 @@ class TmuxManager:
                 "-t",
                 session_name,
                 "-F",
-                "#{window_id}\t#{window_name}\t#{pane_current_path}\t#{pane_current_command}\t#{pane_tty}",
+                "#{window_id}\t#{window_name}\t#{pane_current_path}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -360,7 +279,7 @@ class TmuxManager:
         if proc.returncode != 0:
             return None
         for line in stdout.decode().strip().split("\n"):
-            parts = line.split("\t", 4)
+            parts = line.split("\t", 2)
             if parts and parts[idx_window_id] == win_id:
                 return TmuxWindow(
                     window_id=window_id,
@@ -456,10 +375,7 @@ class TmuxManager:
     async def _capture_pane_plain(
         self, window_id: str, *, include_history: bool = False
     ) -> str | None:
-        """Capture pane as plain text via libtmux.
-
-        Foreign windows (emdash) are captured via subprocess instead.
-        """
+        """Capture pane as plain text via libtmux."""
 
         def _sync_capture() -> str | None:
             session_name, wid = self._split_qualified(window_id)
@@ -492,10 +408,7 @@ class TmuxManager:
     def _pane_send(
         self, window_id: str, chars: str, *, enter: bool, literal: bool
     ) -> bool:
-        """Synchronous helper: send keys to the active pane of a window.
-
-        Foreign windows (emdash) are handled via tmux subprocess.
-        """
+        """Synchronous helper: send keys to the active pane of a window."""
         session_name, wid = self._split_qualified(window_id)
         session = self.get_session(session_name)
         if not session:
@@ -640,7 +553,7 @@ class TmuxManager:
         target = f"{session_name}:{wid}" if session_name else wid
         marker = f"__CCG_DONE_{uuid4().hex[:12]}__"
         wrapped = (
-            "tmux set-option -p -t \"$TMUX_PANE\" remain-on-exit on "
+            'tmux set-option -p -t "$TMUX_PANE" remain-on-exit on '
             "2>/dev/null || true; "
             f"printf '\\n%s:BEGIN\\n' {shlex.quote(marker)}; "
             f"/bin/sh -c {shlex.quote(command)}; "

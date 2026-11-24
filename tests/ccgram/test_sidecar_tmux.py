@@ -32,6 +32,7 @@ async def test_start_sidecar_command_uses_active_pane_cwd() -> None:
     assert marker is not None
     assert tm.get_sidecar_pane_id("test-session:@1") == "%2"
     assert tm.get_sidecar_completion_marker("test-session:@1") == marker
+    assert exec_mock.await_args is not None
     cmd = exec_mock.await_args.args
     assert "split-window" in cmd
     assert "-d" in cmd

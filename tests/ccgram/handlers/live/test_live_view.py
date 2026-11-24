@@ -151,7 +151,7 @@ class TestBuildLiveKeyboard:
         flat = [btn for row in kb.inline_keyboard for btn in row]
         labels = [btn.text for btn in flat]
         assert not any("Refresh" in label for label in labels)
-        assert not any(label == "\U0001f4fa Live" for label in labels)
+        assert not any(label == "Live" for label in labels)
 
     def test_has_quick_keys(self):
         kb = build_live_keyboard("@0")

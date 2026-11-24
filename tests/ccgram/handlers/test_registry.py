@@ -318,3 +318,30 @@ async def test_dispatch_single_slash_command_is_ignored():
         command("rename", "", params="<name>")(mock_rename)
         await _dispatch_double_slash(update, context)
         mock_rename.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_double_slash_records_group_chat_id():
+    from ccgram.handlers.registry import _dispatch_double_slash
+    from ccgram.thread_router import ThreadRouter
+
+    router = ThreadRouter()
+    update = MagicMock(spec=Update)
+    update.effective_user = MagicMock(id=100)
+    msg = MagicMock(spec=Message)
+    msg.text = "//commands"
+    msg.chat_id = -100777
+    msg.message_thread_id = 42
+    msg.chat = MagicMock(id=-100777, type="supergroup")
+    update.effective_message = msg
+
+    mock_cmd = AsyncMock()
+    command("commands", "List commands")(mock_cmd)
+    with (
+        patch("ccgram.thread_router.thread_router", router),
+        patch("ccgram.handlers.registry.COMMAND_HANDLERS", (mock_cmd,)),
+    ):
+        await _dispatch_double_slash(update, MagicMock())
+
+    assert router.resolve_chat_id(100, 42) == -100777
+    mock_cmd.assert_awaited_once()

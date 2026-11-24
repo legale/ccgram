@@ -20,7 +20,6 @@ async def test_bootstrap_starts_polling() -> None:
     order: list[str] = []
     with (
         patch("ccgram.bootstrap.install_global_exception_handler"),
-        patch("ccgram.bootstrap.session_manager"),
         patch(
             "ccgram.bootstrap.start_status_polling",
             side_effect=lambda _app: order.append("polling"),
@@ -30,12 +29,10 @@ async def test_bootstrap_starts_polling() -> None:
     assert order == ["polling"]
 
 
-async def test_shutdown_cancels_polling_and_flushes_state() -> None:
+async def test_shutdown_cancels_polling() -> None:
     async def _noop() -> None:
         return None
 
     bootstrap._status_poll_task = asyncio.create_task(_noop())
-    with patch("ccgram.bootstrap.session_manager") as manager:
-        await bootstrap.shutdown_runtime()
+    await bootstrap.shutdown_runtime()
     assert bootstrap._status_poll_task is None
-    manager.flush_state.assert_called_once()

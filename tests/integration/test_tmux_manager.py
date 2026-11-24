@@ -42,21 +42,25 @@ async def tmux(tmp_path):
                 sess.kill()
 
 
-async def test_create_and_list_windows(tmux, tmp_path) -> None:
-    ok, _msg, name, window_id = await tmux.create_session("test-win", str(tmp_path), window_name="test-win")
+async def test_create_and_list_sessions(tmux, tmp_path) -> None:
+    ok, _msg, name, window_id = await tmux.create_session(
+        "test-win", str(tmp_path), window_name="test-win"
+    )
     assert ok
     assert name == "test-win"
 
-    windows = await tmux.list_windows()
-    ids = [w.window_id for w in windows]
+    sessions = await tmux.list_sessions()
+    ids = [w.window_id for w in sessions]
     assert window_id in ids
 
-    match = next(w for w in windows if w.window_id == window_id)
+    match = next(w for w in sessions if w.window_id == window_id)
     assert match.window_name == "test-win"
 
 
 async def test_find_window_by_id(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("find-me", str(tmp_path), window_name="find-me")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "find-me", str(tmp_path), window_name="find-me"
+    )
     assert ok
 
     found = await tmux.find_window_by_id(window_id)
@@ -68,7 +72,9 @@ async def test_find_window_by_id(tmux, tmp_path) -> None:
 
 
 async def test_send_keys_and_capture_pane(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("echo-win", str(tmp_path), window_name="echo-win")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "echo-win", str(tmp_path), window_name="echo-win"
+    )
     assert ok
 
     await tmux.send_keys(window_id, "echo hello-integration")
@@ -79,8 +85,10 @@ async def test_send_keys_and_capture_pane(tmux, tmp_path) -> None:
     assert "hello-integration" in output
 
 
-async def test_no_agent_disables_automatic_rename(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("shell-norename", str(tmp_path), window_name="shell-norename")
+async def test_disables_automatic_rename(tmux, tmp_path) -> None:
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "shell-norename", str(tmp_path), window_name="shell-norename"
+    )
     assert ok
 
     session = tmux.get_session("shell-norename")
@@ -113,13 +121,15 @@ async def test_kill_session_removes_the_tmux_session(tmux, tmp_path) -> None:
 
 
 async def test_reset_server_reconnects(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("reset-test", str(tmp_path), window_name="reset-test")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "reset-test", str(tmp_path), window_name="reset-test"
+    )
     assert ok
 
     tmux._reset_server()
 
-    windows = await tmux.list_windows()
-    ids = [w.window_id for w in windows]
+    sessions = await tmux.list_sessions()
+    ids = [w.window_id for w in sessions]
     assert window_id in ids
 
 
@@ -127,7 +137,9 @@ async def test_reset_server_reconnects(tmux, tmp_path) -> None:
 
 
 async def test_list_panes_single(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("pane-list", str(tmp_path), window_name="pane-list")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "pane-list", str(tmp_path), window_name="pane-list"
+    )
     assert ok
 
     panes = await tmux.list_panes(window_id)
@@ -137,7 +149,9 @@ async def test_list_panes_single(tmux, tmp_path) -> None:
 
 
 async def test_list_panes_multiple(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("multi-pane", str(tmp_path), window_name="multi-pane")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "multi-pane", str(tmp_path), window_name="multi-pane"
+    )
     assert ok
 
     session = tmux.get_session("multi-pane")
@@ -159,7 +173,9 @@ async def test_list_panes_missing_window(tmux) -> None:
 
 
 async def test_capture_pane_by_id(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("cap-pane", str(tmp_path), window_name="cap-pane")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "cap-pane", str(tmp_path), window_name="cap-pane"
+    )
     assert ok
 
     panes = await tmux.list_panes(window_id)
@@ -179,7 +195,9 @@ async def test_capture_pane_by_id_missing(tmux) -> None:
 
 
 async def test_send_keys_to_pane(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("send-pane", str(tmp_path), window_name="send-pane")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "send-pane", str(tmp_path), window_name="send-pane"
+    )
     assert ok
 
     session = tmux.get_session("send-pane")
@@ -211,7 +229,9 @@ async def test_send_keys_to_pane_missing(tmux) -> None:
 
 
 async def test_capture_pane_with_ansi(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("ansi-test", str(tmp_path), window_name="ansi-test")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "ansi-test", str(tmp_path), window_name="ansi-test"
+    )
     assert ok
 
     await tmux.send_keys(window_id, r'printf "\033[31mred\033[0m normal"')
@@ -228,7 +248,9 @@ async def test_capture_pane_with_ansi(tmux, tmp_path) -> None:
 
 
 async def test_capture_pane_can_include_history(tmux, tmp_path) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("history-test", str(tmp_path), window_name="history-test")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "history-test", str(tmp_path), window_name="history-test"
+    )
     assert ok
 
     await tmux.send_keys(window_id, "yes HISTORY-MARKER | head -80")
@@ -245,7 +267,9 @@ async def test_capture_pane_can_include_history(tmux, tmp_path) -> None:
 async def test_create_window_does_not_inject_environment_commands(
     tmux, tmp_path
 ) -> None:
-    ok, _msg, _name, window_id = await tmux.create_session("env-test", str(tmp_path), window_name="env-test")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "env-test", str(tmp_path), window_name="env-test"
+    )
     assert ok
 
     await asyncio.sleep(0.5)
@@ -262,7 +286,9 @@ async def test_send_keys_with_special_chars(tmux, tmp_path) -> None:
     launch_cmd = (
         f"env {marker}=special/path/value sh -c 'echo ${{CCGRAM_LAUNCH_TEST_MARKER}}'"
     )
-    ok, _msg, _name, window_id = await tmux.create_session("literal-launch", str(tmp_path), window_name="literal-launch")
+    ok, _msg, _name, window_id = await tmux.create_session(
+        "literal-launch", str(tmp_path), window_name="literal-launch"
+    )
     assert ok
 
     await tmux.send_keys(window_id, launch_cmd)

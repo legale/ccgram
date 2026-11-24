@@ -8,7 +8,9 @@ from ccgram.tmux_manager import TmuxWindow
 from tests.ccgram._helpers import FakeTelegramClient
 
 
-def _make_update(user_id: int = 1, thread_id: int | None = 42) -> tuple[Update, Message, MagicMock]:
+def _make_update(
+    user_id: int = 1, thread_id: int | None = 42
+) -> tuple[Update, Message, MagicMock]:
     update = MagicMock(spec=Update)
     user = User(id=user_id, is_bot=False, first_name="Test")
     update.effective_user = user
@@ -67,7 +69,15 @@ class TestSendCommand:
 
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
-            patch("ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread", return_value=None),
+            patch(
+                "ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread",
+                return_value=None,
+            ),
+            patch(
+                "ccgram.handlers.topics.topic_binding.find_topic_session",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
             patch("ccgram.handlers.send.send_command.safe_reply") as mock_reply,
         ):
             await send_command(update, context)
@@ -81,8 +91,15 @@ class TestSendCommand:
 
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
-            patch("ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread", return_value="s1:@1"),
-            patch("ccgram.handlers.send.send_command.tmux_manager.find_window_by_id", new_callable=AsyncMock, return_value=window),
+            patch(
+                "ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread",
+                return_value="s1:@1",
+            ),
+            patch(
+                "ccgram.handlers.send.send_command.tmux_manager.find_window_by_id",
+                new_callable=AsyncMock,
+                return_value=window,
+            ),
             patch("ccgram.handlers.send.send_command.safe_reply") as mock_reply,
         ):
             await send_command(update, context)
@@ -104,8 +121,15 @@ class TestSendCommand:
 
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
-            patch("ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread", return_value="s1:@1"),
-            patch("ccgram.handlers.send.send_command.tmux_manager.find_window_by_id", new_callable=AsyncMock, return_value=window),
+            patch(
+                "ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread",
+                return_value="s1:@1",
+            ),
+            patch(
+                "ccgram.handlers.send.send_command.tmux_manager.find_window_by_id",
+                new_callable=AsyncMock,
+                return_value=window,
+            ),
             patch("ccgram.handlers.send.send_command.safe_reply") as mock_reply,
         ):
             await send_command(update, context)
@@ -126,10 +150,23 @@ class TestSendCommand:
 
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
-            patch("ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread", return_value="s1:@1"),
-            patch("ccgram.handlers.send.send_command.thread_router.resolve_chat_id", return_value=-100),
-            patch("ccgram.handlers.send.send_command.tmux_manager.find_window_by_id", new_callable=AsyncMock, return_value=window),
-            patch("ccgram.handlers.send.send_command.PTBTelegramClient", return_value=fake_client),
+            patch(
+                "ccgram.handlers.send.send_command.thread_router.resolve_window_for_thread",
+                return_value="s1:@1",
+            ),
+            patch(
+                "ccgram.handlers.send.send_command.thread_router.resolve_chat_id",
+                return_value=-100,
+            ),
+            patch(
+                "ccgram.handlers.send.send_command.tmux_manager.find_window_by_id",
+                new_callable=AsyncMock,
+                return_value=window,
+            ),
+            patch(
+                "ccgram.handlers.send.send_command.PTBTelegramClient",
+                return_value=fake_client,
+            ),
         ):
             await send_command(update, context)
 

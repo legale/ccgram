@@ -18,16 +18,14 @@ from ...config import config
 from ...telegram_client import PTBTelegramClient
 from ...thread_router import thread_router
 from ...tmux_manager import extract_sidecar_output, send_to_window
-from ...utils import handle_general_topic_message, is_general_topic
 from ..callback_helpers import get_thread_id as _get_thread_id
-from ..messaging_pipeline.message_sender import ack_reaction, safe_reply
+from ..messaging_pipeline.message_sender import safe_reply
 from ..sessions_dashboard import apply_session_rename
 
 logger = structlog.get_logger()
 
 
 if TYPE_CHECKING:
-    from telegram import Bot, Chat
     from telegram.ext import ContextTypes
 
     from ...telegram_client import TelegramClient
@@ -38,7 +36,7 @@ async def _handle_unbound_topic(
     thread_id: int,
     message: Message,
 ) -> bool:
-    """Resolve a topic from tmux metadata or its strict ``cc_<name>`` session."""
+    """Resolve a topic from tmux metadata or prompt for ``//bind <key>``."""
     if thread_router.get_window_for_thread(user_id, thread_id) is not None:
         return False
 
@@ -87,10 +85,8 @@ async def _forward_message(
         send_fn=send_to_window,
     )
     if not success:
-        await safe_reply(message, f"❌ {error}")
+        await safe_reply(message, error)
         return
-
-    await ack_reaction(client, message.chat.id, message.message_id)
 
 
 async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -104,13 +100,6 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     await handle_text_message(update, context)
-
-
-async def _handle_unnamed_topic(bot: Bot, chat: Chat | None, message: Message) -> None:
-    if chat and is_general_topic(message):
-        await handle_general_topic_message(bot, message, chat.id)
-    else:
-        await safe_reply(message, "Use a named topic.")
 
 
 async def handle_text_message(
@@ -154,7 +143,7 @@ async def handle_text_message(
         return
 
     if thread_id is None:
-        await _handle_unnamed_topic(context.bot, update.effective_chat, message)
+        await safe_reply(message, "Use a named topic.")
         return
 
     if await _handle_unbound_topic(user.id, thread_id, message):
@@ -214,18 +203,18 @@ async def _handle_sidecar_command(
     )
 
     if tmux_manager.get_sidecar_pane_id(window_id):
-        await safe_reply(message, "⚠️ A sidecar command is already running.")
+        await safe_reply(message, "A sidecar command is already running.")
         return
 
     sidecar_pane_id, marker = await tmux_manager.start_sidecar_command(
         window_id, command
     )
     if not sidecar_pane_id or not marker:
-        await safe_reply(message, "❌ Failed to create or access sidecar pane.")
+        await safe_reply(message, "Failed to create or access sidecar pane.")
         return
 
     time_str = time.strftime("%H:%M:%S")
-    title = f"⚡ Sidecar: {command} ({time_str})"
+    title = f"Sidecar: {command} ({time_str})"
     assert message.chat is not None
     chat_id = message.chat.id
     start_sidecar_diff(
@@ -234,8 +223,6 @@ async def _handle_sidecar_command(
         window_id=window_id,
         title=title,
     )
-
-    await ack_reaction(client, chat_id, message.message_id)
 
     async def _quick_sidecar_tick() -> None:
         await asyncio.sleep(0.3)

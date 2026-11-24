@@ -12,8 +12,6 @@ from telegram.error import BadRequest, TelegramError
 
 from ...config import config
 from ...telegram_client import PTBTelegramClient
-
-from ...session import session_manager
 from ...thread_router import ThreadRouter, thread_router
 from ...tmux_manager import TmuxWindow, tmux_manager
 from ..callback_helpers import get_thread_id
@@ -46,10 +44,6 @@ def bind_runtime(
     name = tmux_manager.topic_name_from_session_name(session.window_name)
     router.bind_thread(user_id, thread_id, session.window_id, window_name=name)
     router.set_group_chat_id(user_id, thread_id, chat_id)
-    if session.cwd:
-        session_manager.set_window_cwd(
-            session.window_id, str(Path(session.cwd).expanduser().resolve())
-        )
     return session.window_id
 
 
@@ -98,6 +92,25 @@ async def find_topic_session(chat_id: int, thread_id: int) -> TmuxWindow | None:
         if session.topic_ref and session.topic_ref[1] == thread_id
     ]
     return matches_thread[0] if len(matches_thread) == 1 else None
+
+
+async def resolve_topic_window(
+    user_id: int,
+    chat_id: int | None,
+    thread_id: int,
+    *,
+    router: ThreadRouter = thread_router,
+) -> str | None:
+    """Return bound window_id for topic, lazily reconciling from tmux metadata."""
+    window_id = router.get_window_for_thread(user_id, thread_id)
+    if window_id:
+        return window_id
+    if chat_id is None:
+        return None
+    session = await find_topic_session(chat_id, thread_id)
+    if session is None:
+        return None
+    return bind_runtime(user_id, chat_id, thread_id, session, router=router)
 
 
 async def ensure_topic_session(  # noqa: C901, PLR0911, PLR0912
@@ -220,6 +233,46 @@ async def _session_has(name: str) -> tuple[bool, str]:
     return proc.returncode == 0, stderr.decode().strip()
 
 
+async def _prepare_canonical_session(
+    raw_name: str,
+) -> tuple[str | None, str | None, str | None]:
+    """Validate and canonicalize *raw_name*, renaming tmux session if needed.
+
+    Returns (topic_name, canonical_session, error_message).
+    """
+    exists, stderr_text = await _session_has(raw_name)
+    if not exists:
+        return None, None, stderr_text or f"can't find session: {raw_name}"
+
+    prefix = config.tmux_session_prefix
+    if raw_name.startswith(prefix):
+        topic_name = raw_name[len(prefix) :]
+        canonical_session = raw_name
+    else:
+        topic_name = raw_name
+        canonical_session = f"{prefix}{topic_name}"
+
+    if not _valid_name(topic_name):
+        return None, None, f"Invalid session name: {raw_name}"
+
+    if raw_name != canonical_session:
+        target_exists, _ = await _session_has(canonical_session)
+        if target_exists:
+            return (
+                None,
+                None,
+                f"Error: target session '{canonical_session}' already exists",
+            )
+        if not await tmux_manager.rename_session(raw_name, canonical_session):
+            return (
+                None,
+                None,
+                f"Failed to rename tmux session '{raw_name}' to '{canonical_session}'",
+            )
+
+    return topic_name, canonical_session, None
+
+
 async def _do_bind_raw(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -236,40 +289,12 @@ async def _do_bind_raw(
         await safe_reply(message, "Error: not inside a topic")
         return
 
-    exists, stderr_text = await _session_has(raw_name)
-    if not exists:
-        err = stderr_text or f"can't find session: {raw_name}"
-        await safe_reply(message, err)
+    topic_name, canonical_session, prep_error = await _prepare_canonical_session(
+        raw_name
+    )
+    if prep_error or not topic_name or not canonical_session:
+        await safe_reply(message, prep_error or "Failed to bind session.")
         return
-
-    prefix = config.tmux_session_prefix
-    if raw_name.startswith(prefix):
-        topic_name = raw_name[len(prefix) :]
-        canonical_session = raw_name
-    else:
-        topic_name = raw_name
-        canonical_session = f"{prefix}{topic_name}"
-
-    if not _valid_name(topic_name):
-        await safe_reply(message, f"Invalid session name: {raw_name}")
-        return
-
-    # If raw session does not have cc_ prefix, rename it in tmux to cc_<name>
-    if raw_name != canonical_session:
-        target_exists, _ = await _session_has(canonical_session)
-        if target_exists:
-            await safe_reply(
-                message,
-                f"Error: target session '{canonical_session}' already exists",
-            )
-            return
-        renamed = await tmux_manager.rename_session(raw_name, canonical_session)
-        if not renamed:
-            await safe_reply(
-                message,
-                f"Failed to rename tmux session '{raw_name}' to '{canonical_session}'",
-            )
-            return
 
     # Switch attached tmux client if any
     switch_proc = await asyncio.create_subprocess_exec(
@@ -359,13 +384,10 @@ async def rename_command(  # noqa: C901
 
     args = list(context.args or [])
     if not args:
-        await safe_reply(message, "Usage: /rename <new_name>")
+        await safe_reply(message, "Usage: //rename <new_name>")
         return
 
-    # Lazy: avoid circular imports
-    from ...utils import strip_emoji_prefix
-
-    raw_name = strip_emoji_prefix(" ".join(args).strip()).strip()
+    raw_name = " ".join(args).strip()
     name = raw_name.removeprefix(config.tmux_session_prefix).strip()
     if not _valid_name(name):
         await safe_reply(message, f"Invalid topic name: {name!r}")
@@ -406,11 +428,6 @@ async def rename_command(  # noqa: C901
         bind_runtime(user.id, chat.id, thread_id, session)
 
     bind_runtime(user.id, chat.id, thread_id, session)
-
-    # Lazy: clear dead notification and autoclose if a rename race occurred
-    from .topic_lifecycle import clear_topic_lifecycle_state
-
-    clear_topic_lifecycle_state(user.id, thread_id)
 
     # Rename Telegram topic if supported
     tg_renamed = False

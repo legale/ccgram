@@ -1,31 +1,30 @@
 """Thread routing — Telegram topic to tmux session binding.
 
 Maps Telegram topics (user_id + thread_id) to tmux sessions (window_id)
-bidirectionally in runtime memory. Manages group chat IDs for multi-group
-forum topic routing and display names for windows.
+in runtime memory. Manages group chat IDs for multi-group forum topic
+routing and display names for windows.
 
 Key class: ThreadRouter.
 
 Key data:
   - thread_bindings  (user_id -> {thread_id -> window_id})
-  - _window_to_thread (reverse index for O(1) inbound lookups)
   - group_chat_ids   (composite key -> chat_id)
   - window_display_names (window_id -> display name)
 """
 
 from __future__ import annotations
 
-import structlog
 from collections.abc import Iterator
+
+import structlog
 
 logger = structlog.get_logger()
 
 
 class ThreadRouter:
-    """Bidirectional runtime mapping between Telegram topics and tmux sessions.
+    """Runtime mapping between Telegram topics and tmux sessions.
 
-    Owns thread_bindings, group_chat_ids, window_display_names, and
-    the reverse index _window_to_thread.
+    Owns thread_bindings, group_chat_ids, and window_display_names.
     """
 
     def __init__(self) -> None:
@@ -34,26 +33,12 @@ class ThreadRouter:
         self.group_chat_ids: dict[str, int] = {}
         # window_id -> display name (window_name)
         self.window_display_names: dict[str, str] = {}
-        # Reverse index: (user_id, window_id) -> thread_id for O(1) lookups
-        self._window_to_thread: dict[tuple[int, str], int] = {}
 
     def reset(self) -> None:
         """Clear all state. Used for test isolation."""
         self.thread_bindings.clear()
         self.group_chat_ids.clear()
         self.window_display_names.clear()
-        self._window_to_thread.clear()
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _rebuild_reverse_index(self) -> None:
-        """Rebuild _window_to_thread from thread_bindings."""
-        self._window_to_thread = {}
-        for uid, bindings in self.thread_bindings.items():
-            for tid, wid in bindings.items():
-                self._window_to_thread[(uid, wid)] = tid
 
     # ------------------------------------------------------------------
     # Thread binding operations
@@ -86,13 +71,7 @@ class ThreadRouter:
                 thread_id,
             )
 
-        # Clean up stale reverse index if this thread was previously bound elsewhere
-        old_window = self.thread_bindings[user_id].get(thread_id)
-        if old_window is not None and old_window != window_id:
-            self._window_to_thread.pop((user_id, old_window), None)
-
         self.thread_bindings[user_id][thread_id] = window_id
-        self._window_to_thread[(user_id, window_id)] = thread_id
         if window_name:
             self.window_display_names[window_id] = window_name
         display = window_name or self.get_display_name(window_id)
@@ -110,7 +89,6 @@ class ThreadRouter:
         if not bindings or thread_id not in bindings:
             return None
         window_id = bindings.pop(thread_id)
-        self._window_to_thread.pop((user_id, window_id), None)
         if not bindings:
             del self.thread_bindings[user_id]
         logger.info(
@@ -142,10 +120,6 @@ class ThreadRouter:
             return None
         return bindings.get(thread_id)
 
-    def get_thread_for_window(self, user_id: int, window_id: str) -> int | None:
-        """Reverse lookup: get thread_id for a window (O(1) via reverse index)."""
-        return self._window_to_thread.get((user_id, window_id))
-
     def get_all_thread_windows(self, user_id: int) -> dict[int, str]:
         """Get all thread bindings for a user."""
         return dict(self.thread_bindings.get(user_id, {}))
@@ -162,10 +136,6 @@ class ThreadRouter:
         if thread_id is None:
             return None
         return self.get_window_for_thread(user_id, thread_id)
-
-    def has_window(self, window_id: str) -> bool:
-        """Check if any user has a binding to this window_id."""
-        return any(wid == window_id for (_, wid) in self._window_to_thread)
 
     def iter_thread_bindings(self) -> Iterator[tuple[int, int, str]]:
         """Iterate all thread bindings as (user_id, thread_id, window_id)."""
@@ -227,18 +197,5 @@ class ThreadRouter:
         """Get display name for a window_id, fallback to window_id itself."""
         return self.window_display_names.get(window_id, window_id)
 
-    def pop_display_name(self, window_id: str) -> str:
-        """Remove and return display name for window_id. Falls back to window_id."""
-        return self.window_display_names.pop(window_id, window_id)
-
-    def set_display_name(self, window_id: str, window_name: str) -> None:
-        """Update display name for a window_id."""
-        self.window_display_names[window_id] = window_name
-
 
 thread_router: ThreadRouter = ThreadRouter()
-
-
-def get_thread_router() -> ThreadRouter:
-    """Return the global ThreadRouter instance."""
-    return thread_router

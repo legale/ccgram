@@ -42,10 +42,6 @@ pkg/
 *.swo
 *~
 
-# Claude Code (keep .claude/ tracked)
-.claude/settings.local.json
-.claude/scheduled_tasks.lock
-
 # Spec (keep .spec/ tracked)
 
 # ai artificats to skip

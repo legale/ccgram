@@ -77,17 +77,6 @@ async def _bind_runtime(
             thread_router.bind_thread(uid, thread_id, session.window_id, topic_name)
         thread_router.set_group_chat_id(uid, thread_id, chat_id)
 
-    if session.cwd:
-        # Lazy: Path import
-        from pathlib import Path
-
-        # Lazy: session_manager import
-        from ...session import session_manager
-
-        session_manager.set_window_cwd(
-            session.window_id, str(Path(session.cwd).expanduser().resolve())
-        )
-
     if changed:
         pane_text = await tmux_manager.capture_pane(
             session.window_id, with_ansi=True, include_history=True
@@ -95,28 +84,6 @@ async def _bind_runtime(
         if pane_text:
             prime_topic_status_diff(chat_id, thread_id, session.window_id, pane_text)
     return changed
-
-
-async def _delete_runtime_topic(
-    client: TelegramClient, chat_id: int, thread_id: int
-) -> bool:
-    """Delete a Telegram projection whose authoritative tmux session vanished."""
-    try:
-        await client.delete_forum_topic(chat_id, thread_id)
-    except TelegramError as e:
-        if not is_thread_gone(e):
-            log_throttled(
-                logger,
-                f"topic-delete:{chat_id}:{thread_id}",
-                "Topic delete error for %s:%s: %s",
-                chat_id,
-                thread_id,
-                e,
-            )
-            return False
-
-    await _clear_runtime_topic(chat_id, thread_id)
-    return True
 
 
 async def _detach_missing_topic(
@@ -172,6 +139,7 @@ async def _sync_topic(
             session.window_name,
             e,
         )
+
 
 def _runtime_refs() -> set[tuple[int, int]]:
     refs: set[tuple[int, int]] = set()
@@ -317,11 +285,3 @@ async def run_periodic_tasks(
     if verify_topics:
         timers["topic_check"] = now
         log_throttle_sweep()
-
-
-async def run_lifecycle_tasks(client: TelegramClient) -> None:
-    """Run per-tick topic lifecycle tasks."""
-    # Lazy: topic_lifecycle is needed for check_autoclose_timers
-    from ..topics.topic_lifecycle import check_autoclose_timers
-
-    await check_autoclose_timers(client)

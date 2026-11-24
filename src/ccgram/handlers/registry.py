@@ -25,7 +25,7 @@ from __future__ import annotations
 from typing import TypeAlias
 
 import structlog
-from telegram import BotCommand, Update
+from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -82,9 +82,7 @@ def format_commands_help() -> str:
     ]
     for handler in COMMAND_HANDLERS:
         info = get_command_info(handler)
-        alias_str = (
-            f" (or `{COMMAND_PREFIX}{info.aliases[0]}`)" if info.aliases else ""
-        )
+        alias_str = f" (or `{COMMAND_PREFIX}{info.aliases[0]}`)" if info.aliases else ""
         params_str = f" {info.params}" if info.params else ""
         lines.append(
             f"• `{COMMAND_PREFIX}{info.name}{params_str}`{alias_str} — {info.description}"
@@ -96,21 +94,6 @@ def format_commands_help() -> str:
         ]
     )
     return "\n".join(lines)
-
-
-def get_telegram_menu_commands() -> list[BotCommand]:
-    """Return command list for Telegram Bot API set_my_commands."""
-    menu: list[BotCommand] = []
-    seen: set[str] = set()
-    for handler in COMMAND_HANDLERS:
-        info = get_command_info(handler)
-        cmd = info.menu_name or info.name.replace("-", "_")
-        if cmd in seen:
-            continue
-        seen.add(cmd)
-        desc = f"{info.params} — {info.description}" if info.params else info.description
-        menu.append(BotCommand(cmd, desc))
-    return menu
 
 
 async def _dispatch_double_slash(update: Update, context) -> None:  # type: ignore[type-arg]
@@ -132,6 +115,22 @@ async def _dispatch_double_slash(update: Update, context) -> None:  # type: igno
     from ..topic_tail import record_telegram_message
 
     record_telegram_message(message)
+
+    user = update.effective_user
+    chat = message.chat
+    thread_id = getattr(message, "message_thread_id", None)
+    if (
+        user is not None
+        and isinstance(getattr(user, "id", None), int)
+        and chat is not None
+        and getattr(chat, "type", None) in ("group", "supergroup")
+        and isinstance(thread_id, int)
+        and thread_id != 1
+    ):
+        # Lazy: avoid circular import during registry module load.
+        from ..thread_router import thread_router
+
+        thread_router.set_group_chat_id(user.id, thread_id, chat.id)
 
     text = message.text.strip()
     if not text.startswith(COMMAND_PREFIX):

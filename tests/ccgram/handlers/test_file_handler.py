@@ -146,36 +146,20 @@ class TestResolveUploadDir:
         window_id, upload_path, err = await _resolve_upload_dir(1, 42)
         assert err is None
         assert window_id == "@1"
-        assert upload_path == live_dir / "tmp"
-
-    async def test_fallback_to_window_store_cwd(
-        self, monkeypatch, tmp_path: Path
-    ) -> None:
-        from unittest.mock import AsyncMock
-
-        fallback_dir = tmp_path / "fallback"
-        fallback_dir.mkdir(parents=True)
-        monkeypatch.setattr(
-            "ccgram.handlers.file_handler.thread_router.resolve_window_for_thread",
-            lambda user_id, thread_id: "@1",
-        )
-        monkeypatch.setattr(
-            "ccgram.handlers.file_handler.tmux_manager.find_window_by_id",
-            AsyncMock(return_value=None),
-        )
-        from ccgram.session import session_manager
-        session_manager.set_window_cwd("@1", str(fallback_dir))
-        window_id, upload_path, err = await _resolve_upload_dir(1, 42)
-        assert err is None
-        assert window_id == "@1"
-        assert upload_path == fallback_dir / "tmp"
+        assert upload_path == live_dir / ".ccgram-uploads"
 
     async def test_unbound_topic_returns_error(self, monkeypatch) -> None:
+        from unittest.mock import AsyncMock
+
         monkeypatch.setattr(
             "ccgram.handlers.file_handler.thread_router.resolve_window_for_thread",
             lambda user_id, thread_id: None,
         )
-        window_id, upload_path, err = await _resolve_upload_dir(1, 42)
+        monkeypatch.setattr(
+            "ccgram.handlers.topics.topic_binding.find_topic_session",
+            AsyncMock(return_value=None),
+        )
+        window_id, upload_path, err = await _resolve_upload_dir(1, 42, -100)
         assert err == "No session bound to this topic."
         assert window_id is None
         assert upload_path is None

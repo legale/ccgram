@@ -78,6 +78,7 @@ def content_hash(text: str) -> str:
 
 def build_live_keyboard(window_id: str) -> InlineKeyboardMarkup:
     """Build inline keyboard for live view: quick keys + stop button."""
+
     def btn(label: str, key_id: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(
             label,
@@ -91,7 +92,7 @@ def build_live_keyboard(window_id: str) -> InlineKeyboardMarkup:
             [btn("\u238b Esc", "esc"), btn("^C", "cc"), btn("\u23ce Enter", "ent")],
             [
                 InlineKeyboardButton(
-                    "\u23f9 Stop Live",
+                    "Stop Live",
                     callback_data=f"{CB_LIVE_STOP}{window_id}"[:64],
                 )
             ],
@@ -167,9 +168,7 @@ async def _tick_one_view(
             await _edit_caption(client, view, "Live view ended (window closed)")
             return
 
-        raw_text = await tmux_manager.capture_pane(
-            window.window_id, with_ansi=True
-        )
+        raw_text = await tmux_manager.capture_pane(window.window_id, with_ansi=True)
         if not raw_text:
             return
 

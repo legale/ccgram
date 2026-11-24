@@ -38,6 +38,7 @@ _RE_LONG_REPEATS = re.compile(r"([_─])\1{30,}")
 _RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 logger = structlog.get_logger()
 
+
 @dataclass
 class _DiffState:
     window_id: str
@@ -51,7 +52,6 @@ class _DiffState:
     send_suppressed: bool = False
     last_change_ts: float = 0.0
     last_typing_ts: float = 0.0
-    last_idle_message_id: int = 0
     arrows_enabled: bool = config.screen_diff_arrows
 
 
@@ -231,8 +231,10 @@ async def _send_screen_diff_key(
     key: str,
 ) -> None:
     """Send a control key to the main pane bound to the callback topic."""
-    # Lazy: avoid loading tmux/topic routing during status module import.
+    # Lazy: avoid loading tmux during status module import.
     from ...tmux_manager import tmux_manager
+
+    # Lazy: avoid loading topic routing during status module import.
     from ..callback_helpers import get_bound_window, get_thread_id
 
     user = update.effective_user
@@ -270,9 +272,11 @@ async def _edit_or_send(
 
     diff_ts = state.last_msg_ts
     action = "edit"
-    if state.message_id <= 0 or state.diff_ts < diff_ts:
-        action = "send"
-    elif not is_last(chat_id, thread_id, state.message_id):
+    if (
+        state.message_id <= 0
+        or state.diff_ts < diff_ts
+        or not is_last(chat_id, thread_id, state.message_id)
+    ):
         action = "send"
     logger.info(
         "topic_screen_diff_decision",
@@ -358,34 +362,6 @@ async def update_topic_status_diff(
                 action=ChatAction.TYPING,
             )
 
-    if (
-        config.topic_idle_enabled
-        and target == "main"
-        and state.last_change_ts > 0.0
-        and (now - state.last_change_ts) >= config.topic_idle_delay
-    ):
-        is_idle_last = state.last_idle_message_id > 0 and is_last(
-            chat_id, thread_id, state.last_idle_message_id
-        )
-        if not is_idle_last:
-            sent = await rate_limit_send_message(
-                client,
-                chat_id,
-                config.topic_idle_text,
-                message_thread_id=thread_id,
-            )
-            message_id = getattr(sent, "message_id", None)
-            if message_id is not None:
-                state.last_idle_message_id = int(message_id)
-                record_message(chat_id, thread_id, state.last_idle_message_id)
-                logger.info(
-                    "topic_idle_notification_sent",
-                    chat_id=chat_id,
-                    thread_id=thread_id,
-                    window_id=window_id,
-                    message_id=state.last_idle_message_id,
-                )
-
     if text == state.last_display_text:
         return
 
@@ -454,6 +430,7 @@ async def _handle_screen_diff_resize(
         return
 
     if query.data == f"{CB_SCREEN_DIFF}arrows":
+        # Lazy: avoid loading callback_helpers during status module import.
         from ..callback_helpers import get_thread_id
 
         thread_id = get_thread_id(update)
@@ -463,6 +440,7 @@ async def _handle_screen_diff_resize(
             return
 
         try:
+            # Lazy: avoid loading telegram_client during status module import.
             from ...telegram_client import PTBTelegramClient
 
             enabled = await toggle_screen_diff_arrows(

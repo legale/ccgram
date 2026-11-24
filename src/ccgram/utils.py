@@ -1,53 +1,21 @@
 """Shared utility functions used across multiple CCGram modules.
 
 Provides:
-  - ccgram_dir(): resolve config directory from CCBOT_DIR env var.
-  - tmux_session_name(): resolve tmux session name from env.
-  - atomic_write_json(): crash-safe JSON file writes via temp+rename.
+  - ccgram_dir(): resolve config directory from CCGRAM_DIR env var.
   - task_done_callback(): log unhandled exceptions from background asyncio tasks.
-  - log_throttled(): suppress repeated identical debug messages per key.
-  - detect_tmux_context(): auto-detect tmux session name and own window ID.
-  - check_duplicate_ccgram(): check if another ccgram is running in the session.
-  - is_general_topic(): check if a message is in the General (default) forum topic.
-  - handle_general_topic_message(): pin-once-then-react for General topic messages.
+  - log_throttled() / log_throttle_reset() / log_throttle_sweep(): debug log throttling.
 """
 
 import asyncio
-import contextlib
-import json
 import os
-import subprocess
-import tempfile
 import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import structlog
-from telegram import Bot, Message
-from telegram.error import TelegramError
 
 logger = structlog.get_logger()
-
-_LEGACY_PREFIXES = (
-    "\U0001f7e2",
-    "\U0001f7e1",
-    "\u2705",
-    "\U0001f4a5",
-    "\U0001f3b2",
-    "\U0001f4e1",
-    "⚫",
-    "❌",
-)
-
-
-def strip_emoji_prefix(name: str) -> str:
-    """Remove old status/approval emoji prefixes from a topic name."""
-    for emoji in _LEGACY_PREFIXES:
-        prefix = f"{emoji} "
-        if name.startswith(prefix):
-            name = name[len(prefix) :]
-    return name
 
 # --- Log throttling -----------------------------------------------------------
 
@@ -102,185 +70,12 @@ def log_throttle_sweep(
 
 
 CCGRAM_DIR_ENV = "CCGRAM_DIR"
-_LEGACY_DIR_ENV = "CCBOT_DIR"
 
 
 def ccgram_dir() -> Path:
-    """Resolve config directory from CCGRAM_DIR env var or default ~/.ccgram.
-
-    Falls back to legacy CCBOT_DIR env var with a deprecation warning.
-    If ~/.ccgram doesn't exist but ~/.ccbot does, logs a migration hint.
-    """
+    """Resolve config directory from CCGRAM_DIR env var or default ~/.ccgram."""
     raw = os.environ.get(CCGRAM_DIR_ENV, "")
-    if not raw:
-        raw = os.environ.get(_LEGACY_DIR_ENV, "")
-        if raw:
-            logger.warning(
-                "CCBOT_DIR is deprecated, use CCGRAM_DIR instead",
-                old="CCBOT_DIR",
-                new="CCGRAM_DIR",
-            )
-    if raw:
-        return Path(raw)
-
-    default = Path.home() / ".ccgram"
-    legacy = Path.home() / ".ccbot"
-    # Use legacy ~/.ccbot if it has a .env and ~/.ccgram does not
-    if not (default / ".env").is_file() and (legacy / ".env").is_file():
-        logger.warning(
-            "Using legacy ~/.ccbot config dir. Migrate with: mv ~/.ccbot ~/.ccgram"
-        )
-        return legacy
-    return default
-
-
-def tmux_session_name() -> str:
-    """Get tmux session name from TMUX_SESSION_NAME env var or default 'ccgram'."""
-    return os.environ.get("TMUX_SESSION_NAME", "ccgram")
-
-
-def atomic_write_json(path: Path, data: Any, indent: int = 2) -> None:
-    """Write JSON data to a file atomically.
-
-    Writes to a temporary file in the same directory, then renames it
-    to the target path. This prevents data corruption if the process
-    is interrupted mid-write.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(data, indent=indent)
-
-    # Write to temp file in same directory (same filesystem for atomic rename)
-    fd, tmp_path = tempfile.mkstemp(
-        dir=str(path.parent), suffix=".tmp", prefix=f".{path.name}."
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, str(path))
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp_path)
-        raise
-
-
-def detect_tmux_context() -> tuple[str | None, str | None]:
-    """Detect tmux session name and own window ID in a single tmux call.
-
-    Returns (session_name, own_window_id). Either may be None.
-    Requires $TMUX to be set (running inside tmux).
-    """
-    if not os.environ.get("TMUX"):
-        return None, None
-    pane_id = os.environ.get("TMUX_PANE")
-    if not pane_id:
-        # TMUX set but no TMUX_PANE — can only get session name
-        try:
-            result = subprocess.run(
-                ["tmux", "display-message", "-p", "#{session_name}"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode != 0:
-                return None, None
-            name = result.stdout.strip()
-            return (name or None), None
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return None, None
-    # Single call to get both session name and window ID
-    try:
-        result = subprocess.run(
-            [
-                "tmux",
-                "display-message",
-                "-t",
-                pane_id,
-                "-p",
-                "#{session_name}\t#{window_id}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode != 0:
-            return None, None
-        parts = result.stdout.strip().split("\t", 1)
-        session_name = parts[0] if parts[0] else None
-        window_id = parts[1] if len(parts) > 1 and parts[1] else None
-        return session_name, window_id
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None, None
-
-
-def check_duplicate_ccgram(session_name: str) -> str | None:
-    """Check if another ccgram is running in the session.
-
-    Returns error message if duplicate found, None if clear.
-    """
-    own_pane = os.environ.get("TMUX_PANE", "")
-    if not own_pane:
-        # Cannot reliably exclude self — skip duplicate check
-        return None
-    try:
-        result = subprocess.run(
-            [
-                "tmux",
-                "list-panes",
-                "-s",
-                "-t",
-                session_name,
-                "-F",
-                "#{pane_id}\t#{window_id}\t#{pane_current_command}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return None
-    if result.returncode != 0:
-        return None
-    for line in result.stdout.strip().splitlines():
-        parts = line.split("\t", 2)
-        if len(parts) < 3:  # noqa: PLR2004
-            continue
-        pane_id, window_id, cmd = parts
-        if pane_id == own_pane:
-            continue
-        if cmd.strip() == "ccgram":
-            return (
-                f"Another ccgram instance is already running in "
-                f"tmux session '{session_name}' (window {window_id})"
-            )
-    return None
-
-
-def assert_sendable(file_path: str | Path) -> None:
-    """Block sending files from ccgram's own state directory.
-
-    Prevents accidental leakage of tokens, session maps, or config
-    via any outbound file-sending path.
-    """
-    try:
-        real = Path(file_path).resolve()
-        state_real = ccgram_dir().resolve()
-    except OSError as exc:
-        raise ValueError(f"cannot verify path safety: {file_path}") from exc
-    if real == state_real or str(real).startswith(str(state_real) + os.sep):
-        raise ValueError(f"refusing to send state file: {file_path}")
-
-
-def shorten_path(full_path: str, cwd: str | None) -> str:
-    """Return path relative to cwd if it's a subpath, else return as-is."""
-    if not cwd or not full_path:
-        return full_path
-    # Normalize trailing slashes
-    cwd = cwd.rstrip("/")
-    if full_path.startswith(cwd + "/"):
-        return os.path.relpath(full_path, cwd)
-    return full_path
+    return Path(raw) if raw else Path.home() / ".ccgram"
 
 
 def task_done_callback(task: asyncio.Task[None]) -> None:
@@ -294,55 +89,3 @@ def task_done_callback(task: asyncio.Task[None]) -> None:
     exc = task.exception()
     if exc is not None:
         logger.error("Background task %s failed", task.get_name(), exc_info=exc)
-
-
-# --- General topic pin-once-then-react ------------------------------------
-
-_general_topic_pin_cache: dict[int, bool] = {}
-
-
-def is_general_topic(message: Message) -> bool:
-    """Return True if the message is in the General (default) forum topic.
-
-    In Telegram forum groups, messages sent directly in the General topic
-    (not as replies) may have message_thread_id=None instead of 1.
-    We check chat.is_forum to distinguish General-topic messages from
-    non-forum contexts.
-    """
-    thread_id = getattr(message, "message_thread_id", None)
-    is_forum = getattr(message.chat, "is_forum", False) if message.chat else False
-    return is_forum and (thread_id is None or thread_id == 1)
-
-
-async def handle_general_topic_message(
-    bot: Bot, message: Message, chat_id: int
-) -> None:
-    """Handle messages in General topic: pin hint once, then react only.
-
-    On first General-topic message per chat, sends a warning and pins it.
-    Subsequent messages get a silent thinking reaction instead.
-    """
-    # Check cache first to avoid unnecessary API calls
-    if not _general_topic_pin_cache.get(chat_id):
-        try:
-            chat_info = await bot.get_chat(chat_id)
-            pinned = chat_info.pinned_message
-            if pinned and pinned.from_user and pinned.from_user.id == bot.id:
-                _general_topic_pin_cache[chat_id] = True
-        except TelegramError:
-            pass
-
-    if _general_topic_pin_cache.get(chat_id):
-        # Already pinned — just react silently
-        with contextlib.suppress(TelegramError):
-            await message.set_reaction("🤔")
-    else:
-        # Set cache before attempt to guarantee one-shot behavior even if pin fails
-        _general_topic_pin_cache[chat_id] = True
-        try:
-            hint = await message.reply_text(
-                "Please use a named topic. Create a new topic to start a session."
-            )
-            await hint.pin(disable_notification=True)
-        except TelegramError:
-            pass

@@ -13,31 +13,26 @@ Functions:
 """
 
 import asyncio
-import contextlib
-import structlog
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from telegram import CallbackQuery, LinkPreviewOptions, Message, ReactionTypeEmoji
+import structlog
+from telegram import CallbackQuery, LinkPreviewOptions, Message
 from telegram.error import BadRequest, RetryAfter, TelegramError
 
-from ...config import config
 from ...entity_formatting import convert_to_entities
 from ...telegram_client import TelegramClient
 from ...telegram_sender import TELEGRAM_MAX_MESSAGE_LENGTH, split_message
 from ...topic_tail import record_telegram_message
 
 __all__ = [
-    "ack_reaction",
     "edit_with_fallback",
     "is_thread_gone",
     "rate_limit_send",
     "rate_limit_send_message",
     "safe_edit",
     "safe_reply",
-    "safe_send",
-    "send_kwargs",
 ]
 
 logger = structlog.get_logger()
@@ -104,26 +99,40 @@ def _cap_to_telegram_limit(
     return truncated, kept
 
 
+async def _send_phase(
+    send_fn: Callable[..., Awaitable[Any]],
+    plain_text: str,
+    context_label: str,
+    send_kwargs: dict[str, Any],
+) -> tuple[Message | None, TelegramError | None, bool]:
+    """Attempt one send phase, handling RetryAfter once. Returns (msg, error, abort)."""
+    try:
+        return await send_fn(plain_text, **send_kwargs), None, False
+    except RetryAfter as e:
+        retry_after_s = _retry_after_seconds(e)
+        logger.warning(
+            "telegram_send_rate_limited",
+            context=context_label,
+            retry_after_s=retry_after_s,
+        )
+        if retry_after_s > _MAX_RETRY_AFTER_S:
+            return None, None, True
+        await asyncio.sleep(retry_after_s + 1)
+        try:
+            return await send_fn(plain_text, **send_kwargs), None, False
+        except TelegramError as e2:
+            return None, e2, is_thread_gone(e2)
+    except TelegramError as e:
+        return None, e, is_thread_gone(e)
+
+
 async def _with_entity_fallback(
     send_fn: Callable[..., Awaitable[Any]],
     text: str,
     context_label: str,
     **kwargs: Any,
 ) -> Message | None:
-    """Convert to entities, send, fall back to plain text on error.
-
-    Entity-based formatting uses character offsets — no syntax to parse,
-    no parse errors possible. The only failure mode is Telegram API errors
-    (rate limiting, message gone, etc.), which fall back to plain text.
-
-    Args:
-        send_fn: Async callable accepting (text, **kwargs).
-        text: Raw markdown text (pre-conversion).
-        context_label: Label for warning log messages (e.g. "send to 123").
-        **kwargs: Extra keyword arguments forwarded to send_fn.
-
-    Returns the result Message on success, None on failure.
-    """
+    """Convert to entities, send, fall back to plain text on error."""
     plain_text, entities = convert_to_entities(text)
 
     if not plain_text.strip():
@@ -138,28 +147,15 @@ async def _with_entity_fallback(
         send_kwargs = {**kwargs}
         if phase_entities is not None:
             send_kwargs["entities"] = phase_entities
-        try:
-            return await send_fn(plain_text, **send_kwargs)
-        except RetryAfter as e:
-            retry_after_s = _retry_after_seconds(e)
-            logger.warning(
-                "telegram_send_rate_limited",
-                context=context_label,
-                retry_after_s=retry_after_s,
-            )
-            if retry_after_s > _MAX_RETRY_AFTER_S:
-                return None
-            await asyncio.sleep(retry_after_s + 1)
-            try:
-                return await send_fn(plain_text, **send_kwargs)
-            except TelegramError as e2:
-                if is_thread_gone(e2):
-                    return None
-                last_error = e2
-        except TelegramError as e:
-            if is_thread_gone(e):
-                return None
-            last_error = e
+        msg, err, abort = await _send_phase(
+            send_fn, plain_text, context_label, send_kwargs
+        )
+        if msg is not None:
+            return msg
+        if abort:
+            return None
+        if err is not None:
+            last_error = err
 
     if last_error is not None:
         logger.warning("Failed to %s: %s", context_label, last_error)
@@ -283,26 +279,6 @@ async def safe_edit(target: Message | CallbackQuery, text: str, **kwargs: Any) -
     await _with_entity_fallback(_edit, text, "edit message", **kwargs)
 
 
-async def safe_send(
-    client: TelegramClient,
-    chat_id: int,
-    text: str,
-    message_thread_id: int | None = None,
-    **kwargs: Any,
-) -> Message | None:
-    """Send message with entity formatting, falling back to plain text on failure."""
-    kwargs.setdefault("link_preview_options", NO_LINK_PREVIEW)
-    if message_thread_id is not None:
-        kwargs.setdefault("message_thread_id", message_thread_id)
-
-    async def _send(text: str, **kw: Any) -> Message:
-        return await client.send_message(chat_id=chat_id, text=text, **kw)
-
-    return await _send_text_parts(
-        _send, text, f"send message to {chat_id}", chat_id=chat_id, **kwargs
-    )
-
-
 async def edit_with_fallback(
     client: TelegramClient,
     chat_id: int,
@@ -342,22 +318,3 @@ async def edit_with_fallback(
             raise
         except TelegramError:
             return False
-
-
-async def ack_reaction(client: TelegramClient, chat_id: int, message_id: int) -> None:
-    """React to a message with the configured ack emoji, if enabled."""
-    if not config.ack_reaction:
-        return
-    with contextlib.suppress(TelegramError):
-        await client.set_message_reaction(
-            chat_id=chat_id,
-            message_id=message_id,
-            reaction=[ReactionTypeEmoji(emoji=config.ack_reaction)],
-        )
-
-
-def send_kwargs(thread_id: int | None) -> dict[str, Any]:
-    """Build message_thread_id kwargs for bot.send_message()."""
-    if thread_id is not None:
-        return {"message_thread_id": thread_id}
-    return {}

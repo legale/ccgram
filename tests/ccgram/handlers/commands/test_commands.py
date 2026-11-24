@@ -1,6 +1,6 @@
 """Tests for bot commands (//commands, //ctrl-c)."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from telegram import Message, Update, User
@@ -10,6 +10,9 @@ from ccgram.handlers.commands import (
     commands_command,
     ctrl_c_command,
     ctrl_cc_command,
+    enter_command,
+    esc_command,
+    tab_command,
 )
 
 
@@ -90,7 +93,6 @@ class TestCtrlCCommand:
         update.message.message_thread_id = None
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
-            patch("ccgram.utils.is_general_topic", return_value=False),
             patch(
                 "ccgram.handlers.commands.safe_reply", new_callable=AsyncMock
             ) as mock_reply,
@@ -124,9 +126,9 @@ class TestCtrlCCommand:
                 return_value=True,
             ) as mock_send,
             patch(
-                "ccgram.handlers.messaging_pipeline.message_sender.ack_reaction",
+                "ccgram.handlers.commands.safe_reply",
                 new_callable=AsyncMock,
-            ) as mock_ack,
+            ) as mock_reply,
         ):
             await ctrl_c_command(update, context)
 
@@ -134,7 +136,7 @@ class TestCtrlCCommand:
             "%5", "C-c", enter=False, literal=False, window_id="@1"
         )
         mock_send.assert_awaited_once_with("@1", "C-c", enter=False, literal=False)
-        mock_ack.assert_awaited_once()
+        mock_reply.assert_awaited_once_with(update.message, "Sent `Ctrl+C`")
 
 
 class TestCtrlCCCommand:
@@ -153,7 +155,6 @@ class TestCtrlCCCommand:
         update.message.message_thread_id = None
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
-            patch("ccgram.utils.is_general_topic", return_value=False),
             patch(
                 "ccgram.handlers.commands.safe_reply", new_callable=AsyncMock
             ) as mock_reply,
@@ -164,8 +165,6 @@ class TestCtrlCCCommand:
         assert "inside a topic" in mock_reply.call_args[0][1]
 
     async def test_sends_two_ctrl_c_to_tmux_and_sidecar(self, update, context):
-        from unittest.mock import call
-
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
             patch(
@@ -189,9 +188,9 @@ class TestCtrlCCCommand:
                 return_value=True,
             ) as mock_send,
             patch(
-                "ccgram.handlers.messaging_pipeline.message_sender.ack_reaction",
+                "ccgram.handlers.commands.safe_reply",
                 new_callable=AsyncMock,
-            ) as mock_ack,
+            ) as mock_reply,
         ):
             await ctrl_cc_command(update, context)
 
@@ -209,13 +208,11 @@ class TestCtrlCCCommand:
                 call("@1", "C-c", enter=False, literal=False),
             ]
         )
-        mock_ack.assert_awaited_once()
+        mock_reply.assert_awaited_once_with(update.message, "Sent `Ctrl+C x2`")
 
 
 class TestSpecialKeyCommands:
     async def test_enter_command_sends_enter(self, update, context):
-        from ccgram.handlers.commands import enter_command
-
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
             patch(
@@ -235,18 +232,16 @@ class TestSpecialKeyCommands:
                 return_value=True,
             ) as mock_send,
             patch(
-                "ccgram.handlers.messaging_pipeline.message_sender.ack_reaction",
+                "ccgram.handlers.commands.safe_reply",
                 new_callable=AsyncMock,
-            ) as mock_ack,
+            ) as mock_reply,
         ):
             await enter_command(update, context)
 
         mock_send.assert_awaited_once_with("@1", "Enter", enter=False, literal=False)
-        mock_ack.assert_awaited_once()
+        mock_reply.assert_awaited_once_with(update.message, "Sent `Enter`")
 
     async def test_esc_command_sends_escape(self, update, context):
-        from ccgram.handlers.commands import esc_command
-
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
             patch(
@@ -266,18 +261,16 @@ class TestSpecialKeyCommands:
                 return_value=True,
             ) as mock_send,
             patch(
-                "ccgram.handlers.messaging_pipeline.message_sender.ack_reaction",
+                "ccgram.handlers.commands.safe_reply",
                 new_callable=AsyncMock,
-            ) as mock_ack,
+            ) as mock_reply,
         ):
             await esc_command(update, context)
 
         mock_send.assert_awaited_once_with("@1", "Escape", enter=False, literal=False)
-        mock_ack.assert_awaited_once()
+        mock_reply.assert_awaited_once_with(update.message, "Sent `Escape`")
 
     async def test_tab_command_sends_tab(self, update, context):
-        from ccgram.handlers.commands import tab_command
-
         with (
             patch("ccgram.config.config.is_user_allowed", return_value=True),
             patch(
@@ -297,11 +290,11 @@ class TestSpecialKeyCommands:
                 return_value=True,
             ) as mock_send,
             patch(
-                "ccgram.handlers.messaging_pipeline.message_sender.ack_reaction",
+                "ccgram.handlers.commands.safe_reply",
                 new_callable=AsyncMock,
-            ) as mock_ack,
+            ) as mock_reply,
         ):
             await tab_command(update, context)
 
         mock_send.assert_awaited_once_with("@1", "Tab", enter=False, literal=False)
-        mock_ack.assert_awaited_once()
+        mock_reply.assert_awaited_once_with(update.message, "Sent `Tab`")

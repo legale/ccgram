@@ -1,16 +1,13 @@
 """Application entry point — Click CLI dispatcher and bot bootstrap.
 
 The ``main()`` function invokes the Click command group defined in cli.py,
-which dispatches to subcommands (run, hook, status).
+which dispatches to subcommands (run, status).
 ``run_bot()`` contains the actual bot startup logic, called by the ``run``
 command after CLI flags have been applied to the environment.
 
-Module-level imports stay minimal on purpose: ``run_bot``,
-``start_miniapp_if_enabled``, and ``stop_miniapp_if_enabled`` lazy-load
-``config``, ``utils``, ``tmux_manager``, ``bot.create_bot``, and
-``miniapp`` so that ``ccgram status`` / ``hook`` (which
-import ``main`` only for ``_shutdown_signal`` and ``__version__``) do
-not pay PTB or aiohttp startup cost.
+Module-level imports stay minimal on purpose: ``run_bot`` lazy-loads
+``config``, ``utils``, and ``bot.create_bot`` so that ``ccgram status``
+does not pay PTB startup cost.
 """
 
 import logging
@@ -21,9 +18,6 @@ from types import FrameType
 
 import structlog
 from telegram import Update
-
-# Set by the upgrade handler to trigger os.execv() after run_polling() returns
-_restart_requested = False
 
 # Tracks which signal triggered shutdown (0 = none/clean exit)
 _shutdown_signal = 0
@@ -112,33 +106,8 @@ def setup_logging(log_level: str) -> None:
 
 def run_bot() -> None:
     """Start the bot. Called by the ``run`` Click command after env is set."""
-    log_level = (
-        os.environ.get("CCGRAM_LOG_LEVEL")
-        or os.environ.get("CCBOT_LOG_LEVEL")
-        or "INFO"
-    ).upper()
+    log_level = (os.environ.get("CCGRAM_LOG_LEVEL") or "INFO").upper()
     setup_logging(log_level)
-
-    # --- Auto-detect tmux session (before config import) ---
-    explicit_session = os.environ.get("TMUX_SESSION_NAME")
-    auto_detected = False
-
-    if not explicit_session and os.environ.get("TMUX"):
-        # Lazy: utils import deferred to avoid loading config-aware helpers
-        # before TMUX_SESSION_NAME is set; check_duplicate_ccgram pings tmux.
-        from .utils import check_duplicate_ccgram, detect_tmux_context
-
-        detected, own_wid = detect_tmux_context()
-        if detected:
-            os.environ["TMUX_SESSION_NAME"] = detected
-            auto_detected = True
-
-        dup = check_duplicate_ccgram(detected or "ccgram")
-        if dup:
-            print(f"Error: {dup}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        own_wid = None
 
     try:
         # Lazy: config validates env at import time; deferring lets us catch
@@ -160,19 +129,9 @@ def run_bot() -> None:
         print("Get your user ID from @userinfobot on Telegram.")
         sys.exit(1)
 
-    if own_wid:
-        config.own_window_id = own_wid
-
     logger = structlog.get_logger()
 
     logger.info("Allowed users: %s", config.allowed_users)
-
-    # When started inside tmux, use the existing session only to identify the
-    # daemon's own window. The daemon never needs a control session of its own.
-    if auto_detected:
-        logger.info("Auto-detected tmux session '%s'", config.tmux_session_name)
-    else:
-        logger.info("Tmux session auto-detection disabled")
 
     # Lazy: main runs `ccgram` startup; defer imports until the relevant subcommand executes
     from . import __version__
@@ -188,10 +147,6 @@ def run_bot() -> None:
         allowed_updates=Update.ALL_TYPES,
         stop_signals=None,
     )
-
-    if _restart_requested:
-        logger.info("Restarting bot via os.execv(%s)", sys.argv)
-        os.execv(sys.argv[0], sys.argv)
 
     _reraise_shutdown_signal()
 

@@ -64,9 +64,9 @@ class TestConvertToEntities:
         assert "    y = 2" in text
         assert "    return x + y" in text
 
-    def test_emoji_in_text(self) -> None:
-        text, entities = convert_to_entities("Hello 🌍 **world**")
-        assert text == "Hello 🌍 world"
+    def test_astral_unicode_in_text(self) -> None:
+        text, entities = convert_to_entities("Hello \U0001d400 **world**")
+        assert text == "Hello \U0001d400 world"
         bold_entities = [e for e in entities if e.type == MessageEntity.BOLD]
         assert len(bold_entities) == 1
         ent = bold_entities[0]

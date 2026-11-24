@@ -321,6 +321,11 @@ class TestScreenshotCommand:
         mock_reply.assert_awaited_once()
         assert "topic" in mock_reply.call_args.args[1].lower()
 
+    @patch(
+        "ccgram.handlers.topics.topic_binding.find_topic_session",
+        new_callable=AsyncMock,
+        return_value=None,
+    )
     @patch(f"{_SC}.thread_router")
     @patch("ccgram.config.config")
     @patch(
@@ -332,15 +337,63 @@ class TestScreenshotCommand:
         mock_reply: AsyncMock,
         mock_config: MagicMock,
         mock_tr: MagicMock,
+        _mock_find: AsyncMock,
     ) -> None:
         mock_config.is_user_allowed.return_value = True
         mock_tr.get_window_for_thread.return_value = None
+        mock_tr.resolve_chat_id.return_value = -100
 
         with patch(f"{_SC}.get_thread_id", return_value=42):
             await screenshot_command(_make_update(), MagicMock())
 
         mock_reply.assert_awaited_once()
         assert "not bound" in mock_reply.call_args.args[1]
+
+    @patch(f"{_SC}.text_to_image", new_callable=AsyncMock, return_value=b"png_data")
+    @patch(f"{_SC}.tmux_manager")
+    @patch(f"{_SC}.thread_router")
+    @patch("ccgram.config.config")
+    @patch(
+        "ccgram.handlers.messaging_pipeline.message_sender.safe_reply",
+        new_callable=AsyncMock,
+    )
+    async def test_screenshot_lazy_reconciles_from_tmux(
+        self,
+        mock_reply: AsyncMock,
+        mock_config: MagicMock,
+        mock_tr: MagicMock,
+        mock_tm: MagicMock,
+        _mock_render: AsyncMock,
+    ) -> None:
+        from ccgram.tmux_manager import TmuxWindow
+
+        mock_config.is_user_allowed.return_value = True
+        mock_config.screenshot_as_photo = True
+        mock_tr.get_window_for_thread.return_value = None
+        mock_tr.resolve_chat_id.return_value = -100
+        session = TmuxWindow("cc_foo:@0", "cc_foo", "/tmp", topic_ref=(-100, 42))
+        mock_tm.find_window_by_id = AsyncMock(return_value=session)
+        mock_tm.capture_pane = AsyncMock(return_value="term output")
+
+        update = _make_update()
+        update.message.chat.id = -100
+        with (
+            patch(f"{_SC}.get_thread_id", return_value=42),
+            patch(
+                "ccgram.handlers.topics.topic_binding.find_topic_session",
+                new=AsyncMock(return_value=session),
+            ),
+            patch(
+                "ccgram.handlers.topics.topic_binding.bind_runtime",
+                return_value="cc_foo:@0",
+            ) as bind,
+        ):
+            await screenshot_command(update, MagicMock())
+
+        assert bind.call_args is not None
+        assert bind.call_args.args == (100, -100, 42, session)
+        update.message.get_bot.return_value.send_photo.assert_awaited_once()
+        mock_reply.assert_not_awaited()
 
     @patch(f"{_SC}.tmux_manager")
     @patch(f"{_SC}.thread_router")

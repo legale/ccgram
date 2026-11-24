@@ -5,10 +5,6 @@ Handles inline keyboard callbacks for screenshot UI:
   - CB_LIVE_START: Start auto-refreshing live terminal view
   - CB_LIVE_STOP: Stop live view and revert to screenshot keyboard
   - CB_STATUS_SCREENSHOT: Take a screenshot from status message
-
-Status-bar button callbacks (notify, recall, esc, remote, keys) are in
-status_bar_actions.py. Toolbar callbacks (CB_TOOLBAR_*) are in
-toolbar_callbacks.py.
 """
 
 from __future__ import annotations
@@ -82,6 +78,7 @@ KEY_LABELS: dict[str, str] = {
 
 def build_screenshot_keyboard(window_id: str) -> InlineKeyboardMarkup:
     """Build inline keyboard for screenshot: control keys + refresh."""
+
     def btn(label: str, key_id: str) -> InlineKeyboardButton:
         return InlineKeyboardButton(
             label,
@@ -95,11 +92,11 @@ def build_screenshot_keyboard(window_id: str) -> InlineKeyboardMarkup:
             [btn("\u238b Esc", "esc"), btn("^C", "cc"), btn("\u23ce Enter", "ent")],
             [
                 InlineKeyboardButton(
-                    "\U0001f4fa Live",
+                    "Live",
                     callback_data=f"{CB_LIVE_START}{window_id}"[:64],
                 ),
                 InlineKeyboardButton(
-                    "\U0001f504 Refresh",
+                    "Refresh",
                     callback_data=f"{CB_SCREENSHOT_REFRESH}{window_id}"[:64],
                 ),
             ],
@@ -178,7 +175,7 @@ async def _handle_live_start(
             last_hash=content_hash(text),
         )
     )
-    await query.answer("\U0001f4fa Live started")
+    await query.answer("Live started")
 
 
 async def _handle_live_stop(
@@ -201,7 +198,7 @@ async def _handle_live_stop(
     keyboard = build_screenshot_keyboard(window_id)
     with contextlib.suppress(TelegramError):
         await query.edit_message_caption(caption="Screenshot", reply_markup=keyboard)
-    await query.answer("\u23f9 Stopped")
+    await query.answer("Stopped")
 
 
 async def _handle_keys(query: CallbackQuery, user_id: int, data: str) -> None:
@@ -273,11 +270,7 @@ async def handle_screenshot_callback(
     _context: ContextTypes.DEFAULT_TYPE,
     allow_unowned: bool = False,
 ) -> None:
-    """Handle screenshot-related callbacks only.
-
-    Status-bar actions (notify, recall, esc, remote, keys) are dispatched
-    separately by status_bar_actions.py.
-    """
+    """Handle screenshot-related callbacks."""
     with_update = {
         CB_KEYS_PREFIX: _handle_keys,
         CB_LIVE_START: _handle_live_start,
@@ -378,7 +371,7 @@ async def _handle_status_screenshot(
             keyboard=keyboard,
             thread_id=thread_id,
         )
-        await query.answer("\U0001f4f8")
+        await query.answer("Sent")
     except TelegramError as e:
         logger.error("Failed to send screenshot: %s", e)
         await query.answer("Failed to send screenshot", show_alert=True)
@@ -392,8 +385,6 @@ async def _handle_status_screenshot(
 async def _command_thread_id(
     update: Update,
     safe_reply: Callable[..., Awaitable[object]],
-    handle_general_topic_message: Callable[..., Awaitable[object]],
-    is_general_topic: Callable[["Message"], bool],
     use_topic_text: str,
 ) -> int | None:
     message = update.message
@@ -404,12 +395,7 @@ async def _command_thread_id(
     if thread_id is not None:
         return thread_id
 
-    if update.effective_chat and is_general_topic(message):
-        await handle_general_topic_message(
-            update.get_bot(), message, update.effective_chat.id
-        )
-    else:
-        await safe_reply(message, use_topic_text)
+    await safe_reply(message, use_topic_text)
     return None
 
 
@@ -423,6 +409,16 @@ async def _resolve_bound_tmux_window(
     missing_text: str,
 ) -> tuple[str, "TmuxWindow"] | None:
     window_id = thread_router.get_window_for_thread(user_id, thread_id)
+    if not window_id:
+        # Lazy: avoid circular import with topic_binding
+        from ..topics.topic_binding import resolve_topic_window
+
+        chat_id = (
+            message.chat.id
+            if message.chat
+            else thread_router.resolve_chat_id(user_id, thread_id)
+        )
+        window_id = await resolve_topic_window(user_id, chat_id, thread_id)
     if not window_id:
         await safe_reply(message, unbound_text)
         return None
@@ -439,16 +435,10 @@ async def screenshot_command(
     update: Update, _context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Capture and send a terminal screenshot for the current topic."""
-    # Lazy: command-handler entry; loaded by callback_registry.  Hoisting
-    # config / utils / message_sender pulls handler registration into
-    # this module's import graph and breaks reset-for-testing.
     # Lazy: config singleton resolved at call time so tests can swap it
     from ...config import config
 
-    # Lazy: utils pulls in chat-id helpers that reach back into handlers
-    from ...utils import handle_general_topic_message, is_general_topic
-
-    # Lazy: messaging_pipeline ↔ live cycle through status_bubble
+    # Lazy: messaging_pipeline <-> live cycle avoided at import time
     from ..messaging_pipeline.message_sender import safe_reply
 
     user = update.effective_user
@@ -460,9 +450,7 @@ async def screenshot_command(
     thread_id = await _command_thread_id(
         update,
         safe_reply,
-        handle_general_topic_message,
-        is_general_topic,
-        "\u274c Use this command inside a topic.",
+        "Use this command inside a topic.",
     )
     if thread_id is None:
         return
@@ -472,8 +460,8 @@ async def screenshot_command(
         user.id,
         thread_id,
         safe_reply,
-        unbound_text="\u274c This topic is not bound to any session.",
-        missing_text="\u274c Window no longer exists.",
+        unbound_text="This topic is not bound to any session.",
+        missing_text="Window no longer exists.",
     )
     if resolved is None:
         return
@@ -481,7 +469,7 @@ async def screenshot_command(
 
     pane_text = await tmux_manager.capture_pane(w.window_id, with_ansi=True)
     if not pane_text:
-        await safe_reply(update.message, "\u274c Failed to capture terminal.")
+        await safe_reply(update.message, "Failed to capture terminal.")
         return
 
     png_bytes = await text_to_image(pane_text, with_ansi=True)
@@ -498,21 +486,16 @@ async def screenshot_command(
         )
     except TelegramError as e:
         logger.error("Failed to send screenshot: %s", e)
-        await safe_reply(update.message, "\u274c Failed to send screenshot.")
+        await safe_reply(update.message, "Failed to send screenshot.")
 
 
 @command("live", "Live terminal view")
 async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> None:
     """Open auto-refreshing live terminal view directly, skipping the screenshot step."""
-    # Lazy: same callback-registry contract as screenshot_command, plus
-    # the live_view ↔ screenshot_callbacks cycle.
     # Lazy: config singleton resolved at call time so tests can swap it
     from ...config import config
 
-    # Lazy: utils pulls in chat-id helpers that reach back into handlers
-    from ...utils import handle_general_topic_message, is_general_topic
-
-    # Lazy: messaging_pipeline ↔ live cycle through status_bubble
+    # Lazy: messaging_pipeline <-> live cycle avoided at import time
     from ..messaging_pipeline.message_sender import safe_reply
 
     # Lazy: live_view registers callbacks against this module on import
@@ -534,15 +517,13 @@ async def live_command(update: Update, _context: ContextTypes.DEFAULT_TYPE) -> N
     thread_id = await _command_thread_id(
         update,
         safe_reply,
-        handle_general_topic_message,
-        is_general_topic,
         "Use this command inside a topic.",
     )
     if thread_id is None:
         return
 
     if is_live(user.id, thread_id):
-        await safe_reply(update.message, "\U0001f4fa Live view already running.")
+        await safe_reply(update.message, "Live view already running.")
         return
 
     resolved = await _resolve_bound_tmux_window(

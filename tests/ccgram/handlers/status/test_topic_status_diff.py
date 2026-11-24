@@ -13,8 +13,6 @@ from ccgram.topic_tail import reset_topic_tail_state
 def _reset_state(monkeypatch):
     monkeypatch.setattr(topic_status_diff.config, "topic_status_diff_enabled", True)
     monkeypatch.setattr(topic_status_diff.config, "topic_status_diff_interval", 10)
-    monkeypatch.setattr(topic_status_diff.config, "topic_idle_enabled", True)
-    monkeypatch.setattr(topic_status_diff.config, "topic_idle_delay", 10.0)
     topic_status_diff.reset_topic_status_diff_state()
     reset_topic_tail_state()
     yield
@@ -155,7 +153,9 @@ async def test_toggle_screen_diff_arrows_edits_current_message() -> None:
     assert len(markup.inline_keyboard) == 1
 
 
-@pytest.mark.parametrize(("enabled", "notice"), [(True, "arrows on"), (False, "arrows off")])
+@pytest.mark.parametrize(
+    ("enabled", "notice"), [(True, "arrows on"), (False, "arrows off")]
+)
 async def test_screen_diff_arrows_button_toggles_with_notice(
     monkeypatch, enabled, notice
 ) -> None:
@@ -385,14 +385,10 @@ async def test_new_message_timestamp_forces_new_diff_message(monkeypatch) -> Non
         lambda: float(monotonic.v),
     )
 
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "a\n"
-    )
+    await topic_status_diff.update_topic_status_diff(client, 1, 2, "@7", "a\n")
     topic_status_diff.mark_topic_status_activity(1, 2, "@7", 99)
     monotonic.v = 11.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "b\n"
-    )
+    await topic_status_diff.update_topic_status_diff(client, 1, 2, "@7", "b\n")
 
     assert send.await_count == 1
     edit.assert_not_called()
@@ -410,13 +406,9 @@ async def test_changed_screen_edits_with_resize_keyboard(monkeypatch) -> None:
     monotonic = SimpleNamespace(v=11.0)
     monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
 
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "first\n"
-    )
+    await topic_status_diff.update_topic_status_diff(client, 1, 2, "@7", "first\n")
     monotonic.v = 22.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "second\n"
-    )
+    await topic_status_diff.update_topic_status_diff(client, 1, 2, "@7", "second\n")
 
     edit.assert_awaited_once()
     assert edit.await_args is not None
@@ -562,7 +554,7 @@ async def test_sidecar_diff_uses_custom_title_and_sends_new_message(
         chat_id=1,
         thread_id=2,
         window_id="@7",
-        title="⚡ Sidecar: ls -alh (12:00:00)",
+        title="Sidecar: ls -alh (12:00:00)",
     )
 
     monotonic.v = 11.0
@@ -578,7 +570,7 @@ async def test_sidecar_diff_uses_custom_title_and_sends_new_message(
     send.assert_awaited_once()
     assert send.await_args is not None
     msg_text = send.await_args.args[2]
-    assert "⚡ Sidecar: ls -alh (12:00:00)" in msg_text
+    assert "Sidecar: ls -alh (12:00:00)" in msg_text
     assert "file1.txt" in msg_text
     assert "file2.txt" in msg_text
 
@@ -605,7 +597,7 @@ async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None
         chat_id=1,
         thread_id=2,
         window_id="@7",
-        title="⚡ Sidecar: pwd (12:00:00)",
+        title="Sidecar: pwd (12:00:00)",
     )
 
     monotonic.v = 11.0
@@ -628,9 +620,9 @@ async def test_sidecar_and_main_diff_states_are_independent(monkeypatch) -> None
     sidecar_call = send.await_args_list[1].args[2]
 
     assert "agent step 1" in main_call
-    assert "⚡ Sidecar: pwd" not in main_call
+    assert "Sidecar: pwd" not in main_call
 
-    assert "⚡ Sidecar: pwd (12:00:00)" in sidecar_call
+    assert "Sidecar: pwd (12:00:00)" in sidecar_call
     assert "/home/ruslan" in sidecar_call
     assert "agent step 1" not in sidecar_call
 
@@ -653,7 +645,7 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
         chat_id=1,
         thread_id=2,
         window_id="@7",
-        title="⚡ Sidecar: cmd1 (12:00:00)",
+        title="Sidecar: cmd1 (12:00:00)",
     )
     monotonic.v = 11.0
     await topic_status_diff.update_topic_status_diff(
@@ -666,7 +658,7 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
         chat_id=1,
         thread_id=2,
         window_id="@7",
-        title="⚡ Sidecar: cmd2 (12:00:10)",
+        title="Sidecar: cmd2 (12:00:10)",
     )
     monotonic.v = 31.0
     await topic_status_diff.update_topic_status_diff(
@@ -682,10 +674,10 @@ async def test_option_b_successive_sidecars_create_new_messages(monkeypatch) -> 
     msg1_text = send.await_args_list[0].args[2]
     msg2_text = send.await_args_list[1].args[2]
 
-    assert "⚡ Sidecar: cmd1" in msg1_text
+    assert "Sidecar: cmd1" in msg1_text
     assert "output1" in msg1_text
 
-    assert "⚡ Sidecar: cmd2" in msg2_text
+    assert "Sidecar: cmd2" in msg2_text
     assert "output2" in msg2_text
 
 
@@ -701,9 +693,7 @@ async def test_screen_change_triggers_send_typing(monkeypatch) -> None:
     monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
 
     # Initial capture (change from empty to text1) -> should send typing
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
+    await topic_status_diff.update_topic_status_diff(client, 1, 2, "@7", "line1\n")
     client.send_chat_action.assert_awaited_once_with(
         chat_id=1,
         message_thread_id=2,
@@ -713,9 +703,7 @@ async def test_screen_change_triggers_send_typing(monkeypatch) -> None:
 
     # No change in screen -> typing should not be sent
     monotonic.v = 11.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
+    await topic_status_diff.update_topic_status_diff(client, 1, 2, "@7", "line1\n")
     client.send_chat_action.assert_not_called()
 
     # Change in screen after 5s from last typing -> should send typing again
@@ -728,232 +716,3 @@ async def test_screen_change_triggers_send_typing(monkeypatch) -> None:
         message_thread_id=2,
         action=ChatAction.TYPING,
     )
-
-
-async def test_idle_notification_sent_after_10_seconds_of_no_screen_change(
-    monkeypatch,
-) -> None:
-    client = AsyncMock()
-    diff_msg = SimpleNamespace(message_id=10)
-    idle_msg = SimpleNamespace(message_id=20)
-    send = AsyncMock(side_effect=[diff_msg, idle_msg])
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    # Initial capture at t=100.0: diff message sent
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-    assert send.await_count == 1
-    assert send.await_args_list[0].args[2].startswith("Screen delta")
-
-    # At t=105.0: screen unchanged, not enough time for idle
-    monotonic.v = 105.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-    assert send.await_count == 1
-
-    # At t=110.0: screen unchanged for 10s -> idle message sent
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-    assert send.await_count == 2
-    assert send.await_args_list[1].args[2] == "idle"
-
-
-async def test_idle_notification_sent_only_once_while_idle(monkeypatch) -> None:
-    client = AsyncMock()
-    diff_msg = SimpleNamespace(message_id=10)
-    idle_msg = SimpleNamespace(message_id=20)
-    send = AsyncMock(side_effect=[diff_msg, idle_msg])
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    # Initial capture
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-
-    # At t=110.0: idle message sent
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-    assert send.await_count == 2
-
-    # At t=115.0 and t=130.0: still idle, no new message should be sent
-    monotonic.v = 115.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-    monotonic.v = 130.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "hello\n"
-    )
-    assert send.await_count == 2
-
-
-async def test_idle_notification_sent_again_after_screen_change(monkeypatch) -> None:
-    client = AsyncMock()
-    diff1 = SimpleNamespace(message_id=10)
-    idle1 = SimpleNamespace(message_id=20)
-    diff2 = SimpleNamespace(message_id=30)
-    idle2 = SimpleNamespace(message_id=40)
-    send = AsyncMock(side_effect=[diff1, idle1, diff2, idle2])
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    # Initial screen at t=100
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 1
-
-    # Idle at t=110
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 2
-    assert send.await_args_list[1].args[2] == "idle"
-
-    # Screen changes at t=115 -> new diff message sent
-    monotonic.v = 115.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n"
-    )
-    assert send.await_count == 3
-    assert send.await_args_list[2].args[2].startswith("Screen delta")
-
-    # At t=120 (5s silence): not idle yet
-    monotonic.v = 120.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n"
-    )
-    assert send.await_count == 3
-
-    # At t=125 (10s silence): second idle message sent
-    monotonic.v = 125.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\nline2\n"
-    )
-    assert send.await_count == 4
-    assert send.await_args_list[3].args[2] == "idle"
-
-
-async def test_idle_notification_resets_when_user_sends_message(monkeypatch) -> None:
-    client = AsyncMock()
-    diff1 = SimpleNamespace(message_id=10)
-    idle1 = SimpleNamespace(message_id=20)
-    idle2 = SimpleNamespace(message_id=30)
-    send = AsyncMock(side_effect=[diff1, idle1, idle2])
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    # Initial capture at t=100
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-
-    # Idle at t=110
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 2
-
-    # User sends a message at t=112 (recorded as message_id=25)
-    monotonic.v = 112.0
-    topic_status_diff.mark_topic_status_activity(1, 2, "@7", 25)
-
-    # At t=118 (6s after user message): not idle yet
-    monotonic.v = 118.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 2
-
-    # At t=122 (10s after user message): new idle message sent
-    monotonic.v = 122.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 3
-    assert send.await_args_list[2].args[2] == "idle"
-
-
-async def test_idle_notification_disabled_by_config(monkeypatch) -> None:
-    monkeypatch.setattr(topic_status_diff.config, "topic_idle_enabled", False)
-    client = AsyncMock()
-    diff1 = SimpleNamespace(message_id=10)
-    send = AsyncMock(return_value=diff1)
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 1
-
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    assert send.await_count == 1
-
-
-async def test_idle_notification_not_sent_for_sidecar(monkeypatch) -> None:
-    client = AsyncMock()
-    diff1 = SimpleNamespace(message_id=10)
-    send = AsyncMock(return_value=diff1)
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-    monkeypatch.setattr(topic_status_diff, "edit_with_fallback", AsyncMock())
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", target="sidecar"
-    )
-    assert send.await_count == 1
-
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n", target="sidecar"
-    )
-    assert send.await_count == 1
-
-
-async def test_idle_notification_not_sent_if_screen_never_changed(monkeypatch) -> None:
-    client = AsyncMock()
-    send = AsyncMock()
-    monkeypatch.setattr(topic_status_diff, "rate_limit_send_message", send)
-
-    monotonic = SimpleNamespace(v=100.0)
-    monkeypatch.setattr(topic_status_diff.time, "monotonic", lambda: float(monotonic.v))
-
-    # Prime state without changes (last_change_ts remains 0.0)
-    topic_status_diff.prime_topic_status_diff(1, 2, "@7", "line1\n")
-
-    monotonic.v = 110.0
-    await topic_status_diff.update_topic_status_diff(
-        client, 1, 2, "@7", "line1\n"
-    )
-    send.assert_not_called()

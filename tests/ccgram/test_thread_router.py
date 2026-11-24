@@ -63,22 +63,6 @@ class TestUnbindThread:
         assert router.get_display_name("@1") == "@1"
 
 
-class TestReverseIndex:
-    def test_get_thread_for_window(self, router: ThreadRouter) -> None:
-        router.bind_thread(100, 42, "@5")
-        assert router.get_thread_for_window(100, "@5") == 42
-
-    def test_reverse_cleared_on_unbind(self, router: ThreadRouter) -> None:
-        router.bind_thread(100, 42, "@5")
-        router.unbind_thread(100, 42)
-        assert router.get_thread_for_window(100, "@5") is None
-
-    def test_reverse_updated_on_evict(self, router: ThreadRouter) -> None:
-        router.bind_thread(100, 1, "@1")
-        router.bind_thread(100, 2, "@1")
-        assert router.get_thread_for_window(100, "@1") == 2
-
-
 class TestIterThreadBindings:
     def test_iter_all(self, router: ThreadRouter) -> None:
         router.bind_thread(100, 1, "@1")
@@ -143,10 +127,6 @@ class TestGetWindowForChatThread:
 class TestDisplayNames:
     def test_get_fallback(self, router: ThreadRouter) -> None:
         assert router.get_display_name("@99") == "@99"
-
-    def test_set_and_get(self, router: ThreadRouter) -> None:
-        router.set_display_name("@1", "myproject")
-        assert router.get_display_name("@1") == "myproject"
 
 
 class TestReset:

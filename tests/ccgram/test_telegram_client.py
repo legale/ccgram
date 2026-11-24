@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from telegram import BotCommand, InputMedia, Message
-
+from telegram import InputMedia, Message
 from telegram.error import TelegramError
 
 from ccgram.telegram_client import (
@@ -13,9 +11,6 @@ from ccgram.telegram_client import (
     TelegramClient,
 )
 from tests.ccgram._helpers import FakeTelegramClient
-
-if TYPE_CHECKING:
-    pass
 
 
 @pytest.fixture
@@ -26,20 +21,14 @@ def fake_bot() -> MagicMock:
         "edit_message_text",
         "edit_message_media",
         "edit_message_caption",
-        "delete_message",
+        "edit_message_reply_markup",
         "send_photo",
         "send_document",
         "send_chat_action",
-        "set_message_reaction",
-        "get_chat",
-        "get_file",
-        "create_forum_topic",
         "edit_forum_topic",
         "close_forum_topic",
+        "reopen_forum_topic",
         "delete_forum_topic",
-        "unpin_all_forum_topic_messages",
-        "delete_my_commands",
-        "set_my_commands",
     ):
         setattr(bot, name, AsyncMock(return_value=True))
     return bot
@@ -76,11 +65,6 @@ class TestPTBTelegramClient:
             text="new", chat_id=1, message_id=2
         )
 
-    async def test_delete_message_delegates(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        await client.delete_message(chat_id=1, message_id=2)
-        fake_bot.delete_message.assert_awaited_once_with(chat_id=1, message_id=2)
-
     async def test_send_chat_action_delegates(self, fake_bot: MagicMock):
         client = PTBTelegramClient(fake_bot)
         await client.send_chat_action(chat_id=1, action="typing")
@@ -100,11 +84,6 @@ class TestPTBTelegramClient:
         await client.send_document(chat_id=1, document=doc)
         fake_bot.send_document.assert_awaited_once_with(chat_id=1, document=doc)
 
-    async def test_create_forum_topic_delegates(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        await client.create_forum_topic(chat_id=1, name="topic")
-        fake_bot.create_forum_topic.assert_awaited_once_with(chat_id=1, name="topic")
-
     async def test_edit_forum_topic_delegates(self, fake_bot: MagicMock):
         client = PTBTelegramClient(fake_bot)
         await client.edit_forum_topic(chat_id=1, message_thread_id=7, name="new")
@@ -112,17 +91,17 @@ class TestPTBTelegramClient:
             chat_id=1, message_thread_id=7, name="new"
         )
 
-    async def test_unpin_all_forum_topic_messages_delegates(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        await client.unpin_all_forum_topic_messages(chat_id=1, message_thread_id=7)
-        fake_bot.unpin_all_forum_topic_messages.assert_awaited_once_with(
-            chat_id=1, message_thread_id=7
-        )
-
     async def test_close_forum_topic_delegates(self, fake_bot: MagicMock):
         client = PTBTelegramClient(fake_bot)
         await client.close_forum_topic(chat_id=1, message_thread_id=7)
         fake_bot.close_forum_topic.assert_awaited_once_with(
+            chat_id=1, message_thread_id=7
+        )
+
+    async def test_reopen_forum_topic_delegates(self, fake_bot: MagicMock):
+        client = PTBTelegramClient(fake_bot)
+        await client.reopen_forum_topic(chat_id=1, message_thread_id=7)
+        fake_bot.reopen_forum_topic.assert_awaited_once_with(
             chat_id=1, message_thread_id=7
         )
 
@@ -148,36 +127,6 @@ class TestPTBTelegramClient:
             chat_id=1, message_id=2, media=media
         )
 
-    async def test_set_message_reaction_delegates(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        await client.set_message_reaction(chat_id=1, message_id=2, reaction="👍")
-        fake_bot.set_message_reaction.assert_awaited_once_with(
-            chat_id=1, message_id=2, reaction="👍"
-        )
-
-    async def test_get_chat_and_get_file_delegate(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        await client.get_chat(chat_id=42)
-        fake_bot.get_chat.assert_awaited_once_with(chat_id=42)
-        await client.get_file(file_id="ABC")
-        fake_bot.get_file.assert_awaited_once_with(file_id="ABC")
-
-    async def test_set_and_delete_my_commands_delegate(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        cmds = [BotCommand("start", "Start the bot")]
-        await client.set_my_commands(cmds)
-        fake_bot.set_my_commands.assert_awaited_once_with(
-            commands=cmds, scope=None, language_code=None
-        )
-        await client.delete_my_commands()
-        fake_bot.delete_my_commands.assert_awaited_once_with(
-            scope=None, language_code=None
-        )
-
-    def test_bot_property_exposes_underlying_bot(self, fake_bot: MagicMock):
-        client = PTBTelegramClient(fake_bot)
-        assert client.bot is fake_bot
-
 
 class TestFakeTelegramClient:
     async def test_records_call_metadata(self):
@@ -193,25 +142,21 @@ class TestFakeTelegramClient:
     async def test_records_multiple_calls_in_order(self):
         client = FakeTelegramClient()
         await client.send_message(chat_id=1, text="a")
-        await client.delete_message(chat_id=1, message_id=10)
+        await client.close_forum_topic(chat_id=1, message_thread_id=10)
         await client.send_message(chat_id=2, text="b")
 
         assert [c.method for c in client.calls] == [
             "send_message",
-            "delete_message",
+            "close_forum_topic",
             "send_message",
         ]
         assert client.call_count("send_message") == 2
-        assert client.call_count("delete_message") == 1
+        assert client.call_count("close_forum_topic") == 1
 
     async def test_returns_default_true_for_bool_methods(self):
         client = FakeTelegramClient()
-        assert await client.delete_message(chat_id=1, message_id=2) is True
+        assert await client.close_forum_topic(chat_id=1, message_thread_id=2) is True
         assert await client.send_chat_action(chat_id=1, action="typing") is True
-        assert (
-            await client.unpin_all_forum_topic_messages(chat_id=1, message_thread_id=7)
-            is True
-        )
 
     async def test_custom_return_value_via_returns_dict(self):
         client = FakeTelegramClient()
@@ -245,8 +190,6 @@ class TestFakeTelegramClient:
         await client.edit_forum_topic(
             chat_id=1, message_thread_id=7, name="x", icon_custom_emoji_id=None
         )
-        await client.set_message_reaction(chat_id=1, message_id=2, reaction="👍")
-        await client.create_forum_topic(chat_id=1, name="topic", icon_color=0)
 
         edit = client.last_call("edit_forum_topic")
         assert edit is not None
@@ -256,14 +199,6 @@ class TestFakeTelegramClient:
             "name": "x",
             "icon_custom_emoji_id": None,
         }
-
-        react = client.last_call("set_message_reaction")
-        assert react is not None
-        assert react.kwargs["reaction"] == "👍"
-
-        create = client.last_call("create_forum_topic")
-        assert create is not None
-        assert create.kwargs["icon_color"] == 0
 
 
 class TestSetSideEffect:

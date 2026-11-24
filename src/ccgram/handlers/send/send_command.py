@@ -65,18 +65,23 @@ async def upload_file(
 
 
 async def _resolve_session_cwd(
-    user_id: int, thread_id: int
+    user_id: int, thread_id: int, chat_id: int | None = None
 ) -> tuple[str | None, Path | None]:
     window_id = thread_router.resolve_window_for_thread(user_id, thread_id)
+    if not window_id:
+        # Lazy: avoid circular import with topic_binding
+        from ..topics.topic_binding import resolve_topic_window
+
+        resolved_chat = (
+            chat_id
+            if chat_id is not None
+            else thread_router.resolve_chat_id(user_id, thread_id)
+        )
+        window_id = await resolve_topic_window(user_id, resolved_chat, thread_id)
     if not window_id:
         return None, None
     window = await tmux_manager.find_window_by_id(window_id)
     raw_cwd = window.cwd if window and window.cwd else ""
-    if not raw_cwd:
-        # Lazy: session_manager lookup
-        from ...session import session_manager
-
-        raw_cwd = session_manager.get_window_cwd(window_id)
     if not raw_cwd:
         return window_id, None
     path = Path(raw_cwd).resolve()
@@ -119,7 +124,9 @@ async def send_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(update.message, "Usage: //send <path_to_file>")
         return
 
-    window_id, cwd = await _resolve_session_cwd(user.id, thread_id)
+    window_id, cwd = await _resolve_session_cwd(
+        user.id, thread_id, update.message.chat_id
+    )
     if not window_id:
         await safe_reply(update.message, "No session bound to this topic.")
         return

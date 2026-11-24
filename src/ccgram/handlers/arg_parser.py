@@ -31,9 +31,7 @@ def match_command(
         return None, [], []
 
     token = argv[0]
-    command_entries = [
-        (get_command_info(handler), handler) for handler in handlers
-    ]
+    command_entries = [(get_command_info(handler), handler) for handler in handlers]
 
     for info, handler in command_entries:
         if token == info.name or token in info.aliases:
