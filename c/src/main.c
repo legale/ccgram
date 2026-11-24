@@ -22,6 +22,7 @@ static void print_help(void)
 	       "Options:\n"
 	       "  -v, --verbose            Enable debug logging.\n"
 	       "      --log-level LEVEL    Logging level (DEBUG, INFO, WARNING, ERROR).\n"
+	       "      --no-color           Disable ANSI colors in log output.\n"
 	       "      --config-dir PATH    Config directory (default: ~/.ccgram).\n"
 	       "      --allowed-users IDS  Comma-separated Telegram user IDs.\n"
 	       "      --tmux-session NAME  Tmux session name (default: ccgram).\n"
@@ -86,6 +87,7 @@ int main(int argc, char **argv)
 	static const struct option long_opts[] = {
 		{ "verbose",       no_argument,       NULL, 'v' },
 		{ "log-level",     required_argument, NULL, 'l' },
+		{ "no-color",      no_argument,       NULL, 'N' },
 		{ "config-dir",    required_argument, NULL, 'c' },
 		{ "allowed-users", required_argument, NULL, 'a' },
 		{ "tmux-session",  required_argument, NULL, 't' },
@@ -105,6 +107,9 @@ int main(int argc, char **argv)
 			break;
 		case 'l':
 			setenv("CCGRAM_LOG_LEVEL", optarg, 1);
+			break;
+		case 'N':
+			log_set_color(false);
 			break;
 		case 'c':
 			setenv("CCGRAM_DIR", optarg, 1);
@@ -130,6 +135,10 @@ int main(int argc, char **argv)
 			return 1;
 		}
 	}
+
+	if (getenv("NO_COLOR") != NULL)
+		log_set_color(false);
+	log_set_thread_name("main");
 
 	if (is_status)
 		return status_main();

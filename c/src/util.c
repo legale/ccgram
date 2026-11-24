@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "ccgram.h"
 
 #include <ctype.h>
@@ -7,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -101,6 +103,8 @@ char *sb_detach(struct strbuf *sb)
 /* ── Logging ───────────────────────────────────────────────────────── */
 
 static enum log_level g_log_lvl = LOG_INFO;
+static bool g_log_color = true;
+static _Thread_local char g_thread_name[16] = "main";
 static pthread_mutex_t g_log_mu = PTHREAD_MUTEX_INITIALIZER;
 
 struct throttle_entry {
@@ -118,23 +122,42 @@ void log_set_level(enum log_level lvl)
 	g_log_lvl = lvl;
 }
 
+void log_set_color(bool enabled)
+{
+	g_log_color = enabled;
+}
+
+void log_set_thread_name(const char *name)
+{
+	snprintf(g_thread_name, sizeof(g_thread_name), "%s", name ? name : "thr");
+}
+
 static void log_vprint(enum log_level lvl, const char *fmt, va_list ap)
 {
-	static const char *const names[] = { "DEBUG", "INFO", "WARN", "ERROR" };
 	struct timespec ts;
 	struct tm tm;
 	char tbuf[32];
+	long tid;
+	long msec;
+	bool red;
 
 	if (lvl < g_log_lvl)
 		return;
 
 	clock_gettime(CLOCK_REALTIME, &ts);
 	localtime_r(&ts.tv_sec, &tm);
-	strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", &tm);
+	strftime(tbuf, sizeof(tbuf), "%d.%m.%y %H:%M:%S", &tm);
+	msec = ts.tv_nsec / 1000000L;
+	tid = syscall(SYS_gettid);
+	red = g_log_color && (lvl >= LOG_WARN);
 
 	pthread_mutex_lock(&g_log_mu);
-	fprintf(stderr, "%s [%s] ", tbuf, names[lvl]);
+	if (red)
+		fputs("\x1b[31m", stderr);
+	fprintf(stderr, "%s.%03ld %d [%ld %s] ", tbuf, msec, (int)lvl, tid, g_thread_name);
 	vfprintf(stderr, fmt, ap);
+	if (red)
+		fputs("\x1b[0m", stderr);
 	fputc('\n', stderr);
 	fflush(stderr);
 	pthread_mutex_unlock(&g_log_mu);

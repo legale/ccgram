@@ -1518,6 +1518,7 @@ void *polling_thread_main(void *arg)
 	double last_live_view = 0.0;
 	double last_full_poll = 0.0;
 
+	log_set_thread_name("poll");
 	log_info("Status polling started (interval: %.1fs)", g_cfg.status_poll_interval);
 	while (g_running) {
 		bool woken_for_sidecar = false;

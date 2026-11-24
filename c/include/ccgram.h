@@ -55,6 +55,8 @@ enum log_level {
 };
 
 void log_set_level(enum log_level lvl);
+void log_set_color(bool enabled);
+void log_set_thread_name(const char *name);
 void log_msg(enum log_level lvl, const char *fmt, ...);
 void log_throttled(const char *key, double interval_s, const char *fmt, ...);
 void log_throttle_reset(const char *key);
